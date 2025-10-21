@@ -26,7 +26,7 @@ export const WorkflowsHeader = ({ disabled }: { disabled?: boolean }) => {
     const handleCreate = () => {
         createWorkflow.mutate(undefined, {
             onSuccess: (data) => {
-                router.push('/workflows/${data.id}');
+                router.push(`/workflows/${data.id}`);
             },
             onError: (error) => {
                 handleError(error);
