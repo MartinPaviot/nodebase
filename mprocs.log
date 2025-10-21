@@ -1,0 +1,6 @@
+ERROR [portable_pty::win::psuedocon] CreateProcessW `"\"C:\\Program Files\\nodejs\\npm\" run inngest:dev\0"` in cwd `Some("C:\\Users\\marti\\nodebase\0")` failed: %1 n’est pas une application Win32 valide. (os error 193)
+WARN [mprocs::app] Ignore input event: FocusLost
+WARN [mprocs::app] Ignore input event: FocusGained
+WARN [mprocs::app] Ignore input event: FocusLost
+WARN [mprocs::app] Ignore input event: FocusGained
+ERROR [mprocs::error] Error: channel closed
