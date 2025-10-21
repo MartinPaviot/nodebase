@@ -22,13 +22,13 @@ export const useCreateWorkflow = () => {
     return useMutation(
         trpc.workflows.create.mutationOptions({
             onSuccess: (data) => {
-                toast.success('Workflow "${data.name}" created');
+                toast.success(`Workflow "${data.name}" created`);
                 queryClient.invalidateQueries(
                     trpc.workflows.getMany.queryOptions(),
                 );
             },
             onError: (error) => {
-                toast.error('Failed to create workflow: ${error.message}');
+                toast.error(`Failed to create workflow: ${error.message}`);
             },
         }),
     );
