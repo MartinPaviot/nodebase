@@ -89,7 +89,7 @@ export const EntityContainer = ({
 
 interface EntitySearchProps {
     value: string;
-    onChange: (calue: string) => void;
+    onChange: (value: string) => void;
     placeholder?: string;
 };
 
