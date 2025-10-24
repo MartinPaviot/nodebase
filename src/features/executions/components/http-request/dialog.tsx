@@ -161,14 +161,14 @@ export const HttpRequestDialog = ({
                                     <FormControl>
                                         <Textarea 
                                             placeholder={
-                                                '{\n "userID": "{{httpresponse.data.id}}",\n"name": "{{httpResponse.data.name}}", \n "items": "{{httpResponse.data.items}}"\n}'
+                                                '{\n "userId": "{{httpResponse.data.id}}",\n"name": "{{httpResponse.data.name}}",\n"items": "{{httpResponse.data.items}}"\n}'
                                             }
                                             className="min-h-[120px] font-mono text-sm"
                                             {...field}
                                         />
                                     </FormControl>
                                     <FormDescription>
-                                        JSON with template variables. Use {"{{variables}}"} for simple values or {"{{json variable]]"} to stringify objects
+                                        JSON with template variables. Use {"{{variables}}"} for simple values or {"{{json variable}}"} to stringify objects
                                     </FormDescription>
                                     <FormMessage/>
                                 </FormItem>
