@@ -28,7 +28,7 @@ export const ManualTriggerDialog = ({
                 </DialogHeader>
                 <div className="p-4">
                     <p className="text-sm text-muted-foreground">
-                        Used to maually execute a workflow, no configuration available.
+                        Used to manually execute a workflow, no configuration available.
                     </p>
                 </div>
             </DialogContent>
