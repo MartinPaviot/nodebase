@@ -1,4 +1,9 @@
 procs: 
+
+  ngrok:
+    cmd: ["npm.cmd", "run", "ngrok:dev"]
+    cwd: "."
+    
   inngest: 
     cmd: ["npm.cmd", "run", "inngest:dev"]
     cwd: "."
