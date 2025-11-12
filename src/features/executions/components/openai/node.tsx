@@ -4,34 +4,33 @@ import { useReactFlow, type Node, type NodeProps} from "@xyflow/react";
 import { GlobeIcon } from "lucide-react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
-import { HttpRequestFormValues, HttpRequestDialog } from "./dialog";
+import { OpenAiDialog, OpenAiFormValues } from "./dialog";
 import { useNodeStatus } from "../hooks/use-node-status";
-import { HTTP_REQUEST_CHANNEL_NAME } from "@/inngest/channels/http-request";
-import { fetchHttpRequestRealtimeToken } from "./actions";
+import { OPENAI_CHANNEL_NAME } from "@/inngest/channels/openai";
+import { fetchOpenAiRealtimeToken } from "./actions";
 
-type HttpRequestNodeData = {
-    variableName?: string;
-    endpoint?: string;
-    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    body?: string;
+type OpenAiNodeData = {
+    variableName?: string,
+    systemPrompt?: string;
+    userPrompt?: string;
 };
 
-type HttpRequestNodeType = Node<HttpRequestNodeData>;
+type OpenAiNodeType = Node<OpenAiNodeData>;
 
-export const HttpRequestNode = memo((props: NodeProps<HttpRequestNodeType>) => {
+export const OpenAiNode = memo((props: NodeProps<OpenAiNodeType>) => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const { setNodes } = useReactFlow();
 
     const nodeStatus = useNodeStatus({
         nodeId: props.id,
-        channel: HTTP_REQUEST_CHANNEL_NAME,
+        channel: OPENAI_CHANNEL_NAME,
         topic: "status",
-        refreshToken: fetchHttpRequestRealtimeToken,
+        refreshToken: fetchOpenAiRealtimeToken,
     });
 
     const handleOpenSettings = () => setDialogOpen(true);
 
-    const handleSubmit = (values: HttpRequestFormValues) => {
+    const handleSubmit = (values: OpenAiFormValues) => {
         setNodes((nodes) => nodes.map((node) => {
             if(node.id === props.id) {
                 return {
@@ -47,14 +46,14 @@ export const HttpRequestNode = memo((props: NodeProps<HttpRequestNodeType>) => {
     }
 
     const nodeData = props.data;
-    const description = nodeData?.endpoint
-    ? `${nodeData.method || "GET"}: ${nodeData.endpoint}`
+    const description = nodeData?.userPrompt
+    ? `gpt-4: ${nodeData.userPrompt.slice(0, 50)}...`
     : "Not configured";
 
 
     return (
         <>
-            <HttpRequestDialog 
+            <OpenAiDialog 
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
                 onSubmit={handleSubmit}
@@ -63,8 +62,8 @@ export const HttpRequestNode = memo((props: NodeProps<HttpRequestNodeType>) => {
             <BaseExecutionNode
                 {...props}
                 id={props.id}
-                icon={GlobeIcon}
-                name="HTTP Request"
+                icon="/logos/openai.svg"
+                name="OpenAI"
                 status={nodeStatus}
                 description={description}
                 onSettings={handleOpenSettings}
@@ -74,4 +73,4 @@ export const HttpRequestNode = memo((props: NodeProps<HttpRequestNodeType>) => {
     )
 });
 
-HttpRequestNode.displayName = "HttpRequestNode";
+OpenAiNode.displayName = "OpenAiNode";
