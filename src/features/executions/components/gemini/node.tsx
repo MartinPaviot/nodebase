@@ -5,7 +5,7 @@ import { GlobeIcon } from "lucide-react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { GeminiDialog, GeminiFormValues } from "./dialog";
-import { useNodeStatus } from "../hooks/use-node-status";
+import { useNodeStatus } from "../../hooks/use-node-status";
 import { GEMINI_CHANNEL_NAME } from "@/inngest/channels/gemini";
 import { fetchGeminiRealtimeToken } from "./actions";
 

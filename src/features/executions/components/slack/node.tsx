@@ -5,7 +5,7 @@ import { GlobeIcon } from "lucide-react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { SlackFormValues, SlackDialog } from "./dialog";
-import { useNodeStatus } from "../hooks/use-node-status";
+import { useNodeStatus } from "../../hooks/use-node-status";
 import { SLACK_CHANNEL_NAME } from "@/inngest/channels/slack";
 import { fetchSlackRealtimeToken } from "../slack/actions";
 

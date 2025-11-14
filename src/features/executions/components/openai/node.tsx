@@ -5,7 +5,7 @@ import { GlobeIcon } from "lucide-react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { OpenAiDialog, OpenAiFormValues } from "./dialog";
-import { useNodeStatus } from "../hooks/use-node-status";
+import { useNodeStatus } from "../../hooks/use-node-status";
 import { OPENAI_CHANNEL_NAME } from "@/inngest/channels/openai";
 import { fetchOpenAiRealtimeToken } from "./actions";
 
