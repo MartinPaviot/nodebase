@@ -5,7 +5,7 @@ import { GlobeIcon } from "lucide-react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { AnthropicDialog, AnthropicFormValues } from "./dialog";
-import { useNodeStatus } from "../hooks/use-node-status";
+import { useNodeStatus } from "../../hooks/use-node-status";
 import { ANTHROPIC_CHANNEL_NAME } from "@/inngest/channels/anthropic";
 import { fetchAnthropicRealtimeToken } from "./actions";
 
