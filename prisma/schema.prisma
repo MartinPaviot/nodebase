@@ -24,7 +24,7 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt
   sessions      Session[]
   accounts      Account[]
-  workflows     Workflow[]
+  agents        Agent[]
   credentials   Credential[]
 
   @@unique([email])
@@ -96,18 +96,77 @@ enum CredentialType {
   GEMINI
 }
 
-model Workflow {
+model Agent {
   id String @id @default(cuid())
   name String
+  description String? @db.Text
+  role String? // e.g., "Support Agent", "Sales Agent", "Creative Agent"
+  autonomyLevel String @default("STANDARD") // BASIC, STANDARD, ADVANCED
+  templateId String?
+  template AgentTemplate? @relation(fields: [templateId], references: [id])
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   nodes Node[]
   connections Connection[]
   executions Execution[]
+  memories AgentMemory[]
+  conversations AgentConversation[]
 
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agent")
+}
+
+model AgentTemplate {
+  id String @id @default(cuid())
+  name String
+  description String @db.Text
+  role String
+  category String // "Support", "Sales", "Creative", "Document Processing", "Custom"
+  icon String?
+  defaultNodes Json // Pre-configured node structure
+  defaultConnections Json // Pre-configured connections
+  isPublic Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agents Agent[]
+
+  @@map("agent_template")
+}
+
+model AgentMemory {
+  id String @id @default(cuid())
+  agentId String
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  key String
+  value String @db.Text
+  context String? @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, key])
+  @@map("agent_memory")
+}
+
+model AgentConversation {
+  id String @id @default(cuid())
+  agentId String
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  role String // "user" or "assistant"
+  content String @db.Text
+  metadata Json?
+  
+  createdAt DateTime @default(now())
+
+  @@map("agent_conversation")
 }
 
 enum NodeType {
@@ -125,8 +184,8 @@ enum NodeType {
 
 model Node {
   id String @id @default(cuid())
-  workflowId String 
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agentId String 
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   name String
   type NodeType
@@ -145,8 +204,8 @@ model Node {
 
 model Connection {
 id String @id @default(cuid())
-  workflowId String 
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agentId String 
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   fromNodeId String 
   fromNode Node @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: Cascade)
@@ -170,8 +229,8 @@ enum ExecutionStatus {
 model Execution {
   id String @id @default(cuid())
 
-  workflowId String
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agentId String
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   status ExecutionStatus @default(RUNNING)
   error String? @db.Text
