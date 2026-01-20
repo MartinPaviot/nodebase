@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    BotIcon,
     CreditCardIcon,
     FolderOpenIcon,
     HistoryIcon,
@@ -29,6 +30,11 @@ const menuItems = [
     {
         title: "Main",
         items: [
+            {
+                title: "Agents",
+                icon: BotIcon,
+                url: "/agents",
+            },
             {
                 title: "Workflows",
                 icon: FolderOpenIcon,

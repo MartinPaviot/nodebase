@@ -26,6 +26,7 @@ model User {
   accounts      Account[]
   workflows     Workflow[]
   credentials   Credential[]
+  agents        Agent[]
 
   @@unique([email])
   @@map("user")
@@ -88,6 +89,7 @@ model Credential {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   Node Node[]
+  agents Agent[]
 } 
 
 enum CredentialType {
@@ -105,6 +107,7 @@ model Workflow {
   nodes Node[]
   connections Connection[]
   executions Execution[]
+  agentTools AgentTool[]
 
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -183,4 +186,105 @@ model Execution {
   inngestEventId String @unique
 
   output Json?
+}
+
+// ===================
+// AGENT MODELS
+// ===================
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  systemPrompt String  @db.Text
+
+  // Configuration
+  model       AgentModel @default(ANTHROPIC)
+  temperature Float      @default(0.7)
+
+  // Avatar/Icon (optional)
+  avatar      String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  credentialId String?
+  credential   Credential? @relation(fields: [credentialId], references: [id])
+
+  conversations Conversation[]
+  agentTools    AgentTool[]
+
+  @@map("agent")
+}
+
+enum AgentModel {
+  ANTHROPIC
+  OPENAI
+  GEMINI
+}
+
+// Junction table for Agent <-> Workflow (tools)
+model AgentTool {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // Tool configuration
+  name        String   // Display name for the tool
+  description String   @db.Text // Description for the LLM
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, workflowId])
+  @@map("agent_tool")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String?  // Auto-generated or user-defined
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  messages  Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("conversation")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+model Message {
+  id             String      @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           MessageRole
+  content        String      @db.Text
+
+  // For tool calls/results
+  toolName       String?
+  toolInput      Json?
+  toolOutput     Json?
+
+  createdAt      DateTime    @default(now())
+
+  @@map("message")
 }
