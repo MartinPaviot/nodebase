@@ -45,7 +45,11 @@
       "Bash(dir:*)",
       "WebFetch(domain:www.lindy.ai)",
       "Bash(git config:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npx vercel logs:*)",
+      "Bash(gh run list:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
