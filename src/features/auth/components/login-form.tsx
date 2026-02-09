@@ -27,7 +27,7 @@ import {Input} from "@/components/ui/input"
 import {authClient} from "@/lib/auth-client";
 
 const loginSchema = z.object({
-    email: z.email("Please enter a valid email address"),
+    email: z.string().email("Please enter a valid email address"),
     password: z.string().min(1, "Password is required"),
 });
 

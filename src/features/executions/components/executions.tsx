@@ -1,12 +1,12 @@
 "use client";
 
+import { memo } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { EmptyView, EntityContainer, EntityHeader, EntityItem, EntityList, EntityPagination, EntitySearch, ErrorView, LoadingView } from "@/components/entity-components";
+import { EmptyView, EntityContainer, EntityHeader, EntityItem, EntityList, EntityPagination, ErrorView, LoadingView } from "@/components/entity-components";
 import { useSuspenseExecutions } from "../hooks/use-executions";
 import { useExecutionsParams } from "../hooks/use-executions-params";
 import { Execution, ExecutionStatus } from "@/generated/prisma";
-import { CredentialType } from "@/generated/prisma";
-import { CheckCircle2Icon, ClockIcon, Loader2Icon, XCircleIcon } from "lucide-react";
+import { CheckCircle, Clock, CircleNotch, XCircle } from "@phosphor-icons/react";
 
 export const ExecutionsList = () => {
     const executions = useSuspenseExecutions();
@@ -79,12 +79,13 @@ export const ExecutionsEmpty = () => {
 const getStatusIcon = (status: ExecutionStatus) => {
     switch (status) {
         case ExecutionStatus.SUCCESS:
-            return <CheckCircle2Icon className="size-5 text-green-600" />;
+            return <CheckCircle className="size-5 text-green-600" />;
         case ExecutionStatus.FAILED:
-            return <XCircleIcon className="size-5 text-red-600" />;
+            return <XCircle className="size-5 text-red-600" />;
         case ExecutionStatus.RUNNING:
-            return <Loader2Icon className="size-5 text-blue-600 animate-spin" />;
-            return <ClockIcon className="size-5 text-muted-foreground" />;
+            return <CircleNotch className="size-5 text-blue-600 animate-spin" />;
+        default:
+            return <Clock className="size-5 text-muted-foreground" />;
     }
 }
 
@@ -92,40 +93,41 @@ const formatStatus = (status: ExecutionStatus) => {
     return status.charAt(0) + status.slice(1).toLowerCase();
 };
 
-export const ExecutionItem = ({
-    data,
-}: {
-    data: Execution & {
-        workflow: {
-            id: string;
-            name: string;
-        };
+type ExecutionWithWorkflow = Execution & {
+    workflow: {
+        id: string;
+        name: string;
     };
-}) => {
-    const duration = data.completedAt
-        ? Math.round(
-            (new Date(data.completedAt).getTime() - new Date(data.startedAt).getTime()) / 1000,
-        )
-        : null;
+};
 
-    const subtitle = (
-        <>
-            {data.workflow.name} &bull; Started{" "}
-            {formatDistanceToNow(data.startedAt, { addSuffix: true })}
-            {duration !== null && <> &bull; Took {duration}s </>}
-        </>
-    );
+export const ExecutionItem = memo(
+    function ExecutionItem({ data }: { data: ExecutionWithWorkflow }) {
+        const duration = data.completedAt
+            ? Math.round(
+                  (new Date(data.completedAt).getTime() - new Date(data.startedAt).getTime()) / 1000
+              )
+            : null;
 
-    return (
-        <EntityItem 
-        href={`/executions/${data.id}`}
-        title={formatStatus(data.status)}
-        subtitle={subtitle}
-        image={
-            <div className="size-8 flex items-center justify-center">
-                {getStatusIcon(data.status)}
-            </div>
-        }
-        />
-    )
-}
+        const subtitle = (
+            <>
+                {data.workflow.name} &bull; Started{" "}
+                {formatDistanceToNow(data.startedAt, { addSuffix: true })}
+                {duration !== null && <> &bull; Took {duration}s </>}
+            </>
+        );
+
+        return (
+            <EntityItem
+                href={`/executions/${data.id}`}
+                title={formatStatus(data.status)}
+                subtitle={subtitle}
+                image={
+                    <div className="size-8 flex items-center justify-center">
+                        {getStatusIcon(data.status)}
+                    </div>
+                }
+            />
+        );
+    },
+    (prev, next) => prev.data.id === next.data.id && prev.data.status === next.data.status
+);

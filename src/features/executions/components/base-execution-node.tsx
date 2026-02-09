@@ -1,7 +1,7 @@
 "use client";
 
 import { type NodeProps, Position, useReactFlow } from "@xyflow/react";
-import type { LucideIcon } from "lucide-react";
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import Image from "next/image";
 import { memo, type ReactNode, useCallback } from "react";
 import { BaseNode, BaseNodeContent } from "@/components/react-flow/base-node";
@@ -10,7 +10,7 @@ import { WorkflowNode } from "../../../components/workflow-node";
 import { type NodeStatus, NodeStatusIndicator } from "@/components/react-flow/node-status-indicator";
 
 interface BaseExecutionNodeProps extends NodeProps {
-    icon: LucideIcon | string;
+    icon: PhosphorIcon | string;
     name: string;
     description?: string;
     children?: ReactNode;

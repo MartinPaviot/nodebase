@@ -27,6 +27,7 @@ model User {
   workflows     Workflow[]
   credentials   Credential[]
   agents        Agent[]
+  integrations  Integration[]
 
   @@unique([email])
   @@map("user")
@@ -90,6 +91,9 @@ model Credential {
 
   Node Node[]
   agents Agent[]
+
+  @@index([userId, type])
+  @@index([userId, name])
 } 
 
 enum CredentialType {
@@ -111,6 +115,9 @@ model Workflow {
 
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, name])
+  @@index([userId, updatedAt])
 }
 
 enum NodeType {
@@ -198,12 +205,35 @@ model Agent {
   description String?  @db.Text
   systemPrompt String  @db.Text
 
+  // Context (read-only instructions, like Lindy)
+  context     String?  @db.Text
+
   // Configuration
   model       AgentModel @default(ANTHROPIC)
   temperature Float      @default(0.7)
 
+  // Safe Mode - ask confirmation before side-effect actions
+  safeMode    Boolean  @default(false)
+
   // Avatar/Icon (optional)
   avatar      String?
+
+  // Tags for organization
+  tags        String[] @default([])
+
+  // Favorite
+  isFavorite  Boolean  @default(false)
+
+  // Enabled/Active status (like Lindy)
+  isEnabled   Boolean  @default(true)
+
+  // Template reference (for loading flowData)
+  templateId  String?
+  template    AgentTemplate? @relation(fields: [templateId], references: [id])
+
+  // Custom flow data (user modifications to the template flow)
+  // If null, use the template's flowData; if set, use this instead
+  flowData    Json?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -218,7 +248,66 @@ model Agent {
   conversations Conversation[]
   agentTools    AgentTool[]
 
+  // Memory & Knowledge
+  memories          AgentMemory[]
+  knowledgeDocuments KnowledgeDocument[]
+  knowledgeSettings  KnowledgeSettings?
+
+  // Triggers
+  triggers      AgentTrigger[]
+
+  // Embed widget
+  embed         AgentEmbed?
+
+  // Multi-agent connections (Society of Agents)
+  connectedTo   AgentConnection[] @relation("SourceAgent")
+  connectedFrom AgentConnection[] @relation("TargetAgent")
+
+  // Agent Swarms (parallel execution)
+  swarms        AgentSwarm[]
+
+  // Email address for inbound email trigger
+  emailAddress  AgentEmailAddress?
+
+  // Meeting recordings
+  meetingRecordings MeetingRecording[]
+
+  // Phone number for voice calls
+  phoneNumber   AgentPhoneNumber?
+
+  // Analytics metrics
+  metrics       AgentMetric[]
+
+  @@index([userId, name])
+  @@index([userId, updatedAt])
   @@map("agent")
+}
+
+// Multi-agent connections (Society of Agents)
+model AgentConnection {
+  id        String   @id @default(cuid())
+
+  // Source agent (the one that can call)
+  sourceAgentId String
+  sourceAgent   Agent  @relation("SourceAgent", fields: [sourceAgentId], references: [id], onDelete: Cascade)
+
+  // Target agent (the one being called)
+  targetAgentId String
+  targetAgent   Agent  @relation("TargetAgent", fields: [targetAgentId], references: [id], onDelete: Cascade)
+
+  // How the source agent should refer to the target
+  alias         String   // e.g., "research_assistant", "email_writer"
+  description   String   @db.Text // Description shown to the source agent
+
+  // Configuration
+  enabled       Boolean  @default(true)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sourceAgentId, targetAgentId])
+  @@unique([sourceAgentId, alias])
+  @@map("agent_connection")
 }
 
 enum AgentModel {
@@ -257,10 +346,33 @@ model Conversation {
 
   messages  Message[]
 
+  // Thread features (like Lindy)
+  isArchived  Boolean @default(false)
+  isPinned    Boolean @default(false)
+
+  // Share token for public access
+  shareToken  String?  @unique
+
+  // Source of the conversation
+  source      ConversationSource @default(CHAT)
+
+  // Activity log
+  activities  ConversationActivity[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("conversation")
+}
+
+enum ConversationSource {
+  CHAT        // Manual chat
+  EMBED       // From embed widget
+  EMAIL       // From inbound email
+  PHONE       // From phone call
+  SLACK       // From Slack mention
+  WEBHOOK     // From webhook trigger
+  SCHEDULE    // From scheduled trigger
 }
 
 enum MessageRole {
@@ -287,4 +399,682 @@ model Message {
   createdAt      DateTime    @default(now())
 
   @@map("message")
+}
+
+// ===================
+// CONVERSATION ACTIVITY LOG
+// ===================
+
+model ConversationActivity {
+  id        String   @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Activity type
+  type      ActivityType
+
+  // Activity details
+  title     String
+  details   Json?
+
+  // For actions requiring confirmation (Safe Mode)
+  requiresConfirmation Boolean @default(false)
+  confirmedAt          DateTime?
+  rejectedAt           DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("conversation_activity")
+}
+
+enum ActivityType {
+  MESSAGE_SENT
+  MESSAGE_RECEIVED
+  TOOL_CALLED
+  TOOL_COMPLETED
+  TOOL_FAILED
+  EMAIL_SENT
+  EMAIL_RECEIVED
+  CALENDAR_EVENT_CREATED
+  SLACK_MESSAGE_SENT
+  MEMORY_UPDATED
+  KNOWLEDGE_SEARCHED
+  AGENT_DELEGATED
+  CONFIRMATION_REQUESTED
+  CONFIRMATION_APPROVED
+  CONFIRMATION_REJECTED
+  ERROR_OCCURRED
+}
+
+// ===================
+// AGENT MEMORY SYSTEM
+// ===================
+
+// Persistent memory entries (like Lindy's "small snippets of information")
+model AgentMemory {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Memory content
+  key       String   // Short identifier (e.g., "user_preference", "last_meeting")
+  value     String   @db.Text // The actual memory content
+  category  MemoryCategory @default(GENERAL)
+
+  // For RAG - vector embedding
+  embedding Float[]  @default([])
+
+  // Metadata
+  source    String?  // Where this memory came from (conversation ID, etc.)
+  expiresAt DateTime? // Optional expiration
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, key])
+  @@map("agent_memory")
+}
+
+enum MemoryCategory {
+  GENERAL      // General facts
+  PREFERENCE   // User preferences
+  CONTEXT      // Contextual information
+  HISTORY      // Historical events
+  INSTRUCTION  // Standing instructions
+}
+
+// Knowledge base documents for RAG (like Lindy)
+model KnowledgeDocument {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Document info
+  title     String
+  content   String   @db.Text
+  source    String?  // URL, file path, or external ID
+  mimeType  String   @default("text/plain")
+  fileSize  Int?     // bytes
+
+  // Source type (like Lindy)
+  sourceType KnowledgeSourceType @default(TEXT)
+
+  // For external sources (Google Drive, etc.)
+  externalId   String?
+  externalUrl  String?
+
+  // Sync status
+  syncStatus   KnowledgeSyncStatus @default(SYNCED)
+  lastSyncedAt DateTime?
+  syncError    String?
+
+  // Chunked embeddings
+  chunks    KnowledgeChunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_document")
+}
+
+enum KnowledgeSourceType {
+  TEXT           // Free text / FAQ
+  FILE_UPLOAD    // PDF, DOCX, TXT, etc.
+  WEBSITE        // Scraped website
+  WEBSITE_CRAWL  // Full site crawl
+  GOOGLE_DRIVE   // Google Drive file
+  NOTION         // Notion page/database
+  DROPBOX        // Dropbox file
+  ONEDRIVE       // OneDrive file
+}
+
+enum KnowledgeSyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  ERROR
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(cuid())
+
+  documentId String
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  content    String   @db.Text
+  embedding  Float[]  @default([])
+  position   Int      // Order in document
+
+  // Metadata for search
+  pageNumber Int?
+  heading    String?
+
+  createdAt  DateTime @default(now())
+
+  @@map("knowledge_chunk")
+}
+
+// Knowledge Base Settings (per agent)
+model KnowledgeSettings {
+  id        String   @id @default(cuid())
+
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Search configuration (like Lindy)
+  searchFuzziness  Int     @default(100)  // 0=keyword, 100=semantic
+  maxResults       Int     @default(4)    // 1-10
+  autoRefresh      Boolean @default(true)
+  refreshInterval  Int     @default(24)   // hours
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_settings")
+}
+
+// ===================
+// AGENT TRIGGERS
+// ===================
+
+model AgentTrigger {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  name      String
+  type      TriggerType
+  enabled   Boolean  @default(true)
+
+  // Configuration based on type
+  config    Json     @default("{}")
+
+  // For scheduled triggers
+  cronExpression String?
+  nextRunAt      DateTime?
+  lastRunAt      DateTime?
+
+  // For webhook triggers
+  webhookSecret  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_trigger")
+}
+
+enum TriggerType {
+  SCHEDULE     // Cron-based scheduling
+  WEBHOOK      // External webhook
+  EMAIL        // Email received
+  CHAT         // Chat message (default)
+  AGENT_MESSAGE // Message from another agent
+}
+
+// ===================
+// AGENT TEMPLATES
+// ===================
+
+model AgentTemplate {
+  id          String   @id @default(cuid())
+
+  name        String
+  subtitle    String?  // Short description for card view (2 lines max)
+  description String   @db.Text
+  category    TemplateCategory
+  role        TemplateRole?
+  useCase     TemplateUseCase?
+
+  // Template configuration
+  systemPrompt String  @db.Text
+  context      String? @db.Text
+  model        AgentModel @default(ANTHROPIC)
+  temperature  Float   @default(0.7)
+
+  // Suggested tools/integrations (for UI display)
+  suggestedTools     Json  @default("[]")
+  suggestedTriggers  Json  @default("[]")
+  suggestedIntegrations String[] @default([])
+
+  // Pre-configured flow and defaults (auto-created on template use)
+  flowData          Json  @default("{}")       // { nodes: [], edges: [] } for React Flow
+  defaultTriggers   Json  @default("[]")       // Triggers to auto-create
+  defaultTools      Json  @default("[]")       // Workflows/tools to auto-create
+
+  // UI
+  icon        String?
+  color       String?
+  coverImage  String?
+
+  // Community / Store features
+  isPublic    Boolean @default(false)
+  isFeatured  Boolean @default(false)
+  createdById String?
+  createdByName String?
+
+  // Stats
+  usageCount  Int @default(0)
+  rating      Float @default(0)
+  reviewCount Int @default(0)
+
+  // Tags for search
+  tags        String[] @default([])
+
+  // Agents created from this template
+  agents      Agent[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("agent_template")
+}
+
+enum TemplateCategory {
+  PRODUCTIVITY   // Email, calendar, tasks
+  SALES          // Lead qualification, outreach
+  MARKETING      // Brand, SEO, content marketing
+  SUPPORT        // Customer support, FAQ
+  RESEARCH       // Web research, analysis
+  CREATIVE       // Content creation, writing
+  OPERATIONS     // Workflows, automation
+  CUSTOM         // User-created
+}
+
+enum TemplateRole {
+  ENGINEERING
+  HUMAN_RESOURCES
+  MARKETING
+  OPERATIONS
+  PRODUCT
+  SALES
+  SUPPORT
+}
+
+enum TemplateUseCase {
+  AI_ASSISTANT
+  CHATBOT
+  COACHING
+  CONTENT_CREATION
+  DOCUMENT_PROCESSING
+  EMAILS
+  MEETINGS
+  OUTREACH
+  PHONE
+  PRODUCTIVITY
+  RESEARCH
+  TEAMS
+  WEB_SCRAPER
+}
+
+// ===================
+// WIDGET EMBED
+// ===================
+
+model AgentEmbed {
+  id        String   @id @default(cuid())
+
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Embed configuration
+  enabled       Boolean @default(true)
+  allowedDomains String[] @default([])
+
+  // Customization - Basic
+  displayName   String?
+  welcomeMessage String?
+  logo          String?
+
+  // Customization - Colors (like Lindy)
+  accentColor       String  @default("#6366f1")
+  backgroundColor   String  @default("#ffffff")
+  textColor         String  @default("#1f2937")
+  userBubbleColor   String  @default("#6366f1")
+  botBubbleColor    String  @default("#f3f4f6")
+
+  // Customization - Position & Size
+  position          EmbedPosition @default(BOTTOM_RIGHT)
+  buttonSize        Int     @default(56)
+  windowWidth       Int     @default(400)
+  windowHeight      Int     @default(600)
+
+  // Customization - Behavior
+  autoOpen          Boolean @default(false)
+  autoOpenDelay     Int     @default(0)  // seconds
+  showBranding      Boolean @default(true)
+  collectEmail      Boolean @default(false)
+  requireEmail      Boolean @default(false)
+
+  // Suggested prompts
+  conversationStarters Json @default("[]")
+
+  // Custom CSS (advanced)
+  customCss         String? @db.Text
+
+  // Analytics
+  totalConversations Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_embed")
+}
+
+enum EmbedPosition {
+  BOTTOM_RIGHT
+  BOTTOM_LEFT
+  TOP_RIGHT
+  TOP_LEFT
+}
+
+// ===================
+// AGENT EMAIL ADDRESS (Inbound Email Trigger)
+// ===================
+
+model AgentEmailAddress {
+  id        String   @id @default(cuid())
+
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Unique email address for this agent
+  localPart String   // e.g., "agent-abc123"
+  domain    String   @default("agents.nodebase.app")
+
+  // Configuration
+  autoReply Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([localPart, domain])
+  @@map("agent_email_address")
+}
+
+// ===================
+// INTEGRATIONS
+// ===================
+
+model Integration {
+  id        String   @id @default(cuid())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      IntegrationType
+
+  // OAuth tokens (encrypted)
+  accessToken  String  @db.Text
+  refreshToken String? @db.Text
+  expiresAt    DateTime?
+
+  // Account info
+  accountEmail String?
+  accountName  String?
+
+  // Scopes granted
+  scopes    String[] @default([])
+
+  // Slack-specific fields
+  teamId      String?
+  teamName    String?
+  botUserId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@map("integration")
+}
+
+enum IntegrationType {
+  // Google
+  GMAIL
+  GOOGLE_CALENDAR
+  GOOGLE_SHEETS
+  GOOGLE_DRIVE
+  GOOGLE_DOCS
+  // Microsoft
+  OUTLOOK
+  OUTLOOK_CALENDAR
+  MICROSOFT_TEAMS
+  // Other
+  SLACK
+  NOTION
+}
+
+// ===================
+// AGENT SWARMS (Parallel Execution)
+// ===================
+
+model AgentSwarm {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Swarm configuration
+  name      String
+  taskTemplate String @db.Text // Template with {{variable}} placeholders
+
+  // Status
+  status    SwarmStatus @default(PENDING)
+
+  // Tasks
+  tasks     SwarmTask[]
+
+  // Stats
+  totalTasks     Int @default(0)
+  completedTasks Int @default(0)
+  failedTasks    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_swarm")
+}
+
+model SwarmTask {
+  id        String   @id @default(cuid())
+
+  swarmId   String
+  swarm     AgentSwarm @relation(fields: [swarmId], references: [id], onDelete: Cascade)
+
+  // Task input (JSON with variables)
+  input     Json
+
+  // Execution
+  status    SwarmTaskStatus @default(PENDING)
+  output    String?  @db.Text
+  error     String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("swarm_task")
+}
+
+enum SwarmStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SwarmTaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ===================
+// MEETING RECORDINGS
+// ===================
+
+model MeetingRecording {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Meeting info
+  title          String
+  meetingUrl     String?    // Zoom/Meet URL
+  meetingPlatform MeetingPlatform
+
+  // Calendar event reference
+  calendarEventId String?
+
+  // Recording
+  status         RecordingStatus @default(SCHEDULED)
+  recordingUrl   String?
+
+  // Transcript & Summary
+  transcript     String?   @db.Text
+  summary        String?   @db.Text
+  actionItems    Json      @default("[]")
+
+  // Participants
+  participants   Json      @default("[]")
+
+  // Timing
+  scheduledAt    DateTime
+  startedAt      DateTime?
+  endedAt        DateTime?
+  duration       Int?      // minutes
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("meeting_recording")
+}
+
+enum MeetingPlatform {
+  ZOOM
+  GOOGLE_MEET
+  MICROSOFT_TEAMS
+  OTHER
+}
+
+enum RecordingStatus {
+  SCHEDULED
+  JOINING
+  RECORDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ===================
+// VOICE/PHONE AGENT (Twilio)
+// ===================
+
+model AgentPhoneNumber {
+  id        String   @id @default(cuid())
+
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Twilio phone number
+  phoneNumber String  @unique
+  twilioSid   String  @unique
+
+  // Configuration
+  voiceEnabled   Boolean @default(true)
+  voiceGreeting  String? @db.Text
+
+  // Call logs
+  calls     PhoneCall[]
+
+  createdAt DateTime @default(now())
+
+  @@map("agent_phone_number")
+}
+
+model PhoneCall {
+  id        String   @id @default(cuid())
+
+  phoneNumberId String
+  phoneNumber   AgentPhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+
+  // Call details
+  direction   CallDirection
+  fromNumber  String
+  toNumber    String
+  status      CallStatus @default(INITIATED)
+
+  // Twilio Call SID for tracking
+  twilioCallSid String? @unique
+
+  // Recording & transcript
+  recordingUrl  String?
+  transcript    String?  @db.Text
+
+  // Conversation created from this call
+  conversationId String?
+
+  duration    Int?     // seconds
+
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+
+  @@map("phone_call")
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  NO_ANSWER
+}
+
+// ===================
+// AGENT ANALYTICS METRICS
+// ===================
+
+model AgentMetric {
+  id        String   @id @default(cuid())
+
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Time period
+  date      DateTime @db.Date
+
+  // Conversation metrics
+  totalConversations   Int @default(0)
+  totalMessages        Int @default(0)
+  avgMessagesPerConvo  Float @default(0)
+
+  // Performance
+  avgResponseTimeMs    Int @default(0)
+  totalTokensUsed      Int @default(0)
+
+  // Tool usage
+  toolCallsCount       Int @default(0)
+  toolSuccessRate      Float @default(0)
+
+  // Satisfaction (if feedback enabled)
+  feedbackPositive     Int @default(0)
+  feedbackNegative     Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, date])
+  @@map("agent_metric")
 }

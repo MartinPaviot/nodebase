@@ -1,7 +1,7 @@
 "use client";
 
 import { useReactFlow, type Node, type NodeProps} from "@xyflow/react";
-import { GlobeIcon } from "lucide-react";
+import { Globe } from "@phosphor-icons/react";
 import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { OpenAiDialog, OpenAiFormValues } from "./dialog";

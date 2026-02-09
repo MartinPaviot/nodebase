@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tansta
 import { toast } from "sonner";
 import { useCredentialsParams } from "./use-credentials-params";
 import { CredentialType } from "@/generated/prisma";
+
 /**
 * Hook to fetch all credentials using suspense
 */
@@ -21,14 +22,22 @@ export const useSuspenseCredentials = () => {
 export const useCreateCredential = () => {
     const queryClient = useQueryClient();
     const trpc = useTRPC();
+    const [params] = useCredentialsParams();
 
     return useMutation(
         trpc.credentials.create.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Credential "${data.name}" created`);
-                queryClient.invalidateQueries(
-                    trpc.credentials.getMany.queryOptions({}),
-                );
+                // Update cache optimistically instead of invalidating all queries
+                const queryKey = trpc.credentials.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: [data, ...old.items],
+                        totalCount: old.totalCount + 1,
+                    };
+                });
             },
             onError: (error) => {
                 toast.error(`Failed to create credential: ${error.message}`);
@@ -43,15 +52,25 @@ export const useCreateCredential = () => {
 export const useRemoveCredential = () => {
     const trpc = useTRPC();
     const queryClient = useQueryClient();
+    const [params] = useCredentialsParams();
 
     return useMutation(
         trpc.credentials.remove.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Credential "${data.name}" removed`);
-                queryClient.invalidateQueries(trpc.credentials.getMany.queryOptions({}));
-                queryClient.invalidateQueries(
-                    trpc.credentials.getOne.queryFilter({ id: data.id}),
-                )
+                // Update cache optimistically instead of invalidating all queries
+                const queryKey = trpc.credentials.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: old.items.filter((c) => c.id !== data.id),
+                        totalCount: old.totalCount - 1,
+                    };
+                });
+                queryClient.removeQueries(
+                    trpc.credentials.getOne.queryFilter({ id: data.id }),
+                );
             }
         })
     )
@@ -67,19 +86,27 @@ export const useSuspenseCredential = (id: string) => {
 
 
 /**
-* Hook to update a credential name
+* Hook to update a credential
 */
 export const useUpdateCredential = () => {
     const queryClient = useQueryClient();
     const trpc = useTRPC();
+    const [params] = useCredentialsParams();
 
     return useMutation(
         trpc.credentials.update.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Credential "${data.name}" saved`);
-                queryClient.invalidateQueries(
-                    trpc.credentials.getMany.queryOptions({}),
-                );
+                // Update list cache optimistically
+                const queryKey = trpc.credentials.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((c) => c.id === data.id ? data : c),
+                    };
+                });
+                // Invalidate single item cache to refetch
                 queryClient.invalidateQueries(
                     trpc.credentials.getOne.queryOptions({ id: data.id }),
                 );

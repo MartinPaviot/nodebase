@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { forwardRef, type HTMLAttributes } from "react";
 import { NodeStatus } from "./node-status-indicator";
-import { CheckCircle2Icon, Loader2Icon, XCircleIcon } from "lucide-react";
+import { CheckCircle, CircleNotch, XCircle } from "@phosphor-icons/react";
 
 interface BaseNodeProps extends HTMLAttributes<HTMLDivElement> {
   status?: NodeStatus;
@@ -23,13 +23,13 @@ export const BaseNode = forwardRef<
   >
     {props.children}
     {status === "error" && (
-        <XCircleIcon className="absolute right-0.5 bottom-0.5 size-2 text-red-700 stroke-3" />
+        <XCircle className="absolute right-0.5 bottom-0.5 size-2 text-red-700" weight="bold" />
       )}
     {status === "success" && (
-      <CheckCircle2Icon className="absolute right-0.5 bottom-0.5 size-2 text-green-700 stroke-3" />
+      <CheckCircle className="absolute right-0.5 bottom-0.5 size-2 text-green-700" weight="bold" />
     )}
     {status === "loading" && (
-      <Loader2Icon className="absolute -right-0.5 -bottom-0.5 size-2 text-blue-700 stroke-3 animate-spin" />
+      <CircleNotch className="absolute -right-0.5 -bottom-0.5 size-2 text-blue-700 animate-spin" weight="bold" />
     )}
     
 

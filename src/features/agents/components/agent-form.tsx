@@ -12,22 +12,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCreateAgent, useUpdateAgent } from "../hooks/use-agents";
 import { useRouter } from "next/navigation";
 import { useUpgradeModal } from "@/hooks/use-upgrade-modal";
-import { Loader2Icon } from "lucide-react";
+import { CircleNotch } from "@phosphor-icons/react";
 import type { Agent, Credential } from "@/generated/prisma";
 
 const agentFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(1000).optional(),
   systemPrompt: z.string().min(1, "System prompt is required").max(10000),
+  context: z.string().max(10000).optional(),
   model: z.enum(["ANTHROPIC", "OPENAI", "GEMINI"]),
   temperature: z.number().min(0).max(2),
   credentialId: z.string().optional(),
+  safeMode: z.boolean(),
 });
 
 type AgentFormData = z.infer<typeof agentFormSchema>;
@@ -59,9 +62,11 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
       systemPrompt:
         agent?.systemPrompt ||
         "You are a helpful AI assistant. Be concise and helpful in your responses.",
+      context: agent?.context || "",
       model: (agent?.model as AgentFormData["model"]) || "ANTHROPIC",
       temperature: agent?.temperature || 0.7,
       credentialId: agent?.credentialId || undefined,
+      safeMode: agent?.safeMode || false,
     },
   });
 
@@ -147,6 +152,24 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
           </p>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="context">Context (Global Instructions)</Label>
+          <Textarea
+            id="context"
+            placeholder="Instructions that the agent will always keep in mind. Example: 'Never schedule meetings before 11am. Always be concise.'"
+            rows={4}
+            {...register("context")}
+          />
+          {errors.context && (
+            <p className="text-sm text-destructive">
+              {errors.context.message}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Unlike memory, context cannot be modified by the agent.
+          </p>
+        </div>
+
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Model</Label>
@@ -179,22 +202,23 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
                   onValueChange={(value) =>
                     field.onChange(value === "" ? undefined : value)
                   }
+                  disabled={filteredCredentials.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select credential" />
+                    <SelectValue
+                      placeholder={
+                        filteredCredentials.length === 0
+                          ? `No ${selectedModel} credentials found`
+                          : "Select credential"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredCredentials.length === 0 ? (
-                      <SelectItem value="" disabled>
-                        No {selectedModel} credentials found
+                    {filteredCredentials.map((cred) => (
+                      <SelectItem key={cred.id} value={cred.id}>
+                        {cred.name}
                       </SelectItem>
-                    ) : (
-                      filteredCredentials.map((cred) => (
-                        <SelectItem key={cred.id} value={cred.id}>
-                          {cred.name}
-                        </SelectItem>
-                      ))
-                    )}
+                    ))}
                   </SelectContent>
                 </Select>
               )}
@@ -235,6 +259,25 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
           </p>
         </div>
 
+        <Controller
+          name="safeMode"
+          control={control}
+          render={({ field }) => (
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label>Safe Mode</Label>
+                <p className="text-sm text-muted-foreground">
+                  Ask for confirmation before executing actions like sending emails or creating events
+                </p>
+              </div>
+              <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </div>
+          )}
+        />
+
         <div className="flex gap-3 pt-4">
           <Button
             type="button"
@@ -245,7 +288,7 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2Icon className="mr-2 size-4 animate-spin" />}
+            {isPending && <CircleNotch className="mr-2 size-4 animate-spin" />}
             {isEditing ? "Save changes" : "Create agent"}
           </Button>
         </div>

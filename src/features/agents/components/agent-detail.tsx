@@ -1,28 +1,44 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   useSuspenseAgent,
   useSuspenseConversations,
   useCreateConversation,
-  useDeleteConversation,
 } from "../hooks/use-agents";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import {
-  BotIcon,
-  MessageSquareIcon,
-  PlusIcon,
-  SettingsIcon,
-  TrashIcon,
-  Loader2Icon,
-  WrenchIcon,
-} from "lucide-react";
+  Robot,
+  ChatCircle,
+  Plus,
+  CircleNotch,
+  Envelope,
+  Globe,
+  Clock,
+  PushPin,
+  Archive,
+  ShareNetwork,
+  Lightning,
+  Phone,
+} from "@phosphor-icons/react";
 import Link from "next/link";
+import { ConversationMenu } from "./conversation-menu";
+
+// Source icons mapping
+const sourceIcons: Record<string, typeof ChatCircle> = {
+  CHAT: ChatCircle,
+  EMBED: Globe,
+  EMAIL: Envelope,
+  PHONE: Phone,
+  SLACK: ChatCircle,
+  WEBHOOK: Lightning,
+  SCHEDULE: Clock,
+};
 
 interface AgentDetailProps {
   agentId: string;
@@ -33,7 +49,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
   const agent = useSuspenseAgent(agentId);
   const conversations = useSuspenseConversations(agentId);
   const createConversation = useCreateConversation();
-  const deleteConversation = useDeleteConversation();
+  const [showArchived, setShowArchived] = useState(false);
 
   const handleNewConversation = () => {
     createConversation.mutate(
@@ -46,186 +62,233 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
     );
   };
 
-  const handleDeleteConversation = (conversationId: string) => {
-    deleteConversation.mutate({ id: conversationId });
-  };
-
-  const modelLabels = {
+  const modelLabels: Record<string, string> = {
     ANTHROPIC: "Claude",
     OPENAI: "GPT-4o",
     GEMINI: "Gemini",
   };
 
+  // Separate and sort conversations: pinned first, then by date
+  const { pinnedConversations, regularConversations, archivedConversations } = useMemo(() => {
+    const items = conversations.data.items;
+    const pinned = items.filter((c) => c.isPinned && !c.isArchived);
+    const regular = items.filter((c) => !c.isPinned && !c.isArchived);
+    const archived = items.filter((c) => c.isArchived);
+    return {
+      pinnedConversations: pinned,
+      regularConversations: regular,
+      archivedConversations: archived,
+    };
+  }, [conversations.data.items]);
+
+  const displayedConversations = showArchived
+    ? archivedConversations
+    : [...pinnedConversations, ...regularConversations];
+
   return (
-    <div className="container py-8">
-      {/* Agent Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <Avatar className="size-16">
-            {agent.data.avatar ? (
-              <AvatarImage src={agent.data.avatar} alt={agent.data.name} />
-            ) : null}
-            <AvatarFallback className="bg-primary/10">
-              <BotIcon className="size-8 text-primary" />
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h1 className="text-2xl font-semibold">{agent.data.name}</h1>
-            {agent.data.description && (
-              <p className="text-muted-foreground mt-1">
-                {agent.data.description}
-              </p>
-            )}
-            <div className="flex items-center gap-2 mt-2">
-              <Badge variant="secondary">
-                {modelLabels[agent.data.model]}
-              </Badge>
-              <Badge variant="outline">
-                Temp: {agent.data.temperature.toFixed(1)}
-              </Badge>
-              {agent.data.agentTools.length > 0 && (
-                <Badge variant="outline">
-                  <WrenchIcon className="size-3 mr-1" />
-                  {agent.data.agentTools.length} tool
-                  {agent.data.agentTools.length !== 1 ? "s" : ""}
-                </Badge>
+    <div className="flex-1 overflow-auto bg-[#FAF9F6]">
+      {/* Agent Header - Lindy style simple */}
+      <div className="px-10 pt-10 pb-8">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-5">
+            {/* Agent Avatar - Lindy gold/amber square icon */}
+            <div className="size-16 rounded-2xl bg-[#FEF3C7] flex items-center justify-center shadow-sm">
+              <Robot className="size-8 text-[#D97706]" strokeWidth={1.5} />
+            </div>
+            <div>
+              <h1 className="text-[28px] font-semibold text-[#1a1a1a] leading-tight">
+                {agent.data.name}
+              </h1>
+              {agent.data.description && (
+                <p className="text-[#6B7280] mt-2 max-w-2xl text-[15px] leading-relaxed">
+                  {agent.data.description}
+                </p>
               )}
+              <div className="flex items-center gap-2 mt-4">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#F3F4F6] text-[#374151] text-[13px] font-medium">
+                  {modelLabels[agent.data.model] || agent.data.model}
+                </span>
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#F3F4F6] text-[#374151] text-[13px] font-medium">
+                  Temp: {agent.data.temperature.toFixed(1)}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
+
+          {/* Single action button - Lindy style */}
           <Button
             onClick={handleNewConversation}
             disabled={createConversation.isPending}
+            className="bg-[#F4D03F] hover:bg-[#E6C147] text-[#1a1a1a] font-medium rounded-full px-6 h-11 shadow-none"
           >
             {createConversation.isPending ? (
-              <Loader2Icon className="size-4 animate-spin mr-2" />
+              <CircleNotch className="size-4 animate-spin mr-2" />
             ) : (
-              <PlusIcon className="size-4 mr-2" />
+              <Plus className="size-4 mr-2" strokeWidth={2.5} />
             )}
             New chat
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href={`/agents/${agentId}/edit`}>
-              <SettingsIcon className="size-4 mr-2" />
-              Settings
-            </Link>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Conversations List */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquareIcon className="size-5" />
-              Conversations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {conversations.data.items.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquareIcon className="size-12 text-muted-foreground/50 mx-auto mb-4" />
-                <p className="text-muted-foreground">No conversations yet.</p>
-                <Button
-                  className="mt-4"
-                  onClick={handleNewConversation}
-                  disabled={createConversation.isPending}
-                >
-                  Start your first conversation
-                </Button>
+      {/* Content */}
+      <div className="px-10 pb-10">
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Conversations List - Lindy style with coral/peach border */}
+          <div className="lg:col-span-2 rounded-2xl border-[3px] border-[#F9A8A8] bg-white p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="flex items-center gap-2.5 text-[16px] font-semibold text-[#1a1a1a]">
+                <ChatCircle className="size-5 text-[#6B7280]" />
+                Conversations
+              </h3>
+              <div className="flex items-center gap-2">
+                {archivedConversations.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="show-archived"
+                      checked={showArchived}
+                      onCheckedChange={setShowArchived}
+                      className="data-[state=checked]:bg-[#10b981]"
+                    />
+                    <Label htmlFor="show-archived" className="text-[13px] text-[#6B7280] flex items-center gap-1.5 cursor-pointer">
+                      <Archive className="size-3.5" />
+                      Archived ({archivedConversations.length})
+                    </Label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {displayedConversations.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="size-16 rounded-2xl bg-[#F3F4F6] flex items-center justify-center mx-auto mb-4">
+                  <ChatCircle className="size-8 text-[#9CA3AF]" />
+                </div>
+                <p className="text-[#6B7280] text-[15px]">
+                  {showArchived ? "No archived conversations." : "No conversations yet."}
+                </p>
+                {!showArchived && (
+                  <Button
+                    className="mt-5 rounded-full bg-[#F4D03F] hover:bg-[#E6C147] text-[#1a1a1a] font-medium px-5 shadow-none"
+                    onClick={handleNewConversation}
+                    disabled={createConversation.isPending}
+                  >
+                    Start your first conversation
+                  </Button>
+                )}
               </div>
             ) : (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-2">
-                  {conversations.data.items.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
-                    >
-                      <Link
-                        href={`/agents/${agentId}/chat/${conversation.id}`}
-                        className="flex-1 min-w-0"
-                      >
-                        <p className="font-medium truncate">
-                          {conversation.title || "New conversation"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {conversation.messages[0]?.content
-                            ? conversation.messages[0].content.slice(0, 60) +
-                              (conversation.messages[0].content.length > 60
-                                ? "..."
-                                : "")
-                            : "No messages yet"}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatDistanceToNow(conversation.updatedAt, {
-                            addSuffix: true,
-                          })}
-                        </p>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() =>
-                          handleDeleteConversation(conversation.id)
-                        }
-                        disabled={deleteConversation.isPending}
-                      >
-                        <TrashIcon className="size-4 text-destructive" />
-                      </Button>
+              <ScrollArea className="h-[420px]">
+                <div className="space-y-1">
+                  {/* Pinned Section Header */}
+                  {!showArchived && pinnedConversations.length > 0 && (
+                    <div className="flex items-center gap-2 text-[11px] text-[#9CA3AF] font-semibold tracking-wide py-2 uppercase">
+                      <PushPin className="size-3" />
+                      Pinned
                     </div>
-                  ))}
+                  )}
+
+                  {displayedConversations.map((conversation, index) => {
+                    const SourceIcon = sourceIcons[conversation.source] || ChatCircle;
+                    const isPinned = conversation.isPinned;
+                    const isFirstRegular = !showArchived && isPinned === false && index === pinnedConversations.length && pinnedConversations.length > 0;
+
+                    return (
+                      <div key={conversation.id}>
+                        {/* Regular Section Header */}
+                        {isFirstRegular && (
+                          <div className="flex items-center gap-2 text-[11px] text-[#9CA3AF] font-semibold tracking-wide py-2 mt-4 uppercase">
+                            <ChatCircle className="size-3" />
+                            Recent
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-[#e5e7eb] hover:bg-[#F9FAFB] transition-colors group">
+                          <Link
+                            href={`/agents/${agentId}/chat/${conversation.id}`}
+                            className="flex-1 min-w-0 flex items-start gap-3"
+                          >
+                            <div className="shrink-0 mt-0.5">
+                              <SourceIcon className="size-4 text-[#9CA3AF]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-[14px] text-[#1a1a1a] truncate">
+                                  {conversation.title || "New conversation"}
+                                </p>
+                                {isPinned && (
+                                  <PushPin className="size-3 text-[#F4D03F] shrink-0" />
+                                )}
+                                {conversation.shareToken && (
+                                  <ShareNetwork className="size-3 text-[#9CA3AF] shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-[13px] text-[#6B7280] mt-0.5">
+                                {conversation.messages[0]?.createdAt
+                                  ? formatDistanceToNow(conversation.messages[0].createdAt, { addSuffix: true })
+                                  : "No messages yet"}
+                              </p>
+                            </div>
+                          </Link>
+                          <ConversationMenu conversation={conversation} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Agent Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium">System Prompt</p>
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-4">
-                {agent.data.systemPrompt}
-              </p>
-            </div>
-
-            {agent.data.credential && (
+          {/* Configuration Panel - Lindy style simple */}
+          <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6">
+            <h3 className="text-[16px] font-semibold text-[#1a1a1a] mb-5">Configuration</h3>
+            <div className="space-y-5">
               <div>
-                <p className="text-sm font-medium">API Credential</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {agent.data.credential.name}
+                <p className="text-[13px] font-semibold text-[#374151] mb-1.5">System Prompt</p>
+                <p className="text-[13px] text-[#6B7280] leading-relaxed line-clamp-8">
+                  {agent.data.systemPrompt}
                 </p>
               </div>
-            )}
 
-            {agent.data.agentTools.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-2">Connected Tools</p>
-                <div className="space-y-2">
-                  {agent.data.agentTools.map((tool) => (
-                    <div
-                      key={tool.id}
-                      className="text-sm p-2 rounded bg-muted/50"
-                    >
-                      <p className="font-medium">{tool.name}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {tool.description}
-                      </p>
-                    </div>
-                  ))}
+              {agent.data.context && (
+                <div>
+                  <p className="text-[13px] font-semibold text-[#374151] mb-1.5">Context</p>
+                  <p className="text-[13px] text-[#6B7280] whitespace-pre-wrap line-clamp-4 leading-relaxed">
+                    {agent.data.context}
+                  </p>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+
+              {agent.data.credential && (
+                <div>
+                  <p className="text-[13px] font-semibold text-[#374151] mb-1.5">API Credential</p>
+                  <p className="text-[13px] text-[#6B7280]">
+                    {agent.data.credential.name}
+                  </p>
+                </div>
+              )}
+
+              {agent.data.agentTools.length > 0 && (
+                <div>
+                  <p className="text-[13px] font-semibold text-[#374151] mb-2">Connected Tools</p>
+                  <div className="space-y-2">
+                    {agent.data.agentTools.map((tool) => (
+                      <div
+                        key={tool.id}
+                        className="text-[13px] p-3 rounded-xl bg-[#F9FAFB] border border-[#e5e7eb]"
+                      >
+                        <p className="font-medium text-[#374151]">{tool.name}</p>
+                        <p className="text-[#6B7280] text-[12px] mt-0.5">
+                          {tool.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

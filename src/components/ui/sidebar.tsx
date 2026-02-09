@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { PanelLeftIcon } from "lucide-react"
+import { SidebarSimple } from "@phosphor-icons/react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -27,7 +27,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "14rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -244,7 +244,7 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm overflow-x-hidden overflow-y-auto"
         >
           {children}
         </div>
@@ -273,14 +273,71 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <SidebarSimple />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, setOpen } = useSidebar()
+  const startXRef = React.useRef<number | null>(null)
+  const isDraggingRef = React.useRef(false)
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startXRef.current = e.clientX
+    isDraggingRef.current = false
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (startXRef.current === null) return
+      const deltaX = moveEvent.clientX - startXRef.current
+      // If dragged left more than 50px, close the sidebar
+      if (deltaX < -50) {
+        isDraggingRef.current = true
+        setOpen(false)
+        cleanup()
+      }
+    }
+
+    const handleMouseUp = () => {
+      // Only toggle if it was a click (not a drag)
+      if (!isDraggingRef.current && startXRef.current !== null) {
+        toggleSidebar()
+      }
+      cleanup()
+    }
+
+    const cleanup = () => {
+      startXRef.current = null
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX
+    isDraggingRef.current = false
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (startXRef.current === null) return
+    const deltaX = e.touches[0].clientX - startXRef.current
+    if (deltaX < -50) {
+      isDraggingRef.current = true
+      setOpen(false)
+      startXRef.current = null
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (!isDraggingRef.current && startXRef.current !== null) {
+      toggleSidebar()
+    }
+    startXRef.current = null
+  }
 
   return (
     <button
@@ -288,8 +345,11 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
       tabIndex={-1}
-      onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      title="Drag to close or click to toggle"
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
@@ -348,7 +408,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2 overflow-hidden min-w-0", className)}
       {...props}
     />
   )
@@ -374,7 +434,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}

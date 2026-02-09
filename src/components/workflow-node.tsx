@@ -1,7 +1,7 @@
 "use client";
 
 import { NodeToolbar, Position } from "@xyflow/react";
-import { SettingsIcon, TrashIcon } from "lucide-react";
+import { Gear, Trash } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Button } from "./ui/button";
 
@@ -27,10 +27,10 @@ export function WorkflowNode({
             {showToolbar && (
                 <NodeToolbar>
                     <Button size="sm" variant="ghost" onClick={onSettings}>
-                        <SettingsIcon className="size-4" />
+                        <Gear className="size-4" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={onDelete}>
-                        <TrashIcon className="size-4" />
+                        <Trash className="size-4" />
                     </Button>
                 </NodeToolbar>
             )}

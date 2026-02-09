@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CopyIcon } from "lucide-react";
+import { Copy } from "@phosphor-icons/react";
 
 interface Props {
     open: boolean;
@@ -66,7 +66,7 @@ export const StripeTriggerDialog = ({
                                 variant="outline"
                                 onClick={copyToClipboard}
                             >
-                                <CopyIcon className="size-4"/>
+                                <Copy className="size-4"/>
                             </Button>
                         </div>
                     </div>

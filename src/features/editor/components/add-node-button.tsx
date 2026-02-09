@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
+import { Plus } from "@phosphor-icons/react";
 import { memo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NodeSelector } from "@/components/node-selector";
@@ -15,7 +15,7 @@ export const AddNodeButton = memo(() => {
                 variant="outline"
                 className="bg-background"
             >
-                <PlusIcon/>
+                <Plus />
             </Button>
         </NodeSelector>
     )

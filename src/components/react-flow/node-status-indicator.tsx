@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { LoaderCircle } from "lucide-react";
+import { CircleNotch } from "@phosphor-icons/react";
 
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ export const SpinnerLoadingIndicator = ({
       <div className="absolute inset-0 z-50">
         <span className="absolute left-[calc(50%-1.25rem)] top-[calc(50%-1.25rem)] inline-block h-10 w-10 animate-ping rounded-full bg-blue-700/20" />
 
-        <LoaderCircle className="absolute left-[calc(50%-0.75rem)] top-[calc(50%-0.75rem)] size-6 animate-spin text-blue-700" />
+        <CircleNotch className="absolute left-[calc(50%-0.75rem)] top-[calc(50%-0.75rem)] size-6 animate-spin text-blue-700" />
       </div>
     </div>
   );

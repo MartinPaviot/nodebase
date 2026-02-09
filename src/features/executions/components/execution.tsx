@@ -1,7 +1,7 @@
 "use client";
 
 import { ExecutionStatus } from "@/generated/prisma";
-import { CheckCircle2Icon, ClockIcon, Loader2Icon, XCircleIcon } from "lucide-react";
+import { CheckCircle, Clock, CircleNotch, XCircle } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { useState } from "react";
@@ -23,12 +23,12 @@ import { useSuspenseExecution } from "../hooks/use-executions";
 const getStatusIcon = (status: ExecutionStatus) => {
     switch (status) {
         case ExecutionStatus.SUCCESS:
-            return <CheckCircle2Icon className="size-5 text-green-600" />;
+            return <CheckCircle className="size-5 text-green-600" />;
         case ExecutionStatus.FAILED:
-            return <XCircleIcon className="size-5 text-red-600" />;
+            return <XCircle className="size-5 text-red-600" />;
         case ExecutionStatus.RUNNING:
-            return <Loader2Icon className="size-5 text-blue-600 animate-spin" />;
-            return <ClockIcon className="size-5 text-muted-foreground" />;
+            return <CircleNotch className="size-5 text-blue-600 animate-spin" />;
+            return <Clock className="size-5 text-muted-foreground" />;
     }
 }
 

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useExecuteWorkflow } from "@/features/workflows/hooks/use-workflows";
 import { workflowsParams } from "@/features/workflows/params";
-import { FlaskConicalIcon } from "lucide-react";
+import { Flask } from "@phosphor-icons/react";
 
 export const ExecuteWorkflowButton = ({
     workflowId,
@@ -17,7 +17,7 @@ export const ExecuteWorkflowButton = ({
 
     return (
         <Button size ="lg" onClick={handleExecute} disabled={executeWorkflow.isPending}>
-            <FlaskConicalIcon className="size-4" />
+            <Flask className="size-4" />
             Execute workflows
         </Button>
     );

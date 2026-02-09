@@ -3,9 +3,9 @@
 import {createId} from "@paralleldrive/cuid2";
 import { useReactFlow } from "@xyflow/react";
 import {
-    GlobeIcon,
-    MousePointerIcon,
-} from "lucide-react";
+    Globe,
+    Cursor,
+} from "@phosphor-icons/react";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ const triggerNodes: NodeTypeOption[] = [
         type: NodeType.MANUAL_TRIGGER,
         label: "Trigger manually",
         description: "Runs the flow on clicking a button. Good for getting started quickly",
-        icon: MousePointerIcon,
+        icon: Cursor,
     },
     {
         type: NodeType.GOOGLE_FORM_TRIGGER,
@@ -52,7 +52,7 @@ const executionNodes: NodeTypeOption[] = [
         type: NodeType.HTTP_REQUEST,
         label: "HTTP Request",
         description: "Makes and HTTP request",
-        icon: GlobeIcon,
+        icon: Globe,
     },
     {
         type: NodeType.GEMINI,

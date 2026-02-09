@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { EmptyView, EntityContainer, EntityHeader, EntityItem, EntityList, EntityPagination, EntitySearch, ErrorView, LoadingView } from "@/components/entity-components";
 import { useRemoveCredential, useSuspenseCredentials } from "../hooks/use-credentials"
@@ -111,36 +112,35 @@ const credentialLogos: Record<CredentialType, string>= {
     [CredentialType.GEMINI]: "/logos/gemini.svg",
 };
 
-export const CredentialItem = ({
-    data,
-}: {
-    data: Credential
-}) => {
-    const removeCredential = useRemoveCredential();
-    const handleRemove = () => {
-        removeCredential.mutate({ id: data.id })
-    }
+export const CredentialItem = memo(
+    function CredentialItem({ data }: { data: Credential }) {
+        const removeCredential = useRemoveCredential();
+        const handleRemove = () => {
+            removeCredential.mutate({ id: data.id });
+        };
 
-    const logo = credentialLogos[data.type] || "/logos/openai.svg"
+        const logo = credentialLogos[data.type] || "/logos/openai.svg";
 
-    return (
-        <EntityItem 
-        href={`/credentials/${data.id}`}
-        title={data.name}
-        subtitle={
-            <>
-            Updated {formatDistanceToNow(data.updatedAt, { addSuffix: true })} {" "} 
-            &bull; Created{" "}
-            {formatDistanceToNow(data.createdAt, { addSuffix: true })}
-            </>
-        }
-        image={
-            <div className="size-8 flex items-center justify-center">
-                <Image src={logo} alt={data.type} width={20} height={20} />
-            </div>
-        }
-        onRemove={handleRemove}
-        isRemoving={removeCredential.isPending}
-        />
-    )
-}
+        return (
+            <EntityItem
+                href={`/credentials/${data.id}`}
+                title={data.name}
+                subtitle={
+                    <>
+                        Updated {formatDistanceToNow(data.updatedAt, { addSuffix: true })}{" "}
+                        &bull; Created{" "}
+                        {formatDistanceToNow(data.createdAt, { addSuffix: true })}
+                    </>
+                }
+                image={
+                    <div className="size-8 flex items-center justify-center">
+                        <Image src={logo} alt={data.type} width={20} height={20} />
+                    </div>
+                }
+                onRemove={handleRemove}
+                isRemoving={removeCredential.isPending}
+            />
+        );
+    },
+    (prev, next) => prev.data.id === next.data.id && prev.data.updatedAt.getTime() === next.data.updatedAt.getTime()
+);

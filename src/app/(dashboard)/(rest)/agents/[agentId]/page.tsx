@@ -1,47 +1,109 @@
-import { AgentDetail } from "@/features/agents/components/agent-detail";
-import {
-  prefetchAgent,
-  prefetchConversations,
-} from "@/features/agents/server/prefetch";
-import { requireAuth } from "@/lib/auth-utils";
-import { HydrateClient } from "@/trpc/server";
-import { Suspense } from "react";
-import { ErrorBoundary } from "react-error-boundary";
-import { Loader2Icon } from "lucide-react";
+"use client";
+
+import { use } from "react";
+import { FlowEditor } from "@/features/agents/components/flow-editor";
+import { useAgent, useUpdateAgent } from "@/features/agents/hooks/use-agents";
+import { useTemplate } from "@/features/templates/hooks/use-templates";
+import { CircleNotch } from "@phosphor-icons/react";
 
 type Props = {
   params: Promise<{ agentId: string }>;
 };
 
-const Page = async ({ params }: Props) => {
-  await requireAuth();
+function FlowEditorContent({ agentId }: { agentId: string }) {
+  const agent = useAgent(agentId);
+  const updateAgent = useUpdateAgent();
 
-  const { agentId } = await params;
+  // Fetch template separately if agent has templateId
+  const template = useTemplate(agent.data?.templateId);
 
-  prefetchAgent(agentId);
-  prefetchConversations(agentId);
+  const handleUpdate = (data: Record<string, unknown>) => {
+    updateAgent.mutate({
+      id: agentId,
+      ...data,
+    });
+  };
+
+  // Loading state - wait for agent AND template (if templateId exists)
+  const isLoadingTemplate = agent.data?.templateId && template.isLoading;
+  if (agent.isLoading || isLoadingTemplate) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#FAF9F6]">
+        <CircleNotch className="size-8 animate-spin text-[#D97706]" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (agent.error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#FAF9F6] gap-4">
+        <p className="text-destructive font-medium">Error loading agent</p>
+        <p className="text-sm text-muted-foreground max-w-md text-center">
+          {agent.error.message}
+        </p>
+      </div>
+    );
+  }
+
+  // No data state
+  if (!agent.data) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#FAF9F6]">
+        <p className="text-muted-foreground">Agent not found</p>
+      </div>
+    );
+  }
+
+  // FlowData type
+  type FlowData = {
+    nodes?: Array<{
+      id: string;
+      type: string;
+      position: { x: number; y: number };
+      data?: Record<string, unknown>;
+    }>;
+    edges?: Array<{
+      id: string;
+      source: string;
+      target: string;
+      sourceHandle?: string;
+      targetHandle?: string;
+    }>;
+  };
+
+  // Priority: agent's saved flowData > template's flowData
+  // If agent has saved flowData, use it; otherwise fall back to template
+  const agentFlowData = agent.data?.flowData as FlowData | undefined;
+  const templateFlowData = template.data?.flowData as FlowData | undefined;
+
+  // Use agent's flowData if it exists and has nodes, otherwise use template's
+  const flowDataToUse = (agentFlowData?.nodes && agentFlowData.nodes.length > 0)
+    ? agentFlowData
+    : templateFlowData;
 
   return (
-    <HydrateClient>
-      <ErrorBoundary
-        fallback={
-          <div className="container py-8">
-            <p className="text-destructive">Error loading agent</p>
-          </div>
-        }
-      >
-        <Suspense
-          fallback={
-            <div className="container py-8 flex items-center justify-center">
-              <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
-            </div>
-          }
-        >
-          <AgentDetail agentId={agentId} />
-        </Suspense>
-      </ErrorBoundary>
-    </HydrateClient>
+    <FlowEditor
+      agent={{
+        id: agent.data.id,
+        name: agent.data.name,
+        description: agent.data.description ?? undefined,
+        systemPrompt: agent.data.systemPrompt,
+        avatar: agent.data.avatar,
+        isEnabled: agent.data.isEnabled,
+        context: agent.data.context ?? undefined,
+        model: agent.data.model ?? undefined,
+        temperature: agent.data.temperature ?? undefined,
+        templateId: agent.data.templateId,
+      }}
+      onUpdate={handleUpdate}
+      templateFlowData={flowDataToUse}
+    />
   );
-};
+}
 
-export default Page;
+export default function AgentPage({ params }: Props) {
+  const { agentId } = use(params);
+
+  return <FlowEditorContent agentId={agentId} />;
+}

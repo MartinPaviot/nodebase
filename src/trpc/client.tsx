@@ -44,8 +44,14 @@ export function TRPCReactProvider(
     createTRPCClient<AppRouter>({
       links: [
         httpBatchLink({
-          transformer: superjson, 
+          transformer: superjson,
           url: getUrl(),
+          fetch(url, options) {
+            return fetch(url, {
+              ...options,
+              credentials: 'include',
+            });
+          },
         }),
       ],
     }),

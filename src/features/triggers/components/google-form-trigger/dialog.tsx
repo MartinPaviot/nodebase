@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CopyIcon } from "lucide-react";
+import { Copy } from "@phosphor-icons/react";
 import { generateGoogleFormScript } from "./utils";
 
 interface Props {
@@ -67,7 +67,7 @@ export const GoogleFormTriggerDialog = ({
                                 variant="outline"
                                 onClick={copyToClipboard}
                             >
-                                <CopyIcon className="size-4"/>
+                                <Copy className="size-4"/>
                             </Button>
                         </div>
                     </div>
@@ -99,7 +99,7 @@ export const GoogleFormTriggerDialog = ({
                                 }
                             }}
                         >
-                            <CopyIcon className="size-4 mr-2" />
+                            <Copy className="size-4 mr-2" />
                             Copy Google Apps Script
                         </Button>
                         <p className ="text-xs text-muted-foreground">

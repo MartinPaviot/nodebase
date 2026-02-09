@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { SaveIcon } from "lucide-react";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { FloppyDisk } from "@phosphor-icons/react";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -39,7 +39,7 @@ export const EditorSaveButton = ({ workflowId }: { workflowId: string }) => {
     return (
         <div className="ml-auto">
             <Button size="sm" onClick={handleSave} disabled={saveWorkflow.isPending}>
-                <SaveIcon className="size-4" />
+                <FloppyDisk className="size-4" />
                 Save
             </Button>
         </div>
@@ -136,9 +136,11 @@ export const EditorBreadcrumbs = ({ workflowId }: { workflowId: string }) => {
 };
 
 export const EditorHeader = ({ workflowId }: { workflowId: string }) => {
+    const { open } = useSidebar();
+
     return(
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background">
-            <SidebarTrigger />
+            {!open && <SidebarTrigger />}
             <div className="flex flex-row items-center justify-between gap-x-4 w-full">
                 <EditorBreadcrumbs workflowId={workflowId} />
                 <EditorSaveButton workflowId={workflowId} />

@@ -4,6 +4,7 @@ import { useTRPC } from "@/trpc/client";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useWorkflowsParams } from "./use-workflows-params";
+
 /**
 * Hook to fetch all workflows using suspense
 */
@@ -20,14 +21,22 @@ export const useSuspenseWorkflows = () => {
 export const useCreateWorkflow = () => {
     const queryClient = useQueryClient();
     const trpc = useTRPC();
+    const [params] = useWorkflowsParams();
 
     return useMutation(
         trpc.workflows.create.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Workflow "${data.name}" created`);
-                queryClient.invalidateQueries(
-                    trpc.workflows.getMany.queryOptions({}),
-                );
+                // Update cache optimistically instead of invalidating all queries
+                const queryKey = trpc.workflows.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: [data, ...old.items],
+                        totalCount: old.totalCount + 1,
+                    };
+                });
             },
             onError: (error) => {
                 toast.error(`Failed to create workflow: ${error.message}`);
@@ -42,15 +51,25 @@ export const useCreateWorkflow = () => {
 export const useRemoveWorkflow = () => {
     const trpc = useTRPC();
     const queryClient = useQueryClient();
+    const [params] = useWorkflowsParams();
 
     return useMutation(
         trpc.workflows.remove.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Workflow "${data.name}" removed`);
-                queryClient.invalidateQueries(trpc.workflows.getMany.queryOptions({}));
-                queryClient.invalidateQueries(
-                    trpc.workflows.getOne.queryFilter({ id: data.id}),
-                )
+                // Update cache optimistically instead of invalidating all queries
+                const queryKey = trpc.workflows.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: old.items.filter((w) => w.id !== data.id),
+                        totalCount: old.totalCount - 1,
+                    };
+                });
+                queryClient.removeQueries(
+                    trpc.workflows.getOne.queryFilter({ id: data.id }),
+                );
             }
         })
     )
@@ -70,14 +89,22 @@ export const useSuspenseWorkflow = (id: string) => {
 export const useUpdateWorkflowName = () => {
     const queryClient = useQueryClient();
     const trpc = useTRPC();
+    const [params] = useWorkflowsParams();
 
     return useMutation(
         trpc.workflows.updateName.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Workflow "${data.name}" updated`);
-                queryClient.invalidateQueries(
-                    trpc.workflows.getMany.queryOptions({}),
-                );
+                // Update list cache optimistically
+                const queryKey = trpc.workflows.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((w) => w.id === data.id ? data : w),
+                    };
+                });
+                // Invalidate single item cache to refetch with full data
                 queryClient.invalidateQueries(
                     trpc.workflows.getOne.queryOptions({ id: data.id }),
                 );
@@ -90,19 +117,27 @@ export const useUpdateWorkflowName = () => {
 };
 
 /**
-* Hook to update a workflow name
+* Hook to update a workflow
 */
 export const useUpdateWorkflow = () => {
     const queryClient = useQueryClient();
     const trpc = useTRPC();
+    const [params] = useWorkflowsParams();
 
     return useMutation(
         trpc.workflows.update.mutationOptions({
             onSuccess: (data) => {
                 toast.success(`Workflow "${data.name}" saved`);
-                queryClient.invalidateQueries(
-                    trpc.workflows.getMany.queryOptions({}),
-                );
+                // Update list cache optimistically
+                const queryKey = trpc.workflows.getMany.queryKey(params);
+                queryClient.setQueryData(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((w) => w.id === data.id ? data : w),
+                    };
+                });
+                // Invalidate single item cache to refetch with full data
                 queryClient.invalidateQueries(
                     trpc.workflows.getOne.queryOptions({ id: data.id }),
                 );

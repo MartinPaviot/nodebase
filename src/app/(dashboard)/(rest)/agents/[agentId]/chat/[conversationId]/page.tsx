@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth-utils";
 import { HydrateClient } from "@/trpc/server";
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { Loader2Icon } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 type Props = {
   params: Promise<{ agentId: string; conversationId: string }>;
@@ -29,7 +29,7 @@ const Page = async ({ params }: Props) => {
         <Suspense
           fallback={
             <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-              <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
+              <Spinner className="size-8" />
             </div>
           }
         >
