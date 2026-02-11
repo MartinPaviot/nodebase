@@ -14,13 +14,22 @@ import {
   workspaceScope,
 } from "./base";
 
-// Type for ScanResult (to be added to Prisma schema)
 interface ScanResultData {
   id: string;
-  workspaceId: string;
+  workspaceId: string | null;
   category: ScanCategory;
   signals: ScanSignal[];
   scannedAt: Date;
+}
+
+function toScanResultData(scan: Record<string, unknown>): ScanResultData {
+  return {
+    id: scan.id as string,
+    workspaceId: scan.workspaceId as string | null,
+    category: scan.category as ScanCategory,
+    signals: scan.signals as unknown as ScanSignal[],
+    scannedAt: scan.scannedAt as Date,
+  };
 }
 
 export class ScanResource extends BaseResource<ScanResultData> {
@@ -45,14 +54,7 @@ export class ScanResource extends BaseResource<ScanResultData> {
       throw new PermissionError(auth.userId, "ScanResult", "read");
     }
 
-    return new ScanResource(
-      {
-        ...scan,
-        category: scan.category as ScanCategory,
-        signals: scan.signals as ScanSignal[],
-      },
-      auth
-    );
+    return new ScanResource(toScanResultData(scan as unknown as Record<string, unknown>), auth);
   }
 
   /**
@@ -68,15 +70,7 @@ export class ScanResource extends BaseResource<ScanResultData> {
     });
 
     return scans.map(
-      (scan: any) =>
-        new ScanResource(
-          {
-            ...scan,
-            category: scan.category as ScanCategory,
-            signals: scan.signals as ScanSignal[],
-          },
-          auth
-        )
+      (scan) => new ScanResource(toScanResultData(scan as unknown as Record<string, unknown>), auth)
     );
   }
 
@@ -97,14 +91,7 @@ export class ScanResource extends BaseResource<ScanResultData> {
 
     if (!scan) return null;
 
-    return new ScanResource(
-      {
-        ...scan,
-        category: scan.category as ScanCategory,
-        signals: scan.signals as ScanSignal[],
-      },
-      auth
-    );
+    return new ScanResource(toScanResultData(scan as unknown as Record<string, unknown>), auth);
   }
 
   /**
@@ -119,20 +106,14 @@ export class ScanResource extends BaseResource<ScanResultData> {
   ): Promise<ScanResource> {
     const scan = await prisma.scanResult.create({
       data: {
+        userId: auth.userId,
         workspaceId: auth.workspaceId,
         category: data.category,
-        signals: data.signals as unknown as Record<string, unknown>[],
+        signals: JSON.parse(JSON.stringify(data.signals)),
       },
     });
 
-    return new ScanResource(
-      {
-        ...scan,
-        category: scan.category as ScanCategory,
-        signals: scan.signals as ScanSignal[],
-      },
-      auth
-    );
+    return new ScanResource(toScanResultData(scan as unknown as Record<string, unknown>), auth);
   }
 
   // ============================================
@@ -188,7 +169,7 @@ export class ScanResource extends BaseResource<ScanResultData> {
     return this._data.scannedAt;
   }
 
-  get workspaceId(): string {
+  get workspaceId(): string | null {
     return this._data.workspaceId;
   }
 

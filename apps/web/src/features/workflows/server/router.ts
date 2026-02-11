@@ -4,7 +4,7 @@ import type { Node, Edge } from "@xyflow/react"
 import { createTRPCRouter, premiumProcedure, protectedProcedure } from "@/trpc/init";
 import z from "zod";
 import { PAGINATION } from "@/config/constants";
-import { NodeType } from "@/generated/prisma";
+import { NodeType } from "@prisma/client";
 import { sendWorkflowExecution } from "@/queue/utils";
 
 export const workflowsRouter = createTRPCRouter({

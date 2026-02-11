@@ -6,7 +6,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { decrypt } from "@/lib/encryption";
-import { AgentModel } from "@/generated/prisma";
+import { AgentModel } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {

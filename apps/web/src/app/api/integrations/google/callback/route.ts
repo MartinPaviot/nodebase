@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import type { IntegrationType } from "@/generated/prisma";
+import type { IntegrationType } from "@prisma/client";
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,

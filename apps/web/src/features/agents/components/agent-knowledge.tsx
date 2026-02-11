@@ -46,7 +46,7 @@ import {
   Gear,
 } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
-import type { KnowledgeSourceType, KnowledgeSyncStatus } from "@/generated/prisma";
+import type { KnowledgeSourceType, KnowledgeSyncStatus } from "@prisma/client";
 
 interface AgentKnowledgeProps {
   agentId: string;

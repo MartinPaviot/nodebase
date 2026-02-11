@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ScanCategory } from "@/generated/prisma";
+import { ScanCategory } from "@prisma/client";
 import Link from "next/link";
 
 // ============================================

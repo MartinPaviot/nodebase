@@ -20,7 +20,7 @@
 import prisma from "../db";
 import { Authenticator } from "./authenticator";
 import { NotFoundError, ValidationError } from "../errors";
-import type { Agent, AgentTool, AgentMemory, Conversation } from "@/generated/prisma";
+import type { Agent, AgentTool, AgentMemory, Conversation, AgentModel } from "@prisma/client";
 
 export class AgentResource {
   private constructor(
@@ -64,10 +64,12 @@ export class AgentResource {
       tags?: string[];
     }
   ): Promise<AgentResource[]> {
+    const { tags, ...restFilters } = filters ?? {};
     const agents = await prisma.agent.findMany({
       where: {
         userId: auth.getUserId(),
-        ...filters,
+        ...restFilters,
+        ...(tags ? { tags: { hasSome: tags } } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
@@ -106,6 +108,7 @@ export class AgentResource {
     const agent = await prisma.agent.create({
       data: {
         ...data,
+        model: data.model as AgentModel,
         userId: auth.getUserId(),
         workspaceId: auth.getWorkspaceId(),
       },
@@ -295,6 +298,7 @@ export class AgentResource {
     return await prisma.agentTool.create({
       data: {
         ...data,
+        description: data.description ?? "",
         agentId: this.agent.id,
       },
     });

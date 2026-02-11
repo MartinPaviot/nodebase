@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Robot, User, ChatCircle, Envelope, Phone, Globe, Lightning, Clock } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
-import type { ConversationSource, MessageRole } from "@/generated/prisma";
+import type { ConversationSource, MessageRole } from "@prisma/client";
 
 // Source icons mapping
 const sourceIcons = {

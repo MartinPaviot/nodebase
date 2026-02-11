@@ -20,8 +20,8 @@
 
 import prisma from "../db";
 import { Authenticator } from "./authenticator";
-import { NotFoundError, ValidationError, CredentialError } from "../errors";
-import type { Credential, CredentialType } from "@/generated/prisma";
+import { ValidationError, CredentialError } from "../errors";
+import type { Credential, CredentialType } from "@prisma/client";
 import Cryptr from "cryptr";
 import { config } from "../config";
 
@@ -32,12 +32,10 @@ interface CreateCredentialData {
   name: string;
   type: CredentialType;
   value: string; // Will be encrypted before storage
-  description?: string;
 }
 
 interface UpdateCredentialData {
   name?: string;
-  description?: string;
   value?: string; // Will be encrypted before storage
 }
 
@@ -67,7 +65,7 @@ export class CredentialResource {
     }
 
     // Check permission
-    auth.assertCanAccess("Credential", credential.userId, credential.workspaceId || undefined);
+    auth.assertCanAccess("Credential", credential.userId, undefined);
 
     return new CredentialResource(credential, auth);
   }
@@ -138,9 +136,7 @@ export class CredentialResource {
         name: data.name,
         type: data.type,
         value: encryptedValue,
-        description: data.description,
         userId: auth.getUserId(),
-        workspaceId: auth.getWorkspaceId(),
       },
     });
 
@@ -163,16 +159,8 @@ export class CredentialResource {
     return this.credential.type;
   }
 
-  get description(): string | null {
-    return this.credential.description;
-  }
-
   get userId(): string {
     return this.credential.userId;
-  }
-
-  get workspaceId(): string | null {
-    return this.credential.workspaceId;
   }
 
   get createdAt(): Date {
@@ -212,7 +200,7 @@ export class CredentialResource {
    * ONLY call this server-side, NEVER send to client
    */
   async getDecryptedValue(): Promise<string> {
-    this.auth.assertCanAccess("Credential", this.credential.userId, this.credential.workspaceId || undefined);
+    this.auth.assertCanAccess("Credential", this.credential.userId, undefined);
 
     try {
       return cryptr.decrypt(this.credential.value);
@@ -266,18 +254,6 @@ export class CredentialResource {
   }
 
   /**
-   * Update credential description
-   */
-  async updateDescription(description: string | null): Promise<void> {
-    this.auth.assertCanModify("Credential", this.credential.userId);
-
-    this.credential = await prisma.credential.update({
-      where: { id: this.credential.id },
-      data: { description },
-    });
-  }
-
-  /**
    * Update credential value (encrypts automatically)
    */
   async updateValue(value: string): Promise<void> {
@@ -311,10 +287,6 @@ export class CredentialResource {
       updateData.name = data.name;
     }
 
-    if (data.description !== undefined) {
-      updateData.description = data.description;
-    }
-
     if (data.value !== undefined) {
       if (!data.value.trim()) {
         throw new ValidationError("value", data.value, "Value cannot be empty");
@@ -337,7 +309,7 @@ export class CredentialResource {
    * Returns true if valid, throws CredentialError if invalid
    */
   async validate(): Promise<boolean> {
-    this.auth.assertCanAccess("Credential", this.credential.userId, this.credential.workspaceId || undefined);
+    this.auth.assertCanAccess("Credential", this.credential.userId, undefined);
 
     const decryptedValue = await this.getDecryptedValue();
 

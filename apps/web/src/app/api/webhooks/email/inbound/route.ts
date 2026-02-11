@@ -5,7 +5,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
-import { AgentModel } from "@/generated/prisma";
+import { AgentModel } from "@prisma/client";
 
 export const maxDuration = 60;
 

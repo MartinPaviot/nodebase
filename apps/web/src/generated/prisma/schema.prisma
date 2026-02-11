@@ -216,6 +216,16 @@ model Agent {
   // Safe Mode - ask confirmation before side-effect actions
   safeMode Boolean @default(false)
 
+  // V6 Features - LLM Configuration
+  llmTier        String? // "fast" (Haiku) | "smart" (Sonnet) | "deep" (Opus)
+  maxStepsPerRun Int?    @default(10)
+
+  // V6 Features - Eval Rules (L1/L2/L3)
+  evalRules Json? // { assertions: [], min_confidence: 0.6, l3_trigger: "on_irreversible_action", ... }
+
+  // Workspace (for multi-tenancy)
+  workspaceId String?
+
   // Avatar/Icon (optional)
   avatar String?
 
@@ -1274,9 +1284,10 @@ model AiEvent {
   traceId String?
   trace   AgentTrace? @relation(fields: [traceId], references: [id], onDelete: Cascade)
 
-  agentId     String
-  userId      String
-  workspaceId String
+  agentId        String?
+  conversationId String?
+  userId         String
+  workspaceId    String?
 
   // Model info
   model String // "claude-3-5-haiku-20241022" | "claude-sonnet-4-20250514" | "claude-opus-4-20250514"

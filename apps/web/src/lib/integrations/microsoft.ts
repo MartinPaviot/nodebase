@@ -5,7 +5,7 @@ import {
   AuthorizationCodeRequest,
 } from "@azure/msal-node";
 import prisma from "@/lib/db";
-import type { IntegrationType } from "@/generated/prisma";
+import type { IntegrationType } from "@prisma/client";
 
 // Microsoft Graph API scopes for each integration type
 export const MICROSOFT_SCOPES: Record<string, string[]> = {

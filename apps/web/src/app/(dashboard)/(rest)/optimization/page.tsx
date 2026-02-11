@@ -16,28 +16,36 @@ import {
   ExternalLink,
   Eye,
 } from 'lucide-react';
-import { trpc } from '@/trpc/client';
+import { useTRPC } from '@/trpc/client';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 export default function OptimizationQueuePage() {
   const [selectedTab, setSelectedTab] = useState('runs');
+  const trpc = useTRPC();
 
   // Fetch optimization runs
-  const { data: runs, isLoading: runsLoading, refetch: refetchRuns } = trpc.optimization.getOptimizationRuns.useQuery();
+  const { data: runs, isLoading: runsLoading, refetch: refetchRuns } = useQuery(
+    trpc.optimization.getOptimizationRuns.queryOptions()
+  );
 
   // Fetch A/B tests
-  const { data: tests, isLoading: testsLoading, refetch: refetchTests } = trpc.optimization.getAllABTests.useQuery();
+  const { data: tests, isLoading: testsLoading, refetch: refetchTests } = useQuery(
+    trpc.optimization.getAllABTests.queryOptions()
+  );
 
   // Mutation to select A/B test winner
-  const selectWinner = trpc.optimization.selectABTestWinner.useMutation({
-    onSuccess: () => {
-      toast.success('Winner selected and rolled out');
-      refetchTests();
-    },
-    onError: (error) => {
-      toast.error(`Failed to select winner: ${error.message}`);
-    },
-  });
+  const selectWinner = useMutation(
+    trpc.optimization.selectABTestWinner.mutationOptions({
+      onSuccess: () => {
+        toast.success('Winner selected and rolled out');
+        refetchTests();
+      },
+      onError: (error) => {
+        toast.error(`Failed to select winner: ${error.message}`);
+      },
+    })
+  );
 
   if (runsLoading && testsLoading) {
     return <LoadingSkeleton />;

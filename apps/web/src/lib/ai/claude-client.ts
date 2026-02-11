@@ -213,7 +213,7 @@ export class ClaudeClient {
           return {
             content: finalContent,
             toolCalls: [],
-            stopReason: response.stop_reason,
+            stopReason: response.stop_reason ?? "end_turn",
             usage: response.usage,
             events,
           };

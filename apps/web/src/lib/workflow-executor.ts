@@ -1,7 +1,7 @@
 import prisma from "@/lib/db";
 import { topologicalSort } from "@/inngest/utils";
 import { getExecutor } from "@/features/executions/lib/executor-registry";
-import { NodeType } from "@/generated/prisma";
+import { NodeType } from "@prisma/client";
 import type { WorkflowContext, StepTools } from "@/features/executions/types";
 import type { Realtime } from "@inngest/realtime";
 

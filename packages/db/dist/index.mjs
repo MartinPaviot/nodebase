@@ -261,6 +261,15 @@ var AgentResource = class _AgentResource extends BaseResource {
 
 // src/resources/scan.ts
 import { PermissionError as PermissionError3 } from "@nodebase/types";
+function toScanResultData(scan) {
+  return {
+    id: scan.id,
+    workspaceId: scan.workspaceId,
+    category: scan.category,
+    signals: scan.signals,
+    scannedAt: scan.scannedAt
+  };
+}
 var ScanResource = class _ScanResource extends BaseResource {
   // ============================================
   // Static Factory Methods
@@ -276,14 +285,7 @@ var ScanResource = class _ScanResource extends BaseResource {
     if (scan.workspaceId !== auth.workspaceId) {
       throw new PermissionError3(auth.userId, "ScanResult", "read");
     }
-    return new _ScanResource(
-      {
-        ...scan,
-        category: scan.category,
-        signals: scan.signals
-      },
-      auth
-    );
+    return new _ScanResource(toScanResultData(scan), auth);
   }
   /**
    * Find all scan results in the workspace.
@@ -294,14 +296,7 @@ var ScanResource = class _ScanResource extends BaseResource {
       ...buildQueryOptions(options)
     });
     return scans.map(
-      (scan) => new _ScanResource(
-        {
-          ...scan,
-          category: scan.category,
-          signals: scan.signals
-        },
-        auth
-      )
+      (scan) => new _ScanResource(toScanResultData(scan), auth)
     );
   }
   /**
@@ -316,14 +311,7 @@ var ScanResource = class _ScanResource extends BaseResource {
       orderBy: { scannedAt: "desc" }
     });
     if (!scan) return null;
-    return new _ScanResource(
-      {
-        ...scan,
-        category: scan.category,
-        signals: scan.signals
-      },
-      auth
-    );
+    return new _ScanResource(toScanResultData(scan), auth);
   }
   /**
    * Create a new scan result.
@@ -331,19 +319,13 @@ var ScanResource = class _ScanResource extends BaseResource {
   static async create(auth, data) {
     const scan = await prisma.scanResult.create({
       data: {
+        userId: auth.userId,
         workspaceId: auth.workspaceId,
         category: data.category,
-        signals: data.signals
+        signals: JSON.parse(JSON.stringify(data.signals))
       }
     });
-    return new _ScanResource(
-      {
-        ...scan,
-        category: scan.category,
-        signals: scan.signals
-      },
-      auth
-    );
+    return new _ScanResource(toScanResultData(scan), auth);
   }
   // ============================================
   // Instance Methods

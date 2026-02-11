@@ -27,7 +27,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatDistanceToNow, isToday, isYesterday, format } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { ConversationSource } from "@/generated/prisma";
+import type { ConversationSource } from "@prisma/client";
 
 // Source icons mapping
 const sourceIcons: Record<string, typeof ChatCircle> = {

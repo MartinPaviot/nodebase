@@ -44,7 +44,7 @@ import {
   Copy,
 } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
-import { SwarmStatus, SwarmTaskStatus } from "@/generated/prisma";
+import { SwarmStatus, SwarmTaskStatus } from "@prisma/client";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";

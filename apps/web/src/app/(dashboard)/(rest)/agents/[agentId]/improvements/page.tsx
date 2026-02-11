@@ -20,33 +20,37 @@ import {
   AlertTriangle,
   Sparkles
 } from 'lucide-react';
-import { trpc } from '@/trpc/client';
+import { useTRPC } from '@/trpc/client';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 export default function AgentImprovementsPage() {
   const params = useParams();
   const agentId = params.agentId as string;
+  const trpc = useTRPC();
 
   // Fetch modification proposals
-  const { data: proposals, isLoading, refetch } = trpc.agents.getModificationProposals.useQuery({
-    agentId,
-  });
+  const { data: proposals, isLoading, refetch } = useQuery(
+    trpc.agents.getModificationProposals.queryOptions({ agentId })
+  );
 
   // Fetch performance analysis
-  const { data: analysis, isLoading: analysisLoading } = trpc.agents.getPerformanceAnalysis.useQuery({
-    agentId,
-  });
+  const { data: analysis, isLoading: analysisLoading } = useQuery(
+    trpc.agents.getPerformanceAnalysis.queryOptions({ agentId })
+  );
 
   // Mutation for approving/rejecting proposals
-  const approveProposal = trpc.agents.approveModification.useMutation({
-    onSuccess: () => {
-      toast.success('Modification applied successfully');
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(`Failed to apply modification: ${error.message}`);
-    },
-  });
+  const approveProposal = useMutation(
+    trpc.agents.approveModification.mutationOptions({
+      onSuccess: () => {
+        toast.success('Modification applied successfully');
+        refetch();
+      },
+      onError: (error) => {
+        toast.error(`Failed to apply modification: ${error.message}`);
+      },
+    })
+  );
 
   if (isLoading || analysisLoading) {
     return <LoadingSkeleton />;

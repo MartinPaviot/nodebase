@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import Image from "next/image";
 import { useCredentialsByType } from "@/features/credentials/hooks/use-credentials";
-import { CredentialType } from "@/generated/prisma";
+import { CredentialType } from "@prisma/client";
 
 
 const formSchema =z.object({

@@ -521,9 +521,10 @@ export function toNodebaseError(
 
   // If it's a generic Error, wrap it
   if (error instanceof Error) {
+    const msg = error.message;
     return new (class extends NodebaseError {
       constructor() {
-        super("UNKNOWN_ERROR", { originalError: error.message }, error.message || defaultMessage, false);
+        super("UNKNOWN_ERROR", { originalError: msg }, msg || defaultMessage, false);
       }
     })();
   }

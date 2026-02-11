@@ -5,7 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { EmptyView, EntityContainer, EntityHeader, EntityItem, EntityList, EntityPagination, ErrorView, LoadingView } from "@/components/entity-components";
 import { useSuspenseExecutions } from "../hooks/use-executions";
 import { useExecutionsParams } from "../hooks/use-executions-params";
-import { Execution, ExecutionStatus } from "@/generated/prisma";
+import { Execution, ExecutionStatus } from "@prisma/client";
 import { CheckCircle, Clock, CircleNotch, XCircle } from "@phosphor-icons/react";
 
 export const ExecutionsList = () => {

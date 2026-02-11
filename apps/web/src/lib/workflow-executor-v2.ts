@@ -17,7 +17,7 @@
 import prisma from "./db";
 import { topologicalSort } from "@/inngest/utils";
 import { getExecutor } from "@/features/executions/lib/executor-registry";
-import { NodeType } from "@/generated/prisma";
+import { NodeType } from "@prisma/client";
 import { WorkflowState, WorkflowStatus } from "./workflow-state";
 import { NotFoundError, WorkflowExecutionError } from "./errors";
 import type { StepTools } from "@/features/executions/types";
@@ -198,7 +198,7 @@ async function executeWorkflowInternal({
   for (const node of executableNodes) {
     // Skip nodes until we reach resume point
     if (shouldSkip) {
-      if (node.id === resumePoint.nodeId) {
+      if (node.id === resumePoint?.nodeId) {
         shouldSkip = false;
         console.log(`Resumed at node: ${node.type} (${node.id})`);
       }
@@ -316,9 +316,10 @@ export async function resumeWorkflow({
 }: {
   executionId: string;
 }): Promise<ExecuteWorkflowResult> {
-  // Load execution to get workflow and user info
+  // Load execution with workflow to get user info
   const execution = await prisma.execution.findUnique({
     where: { id: executionId },
+    include: { workflow: { select: { userId: true } } },
   });
 
   if (!execution) {
@@ -327,7 +328,7 @@ export async function resumeWorkflow({
 
   return executeWorkflowV2({
     workflowId: execution.workflowId,
-    userId: execution.userId,
+    userId: execution.workflow.userId,
     resumeFromExecutionId: executionId,
   });
 }

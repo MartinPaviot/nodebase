@@ -30,7 +30,7 @@ export async function POST(
     // Use Resource Pattern - automatic permission check
     const authenticator = new Authenticator({
       userId: session.user.id,
-      workspaceId: session.user.workspaceId || null,
+      workspaceId: undefined,
       isAdmin: false,
     });
 
@@ -91,7 +91,7 @@ export async function GET(
     // Use Resource Pattern - automatic permission check
     const authenticator = new Authenticator({
       userId: session.user.id,
-      workspaceId: session.user.workspaceId || null,
+      workspaceId: undefined,
       isAdmin: false,
     });
 
@@ -143,7 +143,7 @@ export async function DELETE(
     // Use Resource Pattern - automatic permission check
     const authenticator = new Authenticator({
       userId: session.user.id,
-      workspaceId: session.user.workspaceId || null,
+      workspaceId: undefined,
       isAdmin: false,
     });
 

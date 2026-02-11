@@ -53,7 +53,7 @@ export function canManage(auth: ResourceAuth, resourceWorkspaceId: WorkspaceId):
 // Base Resource Class
 // ============================================
 
-export abstract class BaseResource<T extends { id: string; workspaceId?: string }> {
+export abstract class BaseResource<T extends { id: string; workspaceId?: string | null }> {
   protected _data: T;
   protected _auth: ResourceAuth;
 

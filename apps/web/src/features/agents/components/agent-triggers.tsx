@@ -41,7 +41,7 @@ import {
   Copy,
 } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
-import { TriggerType } from "@/generated/prisma";
+import { TriggerType } from "@prisma/client";
 import { toast } from "sonner";
 
 interface AgentTriggersProps {

@@ -35,7 +35,7 @@ import {
   PencilSimple,
 } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
-import { MemoryCategory } from "@/generated/prisma";
+import { MemoryCategory } from "@prisma/client";
 
 interface AgentMemoryProps {
   agentId: string;
