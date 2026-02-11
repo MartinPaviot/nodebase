@@ -1,0 +1,95 @@
+{
+  "id": "tmpl_ticket-escalation",
+  "slug": "ticket-escalation",
+  "name": "Alerte Ticket Escalation",
+  "description": "Detecte les tickets support ouverts depuis plus de 48h sans reponse et alerte l'equipe avec un draft de reponse pre-prepare. L'agent analyse le contexte du ticket et propose une reponse adaptee.",
+  "category": "support",
+  "tags": ["zendesk", "freshdesk", "sla", "ticket", "urgence"],
+  "icon": "headphones",
+
+  "trigger": {
+    "type": "scan_signal",
+    "signalTypes": ["ticket_unanswered", "sla_warning"],
+    "config": {
+      "minHoursOpen": 48
+    }
+  },
+
+  "fetchSteps": [
+    {
+      "connector": "zendesk",
+      "action": "get_ticket",
+      "params": {
+        "ticketId": "{{signal.metadata.ticketId}}",
+        "include": ["comments", "users", "organizations"]
+      },
+      "outputKey": "ticket"
+    },
+    {
+      "connector": "zendesk",
+      "action": "get_user",
+      "params": {
+        "userId": "{{ticket.requester_id}}"
+      },
+      "outputKey": "requester"
+    },
+    {
+      "connector": "zendesk",
+      "action": "search_tickets",
+      "params": {
+        "query": "requester:{{requester.id}} status:solved",
+        "sort_by": "created_at",
+        "limit": 5
+      },
+      "outputKey": "previousTickets"
+    }
+  ],
+
+  "prompt": "Tu es un agent de support client experimente pour une PME francaise.\n\nTa mission est de rediger une reponse professionnelle pour un ticket ouvert depuis {{signal.metadata.hoursOpen}} heures.\n\n## Ticket\n- ID: #{{ticket.id}}\n- Sujet: {{ticket.subject}}\n- Priorite: {{ticket.priority}}\n- Statut: {{ticket.status}}\n- Cree le: {{ticket.created_at}}\n\n## Message du client\n{{ticket.description}}\n\n## Informations client\n- Nom: {{requester.name}}\n- Email: {{requester.email}}\n- Organisation: {{requester.organization.name}}\n\n## Historique des commentaires\n{{#each ticket.comments}}\n[{{author_type}}] {{created_at}}:\n{{body}}\n---\n{{/each}}\n\n## Tickets precedents resolus\n{{#each previousTickets}}\n- #{{id}}: {{subject}} (resolu le {{solved_at}})\n{{/each}}\n\n## Regles de redaction\n1. Commence par reconnaitre le delai de reponse si >24h (sans s'excuser de maniere excessive)\n2. Reponds de maniere precise et actionnable au probleme\n3. Si tu n'as pas assez d'informations, pose des questions claires et numerotees\n4. Propose une solution ou un next step concret\n5. Ton professionnel mais humain - pas de reponses de robot\n6. Maximum 200 mots\n\n## Format de sortie\nRedige UNIQUEMENT la reponse au ticket. Pas d'explication.",
+
+  "llmTier": "sonnet",
+  "temperature": 0.5,
+  "maxStepsPerRun": 5,
+
+  "evalRules": {
+    "assertions": [
+      { "check": "addresses_issue", "severity": "block", "message": "La reponse doit adresser le probleme du client" },
+      { "check": "no_placeholders", "severity": "block", "message": "Pas de placeholders non remplaces" },
+      { "check": "professional_tone", "severity": "block", "message": "Ton professionnel requis" },
+      { "check": "has_next_step", "severity": "warn", "message": "Devrait proposer une prochaine etape" },
+      { "check": "word_count_max_250", "severity": "warn", "message": "Maximum 250 mots" }
+    ],
+    "minConfidence": 0.65,
+    "l3Trigger": "always",
+    "requireApproval": true,
+    "autoSendThreshold": 0.90
+  },
+
+  "actions": [
+    {
+      "type": "send_notification",
+      "connector": "slack",
+      "requiresApproval": false,
+      "config": {
+        "channel": "#support-alerts",
+        "message": ":rotating_light: Ticket #{{ticket.id}} ouvert depuis {{signal.metadata.hoursOpen}}h\n*Sujet:* {{ticket.subject}}\n*Client:* {{requester.name}}\n*Priorite:* {{ticket.priority}}"
+      }
+    },
+    {
+      "type": "draft_ticket",
+      "connector": "zendesk",
+      "requiresApproval": true,
+      "config": {
+        "ticketId": "{{ticket.id}}",
+        "comment": {
+          "body": "{{generated.response}}",
+          "public": true
+        }
+      }
+    }
+  ],
+
+  "isActive": true,
+  "isPremium": false,
+  "version": 1
+}

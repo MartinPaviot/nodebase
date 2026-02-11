@@ -6,7 +6,7 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../apps/web/src/generated/prisma"
 }
 
 datasource db {
@@ -215,6 +215,16 @@ model Agent {
   // Safe Mode - ask confirmation before side-effect actions
   safeMode    Boolean  @default(false)
 
+  // V6 Features - LLM Configuration
+  llmTier         String?  // "fast" (Haiku) | "smart" (Sonnet) | "deep" (Opus)
+  maxStepsPerRun  Int?     @default(10)
+
+  // V6 Features - Eval Rules (L1/L2/L3)
+  evalRules   Json?    // { assertions: [], min_confidence: 0.6, l3_trigger: "on_irreversible_action", ... }
+
+  // Workspace (for multi-tenancy)
+  workspaceId String?
+
   // Avatar/Icon (optional)
   avatar      String?
 
@@ -278,6 +288,20 @@ model Agent {
   // Analytics metrics
   metrics       AgentMetric[]
 
+  // Traces (LangChain-style)
+  traces        AgentTrace[]
+
+  // Insights (Phase 2)
+  insights      AgentInsight[]
+
+  // Optimization (Phase 3)
+  feedbacks     AgentFeedback[]
+  abTests       AgentABTest[]
+  optimizationRuns OptimizationRun[]
+
+  // Meta-Agent (Phase 4)
+  modificationProposals ModificationProposal[]
+
   @@index([userId, name])
   @@index([userId, updatedAt])
   @@map("agent")
@@ -316,17 +340,29 @@ enum AgentModel {
   GEMINI
 }
 
-// Junction table for Agent <-> Workflow (tools)
+// Junction table for Agent <-> Workflow/Composio (tools)
 model AgentTool {
   id        String   @id @default(cuid())
 
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  workflowId String
-  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  // ============================================
+  // Workflow-based tool (legacy)
+  // ============================================
+  workflowId String?
+  workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
-  // Tool configuration
+  // ============================================
+  // Composio-based tool (new)
+  // ============================================
+  composioAppKey    String?  // Ex: "gmail"
+  composioActionName String? // Ex: "GMAIL_SEND_EMAIL"
+  composioConfig     Json?    // Action parameters/config
+
+  // ============================================
+  // Common fields
+  // ============================================
   name        String   // Display name for the tool
   description String   @db.Text // Description for the LLM
 
@@ -358,6 +394,15 @@ model Conversation {
 
   // Activity log
   activities  ConversationActivity[]
+
+  // Traces (LangChain-style)
+  traces      AgentTrace[]
+
+  // Evaluation (Phase 2)
+  evaluation  ConversationEvaluation?
+
+  // Feedback (Phase 3)
+  feedbacks   AgentFeedback[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -621,6 +666,7 @@ enum TriggerType {
 
 model AgentTemplate {
   id          String   @id @default(cuid())
+  slug        String?  @unique // URL-friendly identifier, ex: "relance-client-inactif"
 
   name        String
   subtitle    String?  // Short description for card view (2 lines max)
@@ -634,6 +680,22 @@ model AgentTemplate {
   context      String? @db.Text
   model        AgentModel @default(ANTHROPIC)
   temperature  Float   @default(0.7)
+
+  // V6 Trigger Configuration
+  trigger      Json    @default("{}") // TriggerConfig - what triggers the agent
+
+  // V6 Configuration - LLM Tiering
+  llmTier         String  @default("sonnet") // "haiku" | "sonnet" | "opus"
+  maxStepsPerRun  Int     @default(10)       // Guard-rail for cost
+
+  // V6 Configuration - Data Fetching
+  fetchSources    Json    @default("[]")     // AgentFetchSource[] - what data to fetch
+
+  // V6 Configuration - Actions
+  actions         Json    @default("[]")     // AgentAction[] - what the agent can do
+
+  // V6 Configuration - Eval Rules (L1/L2/L3)
+  evalRules       Json    @default("{}")     // EvalRules - evaluation config
 
   // Suggested tools/integrations (for UI display)
   suggestedTools     Json  @default("[]")
@@ -1077,4 +1139,458 @@ model AgentMetric {
 
   @@unique([agentId, date])
   @@map("agent_metric")
+}
+
+// ===================
+// SCAN ENGINE (V6)
+// ===================
+
+model ScanResult {
+  id          String       @id @default(cuid())
+  userId      String       // User who triggered/owns the scan
+  workspaceId String?      // Optional workspace (for multi-tenant future)
+
+  category    ScanCategory
+  signals     Json         @default("[]") // ScanSignal[]
+
+  // Stats
+  totalSignals    Int      @default(0)
+  criticalCount   Int      @default(0)
+  highCount       Int      @default(0)
+  mediumCount     Int      @default(0)
+  lowCount        Int      @default(0)
+
+  scannedAt   DateTime     @default(now())
+
+  @@index([userId, category])
+  @@index([userId, scannedAt])
+  @@index([workspaceId, category])
+  @@map("scan_result")
+}
+
+enum ScanCategory {
+  SALES
+  SUPPORT
+  MARKETING
+  HR
+  FINANCE
+  PROJECTS
+}
+
+// Individual signal for better tracking
+model Signal {
+  id              String         @id @default(cuid())
+  scanResultId    String
+
+  type            String         // ex: 'deal_stuck', 'ticket_escalation', 'churn_risk'
+  category        ScanCategory
+  severity        SignalSeverity
+  source          String         // ex: 'hubspot', 'zendesk', 'gmail'
+
+  title           String
+  description     String         @db.Text
+  metadata        Json           @default("{}")
+
+  // Suggested action
+  suggestedTemplateId String?    // Template that can handle this signal
+
+  // User interaction
+  snoozedUntil    DateTime?
+  dismissedAt     DateTime?
+  actedOnAt       DateTime?
+
+  detectedAt      DateTime       @default(now())
+
+  @@index([scanResultId])
+  @@index([category, severity])
+  @@index([source])
+  @@map("signal")
+}
+
+enum SignalSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ===================
+// AGENT RUN / EVAL (V6)
+// ===================
+
+model AgentRun {
+  id              String   @id @default(cuid())
+
+  agentId         String
+  userId          String
+  workspaceId     String
+
+  // Trigger info
+  triggeredAt     DateTime @default(now())
+  triggeredBy     String   // "manual" | "schedule" | "webhook" | "email" | "chat"
+
+  // Data sources fetched
+  dataSources     Json     @default("[]")
+
+  // Output
+  outputType      String?  // "text" | "email_draft" | "slack_message" | etc
+  outputContent   String?  @db.Text
+
+  // LLM usage
+  llmModel        String
+  llmTokensUsed   Int      @default(0)
+  llmCost         Float    @default(0)
+
+  // L1 Eval - Deterministic assertions
+  l1Assertions    Json     @default("[]")
+  l1Passed        Boolean  @default(false)
+
+  // L2 Eval - Rule-based scoring
+  l2Score         Int      @default(0)
+  l2Breakdown     Json     @default("{}")
+
+  // L3 Eval - LLM-as-Judge
+  l3Triggered     Boolean  @default(false)
+  l3Blocked       Boolean?
+  l3Reason        String?  @db.Text
+
+  // User action on the output
+  userAction      String?  // "approved" | "edited" | "rejected"
+  draftDiff       String?  @db.Text // If edited, the diff
+  finalAction     String?  // What was actually sent/executed
+  finalAt         DateTime?
+
+  // Status
+  status          String   @default("running") // "running" | "pending_review" | "completed" | "failed" | "blocked"
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([agentId, triggeredAt])
+  @@index([workspaceId, triggeredAt])
+  @@index([status])
+  @@map("agent_run")
+}
+
+// ===================
+// AI EVENT LOGGING (V6)
+// ===================
+
+model AiEvent {
+  id          String   @id @default(cuid())
+
+  // Link to trace (LangChain-style tracing)
+  traceId     String?
+  trace       AgentTrace? @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  agentId         String?
+  conversationId  String?
+  userId          String
+  workspaceId     String?
+
+  // Model info
+  model       String   // "claude-3-5-haiku-20241022" | "claude-sonnet-4-20250514" | "claude-opus-4-20250514"
+  tier        String   // "haiku" | "sonnet" | "opus"
+
+  // Usage
+  tokensIn    Int
+  tokensOut   Int
+  cost        Float    // USD
+  latencyMs   Int
+
+  // Context (LangChain-style)
+  stepNumber  Int      @default(1)
+  action      String   // "reasoning" | "tool_call" | "response" | "message" | "chat" | "stream"
+  toolName    String?
+  toolInput   Json?
+  toolOutput  Json?
+
+  // Eval (kept from V6)
+  stepsUsed   Int      @default(1)
+  evalResult  String   @default("pass") // "pass" | "block" | "warn"
+
+  timestamp   DateTime @default(now())
+
+  @@index([traceId])
+  @@index([agentId, timestamp])
+  @@index([workspaceId, timestamp])
+  @@index([userId, timestamp])
+  @@map("ai_event")
+}
+
+// ===================
+// AGENT TRACE (LangChain/LangSmith-style)
+// ===================
+
+model AgentTrace {
+  id              String      @id @default(cuid())
+  agentId         String
+  conversationId  String
+  userId          String
+  workspaceId     String
+
+  // Trace metadata
+  startedAt       DateTime    @default(now())
+  completedAt     DateTime?
+  status          TraceStatus @default(RUNNING)
+
+  // Execution details
+  steps           Json        @default("[]") // Step[]
+  totalSteps      Int         @default(0)
+  maxSteps        Int         @default(5)
+
+  // LLM usage (aggregated)
+  totalTokensIn   Int         @default(0)
+  totalTokensOut  Int         @default(0)
+  totalCost       Float       @default(0)
+  latencyMs       Int?
+
+  // Tool usage
+  toolCalls       Json        @default("[]") // ToolCall[]
+  toolSuccesses   Int         @default(0)
+  toolFailures    Int         @default(0)
+
+  // Evaluation (L1/L2/L3 from plan)
+  l1Passed        Boolean?
+  l1Failures      Json?
+  l2Score         Float?
+  l2Breakdown     Json?
+  l3Triggered     Boolean     @default(false)
+  l3Blocked       Boolean?
+
+  // User feedback (for optimization loop)
+  feedbackScore   Int?        // 1-5
+  feedbackComment String?     @db.Text
+  userEdited      Boolean     @default(false)
+  editDiff        String?     @db.Text
+
+  // Relations
+  agent           Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  aiEvents        AiEvent[]
+  feedbacks       AgentFeedback[] // Phase 3
+
+  @@index([agentId, startedAt])
+  @@index([conversationId])
+  @@index([userId, startedAt])
+  @@index([workspaceId, startedAt])
+  @@map("agent_trace")
+}
+
+enum TraceStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+// ===================
+// CONVERSATION EVALUATION (Phase 2 - Multi-turn Evals)
+// ===================
+
+model ConversationEvaluation {
+  id                        String   @id @default(cuid())
+  conversationId            String   @unique
+  evaluatedAt               DateTime @default(now())
+
+  // Goal completion
+  goalCompleted             Boolean
+  goalCompletionConfidence  Float    // 0-1
+
+  // Satisfaction
+  userSatisfactionScore     Float    // 1-5
+
+  // Categorization
+  categories                String[] // ["sales", "support"]
+
+  // Failure detection
+  failureModes              String[] // ["hallucination", "tool_error"]
+
+  // Suggestions
+  improvementSuggestions    String[]
+
+  // Metadata
+  metadata                  Json
+
+  conversation              Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([evaluatedAt])
+  @@map("conversation_evaluation")
+}
+
+// ===================
+// AGENT INSIGHTS (Phase 2 - Auto-categorization)
+// ===================
+
+model AgentInsight {
+  id                String   @id @default(cuid())
+  agentId           String
+  generatedAt       DateTime @default(now())
+  timeframeStart    DateTime
+  timeframeEnd      DateTime
+
+  // Clusters
+  clusters          Json     // ConversationCluster[]
+
+  // Patterns
+  patterns          Json     // UsagePattern[]
+
+  // Anomalies
+  anomalies         Json     // Anomaly[]
+
+  // Opportunities
+  opportunities     Json     // OptimizationOpportunity[]
+
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, generatedAt])
+  @@map("agent_insight")
+}
+
+// ===================
+// AGENT FEEDBACK (Phase 3 - Auto-Optimization)
+// ===================
+
+model AgentFeedback {
+  id              String       @id @default(cuid())
+  traceId         String
+  conversationId  String
+  userId          String
+  agentId         String
+
+  type            FeedbackType
+  timestamp       DateTime     @default(now())
+
+  // Context
+  originalOutput  String       @db.Text
+  userEdit        String?      @db.Text
+  correctionText  String?      @db.Text
+
+  // Metadata
+  stepNumber      Int
+  metadata        Json?
+
+  trace           AgentTrace   @relation(fields: [traceId], references: [id], onDelete: Cascade)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent           Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, timestamp])
+  @@index([traceId])
+  @@map("agent_feedback")
+}
+
+enum FeedbackType {
+  THUMBS_UP
+  THUMBS_DOWN
+  USER_EDIT
+  APPROVAL_REJECT
+  EXPLICIT_CORRECTION
+  RETRY_REQUEST
+}
+
+// ===================
+// AGENT A/B TEST (Phase 3 - Prompt Optimization)
+// ===================
+
+model AgentABTest {
+  id              String       @id @default(cuid())
+  agentId         String
+
+  variantAPrompt  String       @db.Text
+  variantBPrompt  String       @db.Text
+  trafficSplit    Float        @default(0.2)  // % to variant B
+
+  status          ABTestStatus
+  startedAt       DateTime     @default(now())
+  endedAt         DateTime?
+
+  // Results
+  variantATraces  Int          @default(0)
+  variantBTraces  Int          @default(0)
+  variantAScore   Float?
+  variantBScore   Float?
+  winningVariant  String?      // "A" or "B"
+
+  agent           Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, status])
+  @@map("agent_ab_test")
+}
+
+enum ABTestStatus {
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+// ===================
+// OPTIMIZATION RUN (Phase 3 - Promptim-style)
+// ===================
+
+model OptimizationRun {
+  id                String   @id @default(cuid())
+  agentId           String
+  triggeredAt       DateTime @default(now())
+  triggeredBy       String   // "accumulated_feedback" | "manual" | "scheduled"
+
+  // Analysis
+  editPatterns      Json     // EditPattern[]
+  promptVariations  Json     // PromptVariation[]
+  testResults       Json     // VariationTestResult[]
+
+  // Outcome
+  recommendation    String   @db.Text
+  abTestId          String?
+  status            String   // "analyzing" | "testing" | "completed"
+
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, triggeredAt])
+  @@map("optimization_run")
+}
+
+// ===================
+// MODIFICATION PROPOSAL (Phase 4 - Self-Modifying Agents)
+// ===================
+
+model ModificationProposal {
+  id              String   @id @default(cuid())
+  agentId         String
+  proposedAt      DateTime @default(now())
+
+  type            ModificationType
+  current         String   @db.Text
+  proposed        String   @db.Text
+  rationale       String   @db.Text
+  impact          String
+
+  status          ProposalStatus @default(PENDING)
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  appliedAt       DateTime?
+
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, status])
+  @@map("modification_proposal")
+}
+
+enum ModificationType {
+  PROMPT_REFINEMENT
+  MODEL_DOWNGRADE
+  MODEL_UPGRADE
+  ADD_TOOL
+  REMOVE_TOOL
+  ADD_RAG
+  ADJUST_TEMPERATURE
+  ADJUST_MAX_STEPS
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
 }

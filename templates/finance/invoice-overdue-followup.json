@@ -1,0 +1,101 @@
+{
+  "id": "tmpl_invoice-overdue",
+  "slug": "invoice-overdue-followup",
+  "name": "Relance Facture Impayee",
+  "description": "Detecte les factures impayees depuis plus de 15 jours et prepare un email de relance poli mais ferme. L'agent adapte le ton selon l'historique de paiement du client.",
+  "category": "finance",
+  "tags": ["facture", "relance", "stripe", "comptabilite", "tresorerie"],
+  "icon": "file-text",
+
+  "trigger": {
+    "type": "scan_signal",
+    "signalTypes": ["invoice_overdue", "payment_failed"],
+    "config": {
+      "minDaysOverdue": 15
+    }
+  },
+
+  "fetchSteps": [
+    {
+      "connector": "stripe",
+      "action": "get_invoice",
+      "params": {
+        "invoiceId": "{{signal.metadata.invoiceId}}"
+      },
+      "outputKey": "invoice"
+    },
+    {
+      "connector": "stripe",
+      "action": "get_customer",
+      "params": {
+        "customerId": "{{invoice.customer}}"
+      },
+      "outputKey": "customer"
+    },
+    {
+      "connector": "stripe",
+      "action": "list_invoices",
+      "params": {
+        "customer": "{{invoice.customer}}",
+        "limit": 10
+      },
+      "outputKey": "invoiceHistory"
+    },
+    {
+      "connector": "hubspot",
+      "action": "search_contacts",
+      "params": {
+        "query": "{{customer.email}}"
+      },
+      "outputKey": "contact"
+    }
+  ],
+
+  "prompt": "Tu es le responsable administratif d'une PME francaise.\n\nTa mission est de rediger un email de relance pour une facture impayee.\n\n## Facture concernee\n- Numero: {{invoice.number}}\n- Montant: {{invoice.amount_due / 100}} EUR\n- Date d'echeance: {{invoice.due_date}}\n- Jours de retard: {{signal.metadata.daysOverdue}}\n- Description: {{invoice.lines.data[0].description}}\n\n## Client\n- Nom: {{customer.name}}\n- Email: {{customer.email}}\n- Contact: {{contact.properties.firstname}} {{contact.properties.lastname}}\n\n## Historique de paiement\n{{#each invoiceHistory}}\n- {{number}}: {{amount_due / 100}} EUR - {{#if paid}}Payee{{else}}{{status}}{{/if}} ({{created}})\n{{/each}}\n\n## Regles de redaction\n1. Ton professionnel et courtois - on maintient la relation\n2. Rappeler clairement les references de la facture\n3. Si c'est un bon payeur historique, etre comprehensif\n4. Si retards frequents, etre plus ferme (sans menace)\n5. Proposer un echeancier si montant > 5000 EUR\n6. Donner les moyens de paiement disponibles\n7. Maximum 150 mots\n\n## Format de sortie\nRedige UNIQUEMENT l'email (objet + corps). En francais.",
+
+  "llmTier": "sonnet",
+  "temperature": 0.4,
+  "maxStepsPerRun": 5,
+
+  "evalRules": {
+    "assertions": [
+      { "check": "contains_invoice_number", "severity": "block", "message": "L'email doit mentionner le numero de facture" },
+      { "check": "contains_amount", "severity": "block", "message": "L'email doit mentionner le montant" },
+      { "check": "no_threats", "severity": "block", "message": "L'email ne doit pas contenir de menaces" },
+      { "check": "professional_tone", "severity": "block", "message": "Ton professionnel requis" },
+      { "check": "correct_language_fr", "severity": "warn", "message": "L'email doit etre en francais" },
+      { "check": "word_count_max_200", "severity": "warn", "message": "Maximum 200 mots" }
+    ],
+    "minConfidence": 0.7,
+    "l3Trigger": "on_irreversible_action",
+    "requireApproval": true,
+    "autoSendThreshold": 0.85
+  },
+
+  "actions": [
+    {
+      "type": "draft_email",
+      "connector": "gmail",
+      "requiresApproval": true,
+      "config": {
+        "to": "{{customer.email}}",
+        "cc": "{{contact.properties.email}}",
+        "subject": "{{generated.subject}}",
+        "body": "{{generated.body}}"
+      }
+    },
+    {
+      "type": "send_notification",
+      "connector": "slack",
+      "requiresApproval": false,
+      "config": {
+        "channel": "#finance",
+        "message": ":receipt: Relance preparee pour facture {{invoice.number}} ({{invoice.amount_due / 100}} EUR - {{signal.metadata.daysOverdue}}j de retard)"
+      }
+    }
+  ],
+
+  "isActive": true,
+  "isPremium": false,
+  "version": 1
+}
