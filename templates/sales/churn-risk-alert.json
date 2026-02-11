@@ -1,0 +1,100 @@
+{
+  "id": "tmpl_churn-risk",
+  "slug": "churn-risk-alert",
+  "name": "Alerte Risque Churn",
+  "description": "Detecte les clients presentant des signaux de desengagement (baisse d'usage, tickets recents, pas de contact) et alerte le commercial responsable avec un brief contextuel pour agir rapidement.",
+  "category": "sales",
+  "tags": ["churn", "retention", "alerte", "crm", "usage"],
+  "icon": "alert-triangle",
+
+  "trigger": {
+    "type": "scan_signal",
+    "signalTypes": ["churn_risk", "usage_decline", "engagement_drop"],
+    "config": {
+      "minRiskScore": 0.6
+    }
+  },
+
+  "fetchSteps": [
+    {
+      "connector": "hubspot",
+      "action": "get_company",
+      "params": {
+        "companyId": "{{signal.metadata.companyId}}",
+        "associations": ["contacts", "deals"]
+      },
+      "outputKey": "company"
+    },
+    {
+      "connector": "hubspot",
+      "action": "get_deal",
+      "params": {
+        "dealId": "{{company.associations.deals[0].id}}"
+      },
+      "outputKey": "deal"
+    },
+    {
+      "connector": "stripe",
+      "action": "get_customer",
+      "params": {
+        "email": "{{company.properties.domain}}"
+      },
+      "outputKey": "stripeCustomer"
+    },
+    {
+      "connector": "zendesk",
+      "action": "search_tickets",
+      "params": {
+        "query": "organization:{{company.properties.name}} created>7days",
+        "limit": 10
+      },
+      "outputKey": "recentTickets"
+    }
+  ],
+
+  "prompt": "Tu es un Customer Success Manager experimente pour une PME SaaS francaise.\n\nTa mission est de preparer un brief d'alerte churn pour le commercial responsable du compte.\n\n## Client a risque\n- Entreprise: {{company.properties.name}}\n- Secteur: {{company.properties.industry}}\n- Taille: {{company.properties.numberofemployees}} employes\n- MRR: {{stripeCustomer.subscriptions[0].plan.amount / 100}} EUR\n- Client depuis: {{stripeCustomer.created}}\n\n## Signaux detectes\n- Score de risque: {{signal.metadata.riskScore * 100}}%\n- Raison principale: {{signal.metadata.primaryReason}}\n{{#if signal.metadata.usageDecline}}\n- Baisse d'usage: {{signal.metadata.usageDecline}}% sur les 30 derniers jours\n{{/if}}\n{{#if signal.metadata.daysSinceLastLogin}}\n- Derniere connexion: il y a {{signal.metadata.daysSinceLastLogin}} jours\n{{/if}}\n\n## Tickets support recents\n{{#each recentTickets}}\n- #{{id}}: {{subject}} ({{status}}, {{priority}})\n{{/each}}\n\n## Commercial responsable\n- Nom: {{deal.properties.hubspot_owner_id}}\n\n## Ta tache\n1. Resume la situation en 3 points cles\n2. Identifie la cause probable du desengagement\n3. Propose 2-3 actions immediates a entreprendre\n4. Suggere un message d'accroche pour reprendre contact\n\n## Format\nRedige un brief structure et actionnable. Maximum 300 mots.",
+
+  "llmTier": "sonnet",
+  "temperature": 0.5,
+  "maxStepsPerRun": 6,
+
+  "evalRules": {
+    "assertions": [
+      { "check": "has_risk_summary", "severity": "block", "message": "Le brief doit contenir un resume du risque" },
+      { "check": "has_action_items", "severity": "block", "message": "Le brief doit proposer des actions" },
+      { "check": "no_placeholders", "severity": "block", "message": "Pas de placeholders" },
+      { "check": "mentions_mrr", "severity": "warn", "message": "Devrait mentionner l'enjeu financier" }
+    ],
+    "minConfidence": 0.5,
+    "l3Trigger": "never",
+    "requireApproval": false,
+    "autoSendThreshold": 0.70
+  },
+
+  "actions": [
+    {
+      "type": "send_notification",
+      "connector": "slack",
+      "requiresApproval": false,
+      "config": {
+        "channel": "#sales-alerts",
+        "message": ":warning: *Alerte Churn - {{company.properties.name}}*\n\nMRR a risque: {{stripeCustomer.subscriptions[0].plan.amount / 100}} EUR\nScore: {{signal.metadata.riskScore * 100}}%\n\n{{generated.brief}}"
+      }
+    },
+    {
+      "type": "create_task",
+      "connector": "hubspot",
+      "requiresApproval": false,
+      "config": {
+        "ownerId": "{{deal.properties.hubspot_owner_id}}",
+        "subject": "Urgence: Contacter {{company.properties.name}} - Risque churn",
+        "body": "{{generated.brief}}",
+        "dueDate": "{{tomorrow}}"
+      }
+    }
+  ],
+
+  "isActive": true,
+  "isPremium": false,
+  "version": 1
+}

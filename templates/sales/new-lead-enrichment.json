@@ -1,0 +1,114 @@
+{
+  "id": "tmpl_lead-enrichment",
+  "slug": "new-lead-enrichment",
+  "name": "Enrichissement Nouveau Lead",
+  "description": "Detecte les nouveaux leads entrants et les enrichit automatiquement avec des donnees web (LinkedIn, site entreprise, actualites). Prepare un brief synthetique pour le commercial avant le premier contact.",
+  "category": "sales",
+  "tags": ["lead", "enrichissement", "linkedin", "prospection", "qualification"],
+  "icon": "user-plus",
+
+  "trigger": {
+    "type": "scan_signal",
+    "signalTypes": ["new_lead", "lead_uncontacted"],
+    "config": {
+      "maxHoursSinceCreation": 6
+    }
+  },
+
+  "fetchSteps": [
+    {
+      "connector": "hubspot",
+      "action": "get_contact",
+      "params": {
+        "contactId": "{{signal.metadata.contactId}}",
+        "properties": ["email", "firstname", "lastname", "company", "jobtitle", "phone", "website", "linkedin_url"]
+      },
+      "outputKey": "lead"
+    },
+    {
+      "connector": "hubspot",
+      "action": "get_company",
+      "params": {
+        "domain": "{{lead.properties.company}}"
+      },
+      "outputKey": "company"
+    },
+    {
+      "connector": "peopledatalabs",
+      "action": "enrich_person",
+      "params": {
+        "email": "{{lead.properties.email}}",
+        "company": "{{lead.properties.company}}"
+      },
+      "outputKey": "enrichedPerson"
+    },
+    {
+      "connector": "peopledatalabs",
+      "action": "enrich_company",
+      "params": {
+        "domain": "{{company.properties.domain}}"
+      },
+      "outputKey": "enrichedCompany"
+    }
+  ],
+
+  "prompt": "Tu es un assistant commercial specialise dans la qualification de leads pour une PME francaise.\n\nTa mission est de preparer un brief de qualification pour un nouveau lead.\n\n## Lead\n- Nom: {{lead.properties.firstname}} {{lead.properties.lastname}}\n- Entreprise: {{lead.properties.company}}\n- Poste: {{lead.properties.jobtitle}}\n- Email: {{lead.properties.email}}\n- Source: {{lead.properties.hs_lead_source}}\n\n## Donnees enrichies - Personne\n{{#if enrichedPerson}}\n- Titre LinkedIn: {{enrichedPerson.job_title}}\n- Experience: {{enrichedPerson.job_company_name}} ({{enrichedPerson.job_start_date}})\n- Formation: {{enrichedPerson.education[0].school_name}}, {{enrichedPerson.education[0].degrees[0]}}\n- Competences: {{enrichedPerson.skills}}\n- Localisation: {{enrichedPerson.location_name}}\n{{else}}\n- Donnees enrichies non disponibles\n{{/if}}\n\n## Donnees enrichies - Entreprise\n{{#if enrichedCompany}}\n- Secteur: {{enrichedCompany.industry}}\n- Taille: {{enrichedCompany.employee_count}} employes\n- Chiffre d'affaires: {{enrichedCompany.estimated_annual_revenue}}\n- Localisation: {{enrichedCompany.location.country}}\n- Description: {{enrichedCompany.summary}}\n- Technologies: {{enrichedCompany.tech_stack}}\n{{else}}\n- Donnees entreprise non disponibles\n{{/if}}\n\n## Ta tache\nPrepare un brief de qualification comprenant:\n\n1. **Score de fit** (1-5 etoiles) avec justification\n2. **Profil decideur** - Est-ce le bon interlocuteur ?\n3. **Contexte entreprise** - Taille, secteur, enjeux potentiels\n4. **Points d'accroche** - 2-3 elements pour personnaliser le premier contact\n5. **Questions de decouverte** - 3 questions cles a poser\n6. **Risques/vigilances** - Points d'attention\n\n## Format\nBrief structure, bullet points. Maximum 250 mots. En francais.",
+
+  "llmTier": "sonnet",
+  "temperature": 0.5,
+  "maxStepsPerRun": 6,
+
+  "evalRules": {
+    "assertions": [
+      { "check": "has_fit_score", "severity": "block", "message": "Le brief doit contenir un score de fit" },
+      { "check": "has_talking_points", "severity": "block", "message": "Le brief doit proposer des points d'accroche" },
+      { "check": "has_discovery_questions", "severity": "warn", "message": "Le brief devrait contenir des questions" },
+      { "check": "no_placeholders", "severity": "block", "message": "Pas de placeholders" }
+    ],
+    "minConfidence": 0.5,
+    "l3Trigger": "never",
+    "requireApproval": false,
+    "autoSendThreshold": 0.70
+  },
+
+  "actions": [
+    {
+      "type": "update_crm",
+      "connector": "hubspot",
+      "requiresApproval": false,
+      "config": {
+        "contactId": "{{lead.id}}",
+        "properties": {
+          "enrichment_status": "completed",
+          "enrichment_date": "{{now}}",
+          "company_size": "{{enrichedCompany.employee_count}}",
+          "industry": "{{enrichedCompany.industry}}"
+        }
+      }
+    },
+    {
+      "type": "send_notification",
+      "connector": "slack",
+      "requiresApproval": false,
+      "config": {
+        "channel": "#sales-leads",
+        "message": ":sparkles: *Nouveau lead qualifie: {{lead.properties.firstname}} {{lead.properties.lastname}}*\n\n{{generated.brief}}"
+      }
+    },
+    {
+      "type": "create_task",
+      "connector": "hubspot",
+      "requiresApproval": false,
+      "config": {
+        "ownerId": "{{assignedSalesRep}}",
+        "subject": "Premier contact - {{lead.properties.firstname}} {{lead.properties.lastname}} ({{lead.properties.company}})",
+        "body": "Brief disponible dans Slack #sales-leads",
+        "dueDate": "{{today}}"
+      }
+    }
+  ],
+
+  "isActive": true,
+  "isPremium": true,
+  "version": 1
+}

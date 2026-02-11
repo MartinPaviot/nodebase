@@ -1,0 +1,1586 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../apps/web/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id
+  name          String
+  email         String
+  emailVerified Boolean       @default(false)
+  image         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  workflows     Workflow[]
+  credentials   Credential[]
+  agents        Agent[]
+  integrations  Integration[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+model Credential {
+  id        String         @id @default(cuid())
+  name      String
+  value     String
+  type      CredentialType
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  Node   Node[]
+  agents Agent[]
+
+  @@index([userId, type])
+  @@index([userId, name])
+}
+
+enum CredentialType {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+}
+
+model Workflow {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nodes       Node[]
+  connections Connection[]
+  executions  Execution[]
+  agentTools  AgentTool[]
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, name])
+  @@index([userId, updatedAt])
+}
+
+enum NodeType {
+  INITIAL
+  MANUAL_TRIGGER
+  HTTP_REQUEST
+  GOOGLE_FORM_TRIGGER
+  STRIPE_TRIGGER
+  ANTHROPIC
+  GEMINI
+  OPENAI
+  DISCORD
+  SLACK
+}
+
+model Node {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  name     String
+  type     NodeType
+  position Json
+  data     Json     @default("{}")
+
+  credentialId String?
+  credential   Credential? @relation(fields: [credentialId], references: [id])
+
+  outputConnections Connection[] @relation("FromNode")
+  inputConnections  Connection[] @relation("ToNode")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Connection {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  fromNodeId String
+  fromNode   Node   @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNodeId   String
+  toNode     Node   @relation("ToNode", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  fromOutput String @default("main")
+  toInput    String @default("main")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fromNodeId, toNodeId, fromOutput, toInput])
+}
+
+enum ExecutionStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Execution {
+  id String @id @default(cuid())
+
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  status     ExecutionStatus @default(RUNNING)
+  error      String?         @db.Text
+  errorStack String?         @db.Text
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  inngestEventId String @unique
+
+  output Json?
+}
+
+// ===================
+// AGENT MODELS
+// ===================
+
+model Agent {
+  id           String  @id @default(cuid())
+  name         String
+  description  String? @db.Text
+  systemPrompt String  @db.Text
+
+  // Context (read-only instructions, like Lindy)
+  context String? @db.Text
+
+  // Configuration
+  model       AgentModel @default(ANTHROPIC)
+  temperature Float      @default(0.7)
+
+  // Safe Mode - ask confirmation before side-effect actions
+  safeMode Boolean @default(false)
+
+  // Avatar/Icon (optional)
+  avatar String?
+
+  // Tags for organization
+  tags String[] @default([])
+
+  // Favorite
+  isFavorite Boolean @default(false)
+
+  // Enabled/Active status (like Lindy)
+  isEnabled Boolean @default(true)
+
+  // Template reference (for loading flowData)
+  templateId String?
+  template   AgentTemplate? @relation(fields: [templateId], references: [id])
+
+  // Custom flow data (user modifications to the template flow)
+  // If null, use the template's flowData; if set, use this instead
+  flowData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  credentialId String?
+  credential   Credential? @relation(fields: [credentialId], references: [id])
+
+  conversations Conversation[]
+  agentTools    AgentTool[]
+
+  // Memory & Knowledge
+  memories           AgentMemory[]
+  knowledgeDocuments KnowledgeDocument[]
+  knowledgeSettings  KnowledgeSettings?
+
+  // Triggers
+  triggers AgentTrigger[]
+
+  // Embed widget
+  embed AgentEmbed?
+
+  // Multi-agent connections (Society of Agents)
+  connectedTo   AgentConnection[] @relation("SourceAgent")
+  connectedFrom AgentConnection[] @relation("TargetAgent")
+
+  // Agent Swarms (parallel execution)
+  swarms AgentSwarm[]
+
+  // Email address for inbound email trigger
+  emailAddress AgentEmailAddress?
+
+  // Meeting recordings
+  meetingRecordings MeetingRecording[]
+
+  // Phone number for voice calls
+  phoneNumber AgentPhoneNumber?
+
+  // Analytics metrics
+  metrics AgentMetric[]
+
+  // Traces (LangChain-style)
+  traces AgentTrace[]
+
+  // Insights (Phase 2)
+  insights AgentInsight[]
+
+  // Optimization (Phase 3)
+  feedbacks        AgentFeedback[]
+  abTests          AgentABTest[]
+  optimizationRuns OptimizationRun[]
+
+  // Meta-Agent (Phase 4)
+  modificationProposals ModificationProposal[]
+
+  @@index([userId, name])
+  @@index([userId, updatedAt])
+  @@map("agent")
+}
+
+// Multi-agent connections (Society of Agents)
+model AgentConnection {
+  id String @id @default(cuid())
+
+  // Source agent (the one that can call)
+  sourceAgentId String
+  sourceAgent   Agent  @relation("SourceAgent", fields: [sourceAgentId], references: [id], onDelete: Cascade)
+
+  // Target agent (the one being called)
+  targetAgentId String
+  targetAgent   Agent  @relation("TargetAgent", fields: [targetAgentId], references: [id], onDelete: Cascade)
+
+  // How the source agent should refer to the target
+  alias       String // e.g., "research_assistant", "email_writer"
+  description String @db.Text // Description shown to the source agent
+
+  // Configuration
+  enabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceAgentId, targetAgentId])
+  @@unique([sourceAgentId, alias])
+  @@map("agent_connection")
+}
+
+enum AgentModel {
+  ANTHROPIC
+  OPENAI
+  GEMINI
+}
+
+// Junction table for Agent <-> Workflow/Composio (tools)
+model AgentTool {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // ============================================
+  // Workflow-based tool (legacy)
+  // ============================================
+  workflowId String?
+  workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // ============================================
+  // Composio-based tool (new)
+  // ============================================
+  composioAppKey     String? // Ex: "gmail"
+  composioActionName String? // Ex: "GMAIL_SEND_EMAIL"
+  composioConfig     Json? // Action parameters/config
+
+  // ============================================
+  // Common fields
+  // ============================================
+  name        String // Display name for the tool
+  description String @db.Text // Description for the LLM
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, workflowId])
+  @@map("agent_tool")
+}
+
+model Conversation {
+  id    String  @id @default(cuid())
+  title String? // Auto-generated or user-defined
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  // Thread features (like Lindy)
+  isArchived Boolean @default(false)
+  isPinned   Boolean @default(false)
+
+  // Share token for public access
+  shareToken String? @unique
+
+  // Source of the conversation
+  source ConversationSource @default(CHAT)
+
+  // Activity log
+  activities ConversationActivity[]
+
+  // Traces (LangChain-style)
+  traces AgentTrace[]
+
+  // Evaluation (Phase 2)
+  evaluation ConversationEvaluation?
+
+  // Feedback (Phase 3)
+  feedbacks AgentFeedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("conversation")
+}
+
+enum ConversationSource {
+  CHAT // Manual chat
+  EMBED // From embed widget
+  EMAIL // From inbound email
+  PHONE // From phone call
+  SLACK // From Slack mention
+  WEBHOOK // From webhook trigger
+  SCHEDULE // From scheduled trigger
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    MessageRole
+  content String      @db.Text
+
+  // For tool calls/results
+  toolName   String?
+  toolInput  Json?
+  toolOutput Json?
+
+  createdAt DateTime @default(now())
+
+  @@map("message")
+}
+
+// ===================
+// CONVERSATION ACTIVITY LOG
+// ===================
+
+model ConversationActivity {
+  id String @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Activity type
+  type ActivityType
+
+  // Activity details
+  title   String
+  details Json?
+
+  // For actions requiring confirmation (Safe Mode)
+  requiresConfirmation Boolean   @default(false)
+  confirmedAt          DateTime?
+  rejectedAt           DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("conversation_activity")
+}
+
+enum ActivityType {
+  MESSAGE_SENT
+  MESSAGE_RECEIVED
+  TOOL_CALLED
+  TOOL_COMPLETED
+  TOOL_FAILED
+  EMAIL_SENT
+  EMAIL_RECEIVED
+  CALENDAR_EVENT_CREATED
+  SLACK_MESSAGE_SENT
+  MEMORY_UPDATED
+  KNOWLEDGE_SEARCHED
+  AGENT_DELEGATED
+  CONFIRMATION_REQUESTED
+  CONFIRMATION_APPROVED
+  CONFIRMATION_REJECTED
+  ERROR_OCCURRED
+}
+
+// ===================
+// AGENT MEMORY SYSTEM
+// ===================
+
+// Persistent memory entries (like Lindy's "small snippets of information")
+model AgentMemory {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Memory content
+  key      String // Short identifier (e.g., "user_preference", "last_meeting")
+  value    String         @db.Text // The actual memory content
+  category MemoryCategory @default(GENERAL)
+
+  // For RAG - vector embedding
+  embedding Float[] @default([])
+
+  // Metadata
+  source    String? // Where this memory came from (conversation ID, etc.)
+  expiresAt DateTime? // Optional expiration
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, key])
+  @@map("agent_memory")
+}
+
+enum MemoryCategory {
+  GENERAL // General facts
+  PREFERENCE // User preferences
+  CONTEXT // Contextual information
+  HISTORY // Historical events
+  INSTRUCTION // Standing instructions
+}
+
+// Knowledge base documents for RAG (like Lindy)
+model KnowledgeDocument {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Document info
+  title    String
+  content  String  @db.Text
+  source   String? // URL, file path, or external ID
+  mimeType String  @default("text/plain")
+  fileSize Int? // bytes
+
+  // Source type (like Lindy)
+  sourceType KnowledgeSourceType @default(TEXT)
+
+  // For external sources (Google Drive, etc.)
+  externalId  String?
+  externalUrl String?
+
+  // Sync status
+  syncStatus   KnowledgeSyncStatus @default(SYNCED)
+  lastSyncedAt DateTime?
+  syncError    String?
+
+  // Chunked embeddings
+  chunks KnowledgeChunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_document")
+}
+
+enum KnowledgeSourceType {
+  TEXT // Free text / FAQ
+  FILE_UPLOAD // PDF, DOCX, TXT, etc.
+  WEBSITE // Scraped website
+  WEBSITE_CRAWL // Full site crawl
+  GOOGLE_DRIVE // Google Drive file
+  NOTION // Notion page/database
+  DROPBOX // Dropbox file
+  ONEDRIVE // OneDrive file
+}
+
+enum KnowledgeSyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  ERROR
+}
+
+model KnowledgeChunk {
+  id String @id @default(cuid())
+
+  documentId String
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  content   String  @db.Text
+  embedding Float[] @default([])
+  position  Int // Order in document
+
+  // Metadata for search
+  pageNumber Int?
+  heading    String?
+
+  createdAt DateTime @default(now())
+
+  @@map("knowledge_chunk")
+}
+
+// Knowledge Base Settings (per agent)
+model KnowledgeSettings {
+  id String @id @default(cuid())
+
+  agentId String @unique
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Search configuration (like Lindy)
+  searchFuzziness Int     @default(100) // 0=keyword, 100=semantic
+  maxResults      Int     @default(4) // 1-10
+  autoRefresh     Boolean @default(true)
+  refreshInterval Int     @default(24) // hours
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_settings")
+}
+
+// ===================
+// AGENT TRIGGERS
+// ===================
+
+model AgentTrigger {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  name    String
+  type    TriggerType
+  enabled Boolean     @default(true)
+
+  // Configuration based on type
+  config Json @default("{}")
+
+  // For scheduled triggers
+  cronExpression String?
+  nextRunAt      DateTime?
+  lastRunAt      DateTime?
+
+  // For webhook triggers
+  webhookSecret String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_trigger")
+}
+
+enum TriggerType {
+  SCHEDULE // Cron-based scheduling
+  WEBHOOK // External webhook
+  EMAIL // Email received
+  CHAT // Chat message (default)
+  AGENT_MESSAGE // Message from another agent
+}
+
+// ===================
+// AGENT TEMPLATES
+// ===================
+
+model AgentTemplate {
+  id   String  @id @default(cuid())
+  slug String? @unique // URL-friendly identifier, ex: "relance-client-inactif"
+
+  name        String
+  subtitle    String? // Short description for card view (2 lines max)
+  description String           @db.Text
+  category    TemplateCategory
+  role        TemplateRole?
+  useCase     TemplateUseCase?
+
+  // Template configuration
+  systemPrompt String     @db.Text
+  context      String?    @db.Text
+  model        AgentModel @default(ANTHROPIC)
+  temperature  Float      @default(0.7)
+
+  // V6 Trigger Configuration
+  trigger Json @default("{}") // TriggerConfig - what triggers the agent
+
+  // V6 Configuration - LLM Tiering
+  llmTier        String @default("sonnet") // "haiku" | "sonnet" | "opus"
+  maxStepsPerRun Int    @default(10) // Guard-rail for cost
+
+  // V6 Configuration - Data Fetching
+  fetchSources Json @default("[]") // AgentFetchSource[] - what data to fetch
+
+  // V6 Configuration - Actions
+  actions Json @default("[]") // AgentAction[] - what the agent can do
+
+  // V6 Configuration - Eval Rules (L1/L2/L3)
+  evalRules Json @default("{}") // EvalRules - evaluation config
+
+  // Suggested tools/integrations (for UI display)
+  suggestedTools        Json     @default("[]")
+  suggestedTriggers     Json     @default("[]")
+  suggestedIntegrations String[] @default([])
+
+  // Pre-configured flow and defaults (auto-created on template use)
+  flowData        Json @default("{}") // { nodes: [], edges: [] } for React Flow
+  defaultTriggers Json @default("[]") // Triggers to auto-create
+  defaultTools    Json @default("[]") // Workflows/tools to auto-create
+
+  // UI
+  icon       String?
+  color      String?
+  coverImage String?
+
+  // Community / Store features
+  isPublic      Boolean @default(false)
+  isFeatured    Boolean @default(false)
+  createdById   String?
+  createdByName String?
+
+  // Stats
+  usageCount  Int   @default(0)
+  rating      Float @default(0)
+  reviewCount Int   @default(0)
+
+  // Tags for search
+  tags String[] @default([])
+
+  // Agents created from this template
+  agents Agent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_template")
+}
+
+enum TemplateCategory {
+  PRODUCTIVITY // Email, calendar, tasks
+  SALES // Lead qualification, outreach
+  MARKETING // Brand, SEO, content marketing
+  SUPPORT // Customer support, FAQ
+  RESEARCH // Web research, analysis
+  CREATIVE // Content creation, writing
+  OPERATIONS // Workflows, automation
+  CUSTOM // User-created
+}
+
+enum TemplateRole {
+  ENGINEERING
+  HUMAN_RESOURCES
+  MARKETING
+  OPERATIONS
+  PRODUCT
+  SALES
+  SUPPORT
+}
+
+enum TemplateUseCase {
+  AI_ASSISTANT
+  CHATBOT
+  COACHING
+  CONTENT_CREATION
+  DOCUMENT_PROCESSING
+  EMAILS
+  MEETINGS
+  OUTREACH
+  PHONE
+  PRODUCTIVITY
+  RESEARCH
+  TEAMS
+  WEB_SCRAPER
+}
+
+// ===================
+// WIDGET EMBED
+// ===================
+
+model AgentEmbed {
+  id String @id @default(cuid())
+
+  agentId String @unique
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Embed configuration
+  enabled        Boolean  @default(true)
+  allowedDomains String[] @default([])
+
+  // Customization - Basic
+  displayName    String?
+  welcomeMessage String?
+  logo           String?
+
+  // Customization - Colors (like Lindy)
+  accentColor     String @default("#6366f1")
+  backgroundColor String @default("#ffffff")
+  textColor       String @default("#1f2937")
+  userBubbleColor String @default("#6366f1")
+  botBubbleColor  String @default("#f3f4f6")
+
+  // Customization - Position & Size
+  position     EmbedPosition @default(BOTTOM_RIGHT)
+  buttonSize   Int           @default(56)
+  windowWidth  Int           @default(400)
+  windowHeight Int           @default(600)
+
+  // Customization - Behavior
+  autoOpen      Boolean @default(false)
+  autoOpenDelay Int     @default(0) // seconds
+  showBranding  Boolean @default(true)
+  collectEmail  Boolean @default(false)
+  requireEmail  Boolean @default(false)
+
+  // Suggested prompts
+  conversationStarters Json @default("[]")
+
+  // Custom CSS (advanced)
+  customCss String? @db.Text
+
+  // Analytics
+  totalConversations Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_embed")
+}
+
+enum EmbedPosition {
+  BOTTOM_RIGHT
+  BOTTOM_LEFT
+  TOP_RIGHT
+  TOP_LEFT
+}
+
+// ===================
+// AGENT EMAIL ADDRESS (Inbound Email Trigger)
+// ===================
+
+model AgentEmailAddress {
+  id String @id @default(cuid())
+
+  agentId String @unique
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Unique email address for this agent
+  localPart String // e.g., "agent-abc123"
+  domain    String @default("agents.nodebase.app")
+
+  // Configuration
+  autoReply Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([localPart, domain])
+  @@map("agent_email_address")
+}
+
+// ===================
+// INTEGRATIONS
+// ===================
+
+model Integration {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type IntegrationType
+
+  // OAuth tokens (encrypted)
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime?
+
+  // Account info
+  accountEmail String?
+  accountName  String?
+
+  // Scopes granted
+  scopes String[] @default([])
+
+  // Slack-specific fields
+  teamId    String?
+  teamName  String?
+  botUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@map("integration")
+}
+
+enum IntegrationType {
+  // Google
+  GMAIL
+  GOOGLE_CALENDAR
+  GOOGLE_SHEETS
+  GOOGLE_DRIVE
+  GOOGLE_DOCS
+  // Microsoft
+  OUTLOOK
+  OUTLOOK_CALENDAR
+  MICROSOFT_TEAMS
+  // Other
+  SLACK
+  NOTION
+}
+
+// ===================
+// AGENT SWARMS (Parallel Execution)
+// ===================
+
+model AgentSwarm {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Swarm configuration
+  name         String
+  taskTemplate String @db.Text // Template with {{variable}} placeholders
+
+  // Status
+  status SwarmStatus @default(PENDING)
+
+  // Tasks
+  tasks SwarmTask[]
+
+  // Stats
+  totalTasks     Int @default(0)
+  completedTasks Int @default(0)
+  failedTasks    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_swarm")
+}
+
+model SwarmTask {
+  id String @id @default(cuid())
+
+  swarmId String
+  swarm   AgentSwarm @relation(fields: [swarmId], references: [id], onDelete: Cascade)
+
+  // Task input (JSON with variables)
+  input Json
+
+  // Execution
+  status SwarmTaskStatus @default(PENDING)
+  output String?         @db.Text
+  error  String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("swarm_task")
+}
+
+enum SwarmStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SwarmTaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ===================
+// MEETING RECORDINGS
+// ===================
+
+model MeetingRecording {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Meeting info
+  title           String
+  meetingUrl      String? // Zoom/Meet URL
+  meetingPlatform MeetingPlatform
+
+  // Calendar event reference
+  calendarEventId String?
+
+  // Recording
+  status       RecordingStatus @default(SCHEDULED)
+  recordingUrl String?
+
+  // Transcript & Summary
+  transcript  String? @db.Text
+  summary     String? @db.Text
+  actionItems Json    @default("[]")
+
+  // Participants
+  participants Json @default("[]")
+
+  // Timing
+  scheduledAt DateTime
+  startedAt   DateTime?
+  endedAt     DateTime?
+  duration    Int? // minutes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("meeting_recording")
+}
+
+enum MeetingPlatform {
+  ZOOM
+  GOOGLE_MEET
+  MICROSOFT_TEAMS
+  OTHER
+}
+
+enum RecordingStatus {
+  SCHEDULED
+  JOINING
+  RECORDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ===================
+// VOICE/PHONE AGENT (Twilio)
+// ===================
+
+model AgentPhoneNumber {
+  id String @id @default(cuid())
+
+  agentId String @unique
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Twilio phone number
+  phoneNumber String @unique
+  twilioSid   String @unique
+
+  // Configuration
+  voiceEnabled  Boolean @default(true)
+  voiceGreeting String? @db.Text
+
+  // Call logs
+  calls PhoneCall[]
+
+  createdAt DateTime @default(now())
+
+  @@map("agent_phone_number")
+}
+
+model PhoneCall {
+  id String @id @default(cuid())
+
+  phoneNumberId String
+  phoneNumber   AgentPhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+
+  // Call details
+  direction  CallDirection
+  fromNumber String
+  toNumber   String
+  status     CallStatus    @default(INITIATED)
+
+  // Twilio Call SID for tracking
+  twilioCallSid String? @unique
+
+  // Recording & transcript
+  recordingUrl String?
+  transcript   String? @db.Text
+
+  // Conversation created from this call
+  conversationId String?
+
+  duration Int? // seconds
+
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@map("phone_call")
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  NO_ANSWER
+}
+
+// ===================
+// AGENT ANALYTICS METRICS
+// ===================
+
+model AgentMetric {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Time period
+  date DateTime @db.Date
+
+  // Conversation metrics
+  totalConversations  Int   @default(0)
+  totalMessages       Int   @default(0)
+  avgMessagesPerConvo Float @default(0)
+
+  // Performance
+  avgResponseTimeMs Int @default(0)
+  totalTokensUsed   Int @default(0)
+
+  // Tool usage
+  toolCallsCount  Int   @default(0)
+  toolSuccessRate Float @default(0)
+
+  // Satisfaction (if feedback enabled)
+  feedbackPositive Int @default(0)
+  feedbackNegative Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, date])
+  @@map("agent_metric")
+}
+
+// ===================
+// SCAN ENGINE (V6)
+// ===================
+
+model ScanResult {
+  id          String  @id @default(cuid())
+  userId      String // User who triggered/owns the scan
+  workspaceId String? // Optional workspace (for multi-tenant future)
+
+  category ScanCategory
+  signals  Json         @default("[]") // ScanSignal[]
+
+  // Stats
+  totalSignals  Int @default(0)
+  criticalCount Int @default(0)
+  highCount     Int @default(0)
+  mediumCount   Int @default(0)
+  lowCount      Int @default(0)
+
+  scannedAt DateTime @default(now())
+
+  @@index([userId, category])
+  @@index([userId, scannedAt])
+  @@index([workspaceId, category])
+  @@map("scan_result")
+}
+
+enum ScanCategory {
+  SALES
+  SUPPORT
+  MARKETING
+  HR
+  FINANCE
+  PROJECTS
+}
+
+// Individual signal for better tracking
+model Signal {
+  id           String @id @default(cuid())
+  scanResultId String
+
+  type     String // ex: 'deal_stuck', 'ticket_escalation', 'churn_risk'
+  category ScanCategory
+  severity SignalSeverity
+  source   String // ex: 'hubspot', 'zendesk', 'gmail'
+
+  title       String
+  description String @db.Text
+  metadata    Json   @default("{}")
+
+  // Suggested action
+  suggestedTemplateId String? // Template that can handle this signal
+
+  // User interaction
+  snoozedUntil DateTime?
+  dismissedAt  DateTime?
+  actedOnAt    DateTime?
+
+  detectedAt DateTime @default(now())
+
+  @@index([scanResultId])
+  @@index([category, severity])
+  @@index([source])
+  @@map("signal")
+}
+
+enum SignalSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ===================
+// AGENT RUN / EVAL (V6)
+// ===================
+
+model AgentRun {
+  id String @id @default(cuid())
+
+  agentId     String
+  userId      String
+  workspaceId String
+
+  // Trigger info
+  triggeredAt DateTime @default(now())
+  triggeredBy String // "manual" | "schedule" | "webhook" | "email" | "chat"
+
+  // Data sources fetched
+  dataSources Json @default("[]")
+
+  // Output
+  outputType    String? // "text" | "email_draft" | "slack_message" | etc
+  outputContent String? @db.Text
+
+  // LLM usage
+  llmModel      String
+  llmTokensUsed Int    @default(0)
+  llmCost       Float  @default(0)
+
+  // L1 Eval - Deterministic assertions
+  l1Assertions Json    @default("[]")
+  l1Passed     Boolean @default(false)
+
+  // L2 Eval - Rule-based scoring
+  l2Score     Int  @default(0)
+  l2Breakdown Json @default("{}")
+
+  // L3 Eval - LLM-as-Judge
+  l3Triggered Boolean  @default(false)
+  l3Blocked   Boolean?
+  l3Reason    String?  @db.Text
+
+  // User action on the output
+  userAction  String? // "approved" | "edited" | "rejected"
+  draftDiff   String?   @db.Text // If edited, the diff
+  finalAction String? // What was actually sent/executed
+  finalAt     DateTime?
+
+  // Status
+  status String @default("running") // "running" | "pending_review" | "completed" | "failed" | "blocked"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId, triggeredAt])
+  @@index([workspaceId, triggeredAt])
+  @@index([status])
+  @@map("agent_run")
+}
+
+// ===================
+// AI EVENT LOGGING (V6)
+// ===================
+
+model AiEvent {
+  id String @id @default(cuid())
+
+  // Link to trace (LangChain-style tracing)
+  traceId String?
+  trace   AgentTrace? @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  agentId     String
+  userId      String
+  workspaceId String
+
+  // Model info
+  model String // "claude-3-5-haiku-20241022" | "claude-sonnet-4-20250514" | "claude-opus-4-20250514"
+  tier  String // "haiku" | "sonnet" | "opus"
+
+  // Usage
+  tokensIn  Int
+  tokensOut Int
+  cost      Float // USD
+  latencyMs Int
+
+  // Context (LangChain-style)
+  stepNumber Int     @default(1)
+  action     String // "reasoning" | "tool_call" | "response" | "message" | "chat" | "stream"
+  toolName   String?
+  toolInput  Json?
+  toolOutput Json?
+
+  // Eval (kept from V6)
+  stepsUsed  Int    @default(1)
+  evalResult String @default("pass") // "pass" | "block" | "warn"
+
+  timestamp DateTime @default(now())
+
+  @@index([traceId])
+  @@index([agentId, timestamp])
+  @@index([workspaceId, timestamp])
+  @@index([userId, timestamp])
+  @@map("ai_event")
+}
+
+// ===================
+// AGENT TRACE (LangChain/LangSmith-style)
+// ===================
+
+model AgentTrace {
+  id             String @id @default(cuid())
+  agentId        String
+  conversationId String
+  userId         String
+  workspaceId    String
+
+  // Trace metadata
+  startedAt   DateTime    @default(now())
+  completedAt DateTime?
+  status      TraceStatus @default(RUNNING)
+
+  // Execution details
+  steps      Json @default("[]") // Step[]
+  totalSteps Int  @default(0)
+  maxSteps   Int  @default(5)
+
+  // LLM usage (aggregated)
+  totalTokensIn  Int   @default(0)
+  totalTokensOut Int   @default(0)
+  totalCost      Float @default(0)
+  latencyMs      Int?
+
+  // Tool usage
+  toolCalls     Json @default("[]") // ToolCall[]
+  toolSuccesses Int  @default(0)
+  toolFailures  Int  @default(0)
+
+  // Evaluation (L1/L2/L3 from plan)
+  l1Passed    Boolean?
+  l1Failures  Json?
+  l2Score     Float?
+  l2Breakdown Json?
+  l3Triggered Boolean  @default(false)
+  l3Blocked   Boolean?
+
+  // User feedback (for optimization loop)
+  feedbackScore   Int? // 1-5
+  feedbackComment String? @db.Text
+  userEdited      Boolean @default(false)
+  editDiff        String? @db.Text
+
+  // Relations
+  agent        Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  aiEvents     AiEvent[]
+  feedbacks    AgentFeedback[] // Phase 3
+
+  @@index([agentId, startedAt])
+  @@index([conversationId])
+  @@index([userId, startedAt])
+  @@index([workspaceId, startedAt])
+  @@map("agent_trace")
+}
+
+enum TraceStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+// ===================
+// CONVERSATION EVALUATION (Phase 2 - Multi-turn Evals)
+// ===================
+
+model ConversationEvaluation {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+  evaluatedAt    DateTime @default(now())
+
+  // Goal completion
+  goalCompleted            Boolean
+  goalCompletionConfidence Float // 0-1
+
+  // Satisfaction
+  userSatisfactionScore Float // 1-5
+
+  // Categorization
+  categories String[] // ["sales", "support"]
+
+  // Failure detection
+  failureModes String[] // ["hallucination", "tool_error"]
+
+  // Suggestions
+  improvementSuggestions String[]
+
+  // Metadata
+  metadata Json
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([evaluatedAt])
+  @@map("conversation_evaluation")
+}
+
+// ===================
+// AGENT INSIGHTS (Phase 2 - Auto-categorization)
+// ===================
+
+model AgentInsight {
+  id             String   @id @default(cuid())
+  agentId        String
+  generatedAt    DateTime @default(now())
+  timeframeStart DateTime
+  timeframeEnd   DateTime
+
+  // Clusters
+  clusters Json // ConversationCluster[]
+
+  // Patterns
+  patterns Json // UsagePattern[]
+
+  // Anomalies
+  anomalies Json // Anomaly[]
+
+  // Opportunities
+  opportunities Json // OptimizationOpportunity[]
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, generatedAt])
+  @@map("agent_insight")
+}
+
+// ===================
+// AGENT FEEDBACK (Phase 3 - Auto-Optimization)
+// ===================
+
+model AgentFeedback {
+  id             String @id @default(cuid())
+  traceId        String
+  conversationId String
+  userId         String
+  agentId        String
+
+  type      FeedbackType
+  timestamp DateTime     @default(now())
+
+  // Context
+  originalOutput String  @db.Text
+  userEdit       String? @db.Text
+  correctionText String? @db.Text
+
+  // Metadata
+  stepNumber Int
+  metadata   Json?
+
+  trace        AgentTrace   @relation(fields: [traceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, timestamp])
+  @@index([traceId])
+  @@map("agent_feedback")
+}
+
+enum FeedbackType {
+  THUMBS_UP
+  THUMBS_DOWN
+  USER_EDIT
+  APPROVAL_REJECT
+  EXPLICIT_CORRECTION
+  RETRY_REQUEST
+}
+
+// ===================
+// AGENT A/B TEST (Phase 3 - Prompt Optimization)
+// ===================
+
+model AgentABTest {
+  id      String @id @default(cuid())
+  agentId String
+
+  variantAPrompt String @db.Text
+  variantBPrompt String @db.Text
+  trafficSplit   Float  @default(0.2) // % to variant B
+
+  status    ABTestStatus
+  startedAt DateTime     @default(now())
+  endedAt   DateTime?
+
+  // Results
+  variantATraces Int     @default(0)
+  variantBTraces Int     @default(0)
+  variantAScore  Float?
+  variantBScore  Float?
+  winningVariant String? // "A" or "B"
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, status])
+  @@map("agent_ab_test")
+}
+
+enum ABTestStatus {
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+// ===================
+// OPTIMIZATION RUN (Phase 3 - Promptim-style)
+// ===================
+
+model OptimizationRun {
+  id          String   @id @default(cuid())
+  agentId     String
+  triggeredAt DateTime @default(now())
+  triggeredBy String // "accumulated_feedback" | "manual" | "scheduled"
+
+  // Analysis
+  editPatterns     Json // EditPattern[]
+  promptVariations Json // PromptVariation[]
+  testResults      Json // VariationTestResult[]
+
+  // Outcome
+  recommendation String  @db.Text
+  abTestId       String?
+  status         String // "analyzing" | "testing" | "completed"
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, triggeredAt])
+  @@map("optimization_run")
+}
+
+// ===================
+// MODIFICATION PROPOSAL (Phase 4 - Self-Modifying Agents)
+// ===================
+
+model ModificationProposal {
+  id         String   @id @default(cuid())
+  agentId    String
+  proposedAt DateTime @default(now())
+
+  type      ModificationType
+  current   String           @db.Text
+  proposed  String           @db.Text
+  rationale String           @db.Text
+  impact    String
+
+  status     ProposalStatus @default(PENDING)
+  reviewedAt DateTime?
+  reviewedBy String?
+  appliedAt  DateTime?
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, status])
+  @@map("modification_proposal")
+}
+
+enum ModificationType {
+  PROMPT_REFINEMENT
+  MODEL_DOWNGRADE
+  MODEL_UPGRADE
+  ADD_TOOL
+  REMOVE_TOOL
+  ADD_RAG
+  ADJUST_TEMPERATURE
+  ADJUST_MAX_STEPS
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+}

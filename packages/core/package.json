@@ -1,0 +1,52 @@
+{
+  "name": "@nodebase/core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./scan-engine": {
+      "types": "./dist/scan-engine/index.d.ts",
+      "import": "./dist/scan-engine/index.mjs",
+      "require": "./dist/scan-engine/index.js"
+    },
+    "./agent-engine": {
+      "types": "./dist/agent-engine/index.d.ts",
+      "import": "./dist/agent-engine/index.mjs",
+      "require": "./dist/agent-engine/index.js"
+    },
+    "./eval": {
+      "types": "./dist/eval/index.d.ts",
+      "import": "./dist/eval/index.mjs",
+      "require": "./dist/eval/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/scan-engine/index.ts src/agent-engine/index.ts src/eval/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts src/scan-engine/index.ts src/agent-engine/index.ts src/eval/index.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@nodebase/types": "workspace:*",
+    "@nodebase/config": "workspace:*",
+    "@nodebase/db": "workspace:*",
+    "@nodebase/ai": "workspace:*",
+    "@nodebase/connectors": "workspace:*",
+    "@nodebase/queue": "workspace:*",
+    "zod": "^3.24.0",
+    "nanoid": "^5.0.9",
+    "luxon": "^3.5.0"
+  }
+}

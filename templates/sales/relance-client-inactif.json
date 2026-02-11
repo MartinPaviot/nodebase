@@ -1,0 +1,95 @@
+{
+  "id": "tmpl_relance-client",
+  "slug": "relance-client-inactif",
+  "name": "Relance Client Inactif",
+  "description": "Detecte les deals sans activite depuis 30 jours et prepare un email de relance personnalise. L'agent analyse l'historique des echanges et le contexte du deal pour creer un message pertinent et engageant.",
+  "category": "sales",
+  "tags": ["churn", "email", "hubspot", "crm", "follow-up"],
+  "icon": "mail",
+
+  "trigger": {
+    "type": "scan_signal",
+    "signalTypes": ["deal_stuck", "deal_dormant"],
+    "config": {
+      "minDaysSinceActivity": 30
+    }
+  },
+
+  "fetchSteps": [
+    {
+      "connector": "hubspot",
+      "action": "get_deal",
+      "params": {
+        "dealId": "{{signal.metadata.dealId}}",
+        "associations": ["contacts", "companies", "notes", "emails"]
+      },
+      "outputKey": "deal"
+    },
+    {
+      "connector": "hubspot",
+      "action": "get_contact",
+      "params": {
+        "contactId": "{{deal.associations.contacts[0].id}}"
+      },
+      "outputKey": "contact"
+    },
+    {
+      "connector": "gmail",
+      "action": "search_emails",
+      "params": {
+        "query": "to:{{contact.email}} OR from:{{contact.email}}",
+        "maxResults": 10
+      },
+      "outputKey": "emailHistory"
+    }
+  ],
+
+  "prompt": "Tu es un assistant commercial experimente travaillant pour une PME francaise.\n\nTa mission est de rediger un email de relance pour un deal qui n'a pas eu d'activite depuis {{signal.metadata.daysSinceActivity}} jours.\n\n## Contexte du deal\n- Nom: {{deal.properties.dealname}}\n- Montant: {{deal.properties.amount}} EUR\n- Etape actuelle: {{deal.properties.dealstage}}\n- Derniere activite: {{deal.properties.notes_last_updated}}\n\n## Contact principal\n- Nom: {{contact.properties.firstname}} {{contact.properties.lastname}}\n- Entreprise: {{contact.properties.company}}\n- Email: {{contact.email}}\n\n## Historique des echanges\n{{#each emailHistory}}\n- {{date}}: {{subject}} ({{from}} -> {{to}})\n{{/each}}\n\n## Regles de redaction\n1. Ton professionnel mais chaleureux - on s'adresse a une PME, pas a un grand compte\n2. Reference obligatoire a un echange ou point specifique de la relation\n3. Propose une action concrete (appel de 15 min, demo, etc.)\n4. Maximum 150 mots - les dirigeants de PME n'ont pas le temps\n5. Pas de formules creuses type \"je me permets de...\" ou \"je reviens vers vous...\"\n6. Signe avec le prenom uniquement (pas \"Cordialement, Prenom Nom\")\n\n## Format de sortie\nRedige UNIQUEMENT l'email (sujet + corps). Pas d'explication avant ou apres.",
+
+  "llmTier": "sonnet",
+  "temperature": 0.7,
+  "maxStepsPerRun": 5,
+
+  "evalRules": {
+    "assertions": [
+      { "check": "contains_recipient_name", "severity": "block", "message": "L'email doit mentionner le nom du destinataire" },
+      { "check": "no_placeholders", "severity": "block", "message": "L'email ne doit pas contenir de placeholders ({{...}})" },
+      { "check": "references_real_exchange", "severity": "block", "message": "L'email doit referencer un echange reel" },
+      { "check": "word_count_max_200", "severity": "warn", "message": "L'email devrait faire moins de 200 mots" },
+      { "check": "correct_language_fr", "severity": "warn", "message": "L'email doit etre en francais" },
+      { "check": "has_call_to_action", "severity": "warn", "message": "L'email devrait contenir un appel a l'action" }
+    ],
+    "minConfidence": 0.6,
+    "l3Trigger": "on_irreversible_action",
+    "requireApproval": true,
+    "autoSendThreshold": 0.85
+  },
+
+  "actions": [
+    {
+      "type": "draft_email",
+      "connector": "gmail",
+      "requiresApproval": true,
+      "config": {
+        "to": "{{contact.email}}",
+        "subject": "{{generated.subject}}",
+        "body": "{{generated.body}}"
+      }
+    },
+    {
+      "type": "update_crm",
+      "connector": "hubspot",
+      "requiresApproval": false,
+      "config": {
+        "dealId": "{{deal.id}}",
+        "properties": {
+          "last_followup_date": "{{now}}"
+        }
+      }
+    }
+  ],
+
+  "isActive": true,
+  "isPremium": false,
+  "version": 1
+}
