@@ -7,7 +7,7 @@
 
 import { startWorkflowWorker, type WorkflowJobData, type WorkflowJobResult } from "./bullmq";
 import prisma from "@/lib/db";
-import { ExecutionStatus, NodeType } from "@/generated/prisma";
+import { ExecutionStatus, NodeType } from "@prisma/client";
 import { getExecutor } from "@/features/executions/lib/executor-registry";
 import { topologicalSort } from "@/inngest/utils";
 import { stubStep, stubPublish } from "./compat";

@@ -8,7 +8,7 @@ import {
 } from "@/trpc/init";
 import z from "zod";
 import { PAGINATION } from "@/config/constants";
-import { AgentModel, MemoryCategory, TriggerType, TemplateCategory, TemplateRole, TemplateUseCase, SwarmStatus, KnowledgeSourceType, NodeType, Prisma } from "@/generated/prisma";
+import { AgentModel, MemoryCategory, TriggerType, TemplateCategory, TemplateRole, TemplateUseCase, SwarmStatus, KnowledgeSourceType, NodeType, Prisma } from "@prisma/client";
 import { executeSwarm, cancelSwarm } from "@/lib/swarm-executor";
 import { indexDocument, searchKnowledge } from "@/lib/knowledge-base";
 
@@ -2548,15 +2548,34 @@ export const agentsRouter = createTRPCRouter({
   getPerformanceAnalysis: protectedProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Verify ownership
-      await prisma.agent.findUniqueOrThrow({
+      // Verify ownership and get agent config
+      const agent = await prisma.agent.findUniqueOrThrow({
         where: { id: input.agentId, userId: ctx.auth.user.id },
+        select: {
+          id: true,
+          workspaceId: true,
+          systemPrompt: true,
+          model: true,
+          temperature: true,
+        },
       });
 
       // Use SelfModifier from @nodebase/core
       const { SelfModifier } = await import("@nodebase/core");
       const modifier = new SelfModifier();
-      return await modifier.proposeModifications(input.agentId);
+      return await modifier.proposeModifications({
+        agentId: input.agentId,
+        workspaceId: agent.workspaceId || "",
+        currentConfig: {
+          systemPrompt: agent.systemPrompt || "",
+          model: agent.model || "ANTHROPIC",
+          temperature: agent.temperature || 0.7,
+          tools: [],
+        },
+        insights: [],
+        feedback: [],
+        metrics: {},
+      });
     }),
 
   approveModification: protectedProcedure

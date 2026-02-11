@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tansta
 import { useTRPC } from "@/trpc/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { TemplateCategory, TemplateRole, TemplateUseCase } from "@/generated/prisma";
+import type { TemplateCategory, TemplateRole, TemplateUseCase } from "@prisma/client";
 
 interface TemplateFilters {
   category?: string;

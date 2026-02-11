@@ -1,7 +1,7 @@
 import prisma from "@/lib/db";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import z from "zod";
-import { ScanCategory, Prisma } from "@/generated/prisma";
+import { ScanCategory, Prisma } from "@prisma/client";
 import {
   listEmails,
   listEvents,

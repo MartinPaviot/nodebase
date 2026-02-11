@@ -4,7 +4,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type CoreMessage } from "ai";
-import { AgentModel, MessageRole } from "@/generated/prisma";
+import { AgentModel, MessageRole } from "@prisma/client";
 
 export const maxDuration = 60;
 

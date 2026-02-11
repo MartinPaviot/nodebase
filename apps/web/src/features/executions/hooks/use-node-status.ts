@@ -1,4 +1,3 @@
-import type { Realtime } from "@inngest/realtime";
 import {useInngestSubscription} from "@inngest/realtime/hooks";
 import { useEffect, useState } from "react";
 import type { NodeStatus } from "@/components/react-flow/node-status-indicator";
@@ -7,7 +6,8 @@ interface UseNodeStatusOptions {
     nodeId: string;
     channel: string;
     topic: string;
-    refreshToken: () => Promise<Realtime.Subscribe.Token>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    refreshToken: () => Promise<any>;
 };
 
 export function useNodeStatus({

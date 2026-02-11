@@ -1,6 +1,6 @@
 "use client";
 
-import { ExecutionStatus } from "@/generated/prisma";
+import { ExecutionStatus } from "@prisma/client";
 import { CheckCircle, Clock, CircleNotch, XCircle } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";

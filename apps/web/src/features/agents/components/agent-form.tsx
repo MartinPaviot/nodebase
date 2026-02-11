@@ -20,7 +20,7 @@ import { useCreateAgent, useUpdateAgent } from "../hooks/use-agents";
 import { useRouter } from "next/navigation";
 import { useUpgradeModal } from "@/hooks/use-upgrade-modal";
 import { CircleNotch } from "@phosphor-icons/react";
-import type { Agent, Credential } from "@/generated/prisma";
+import type { Agent, Credential } from "@prisma/client";
 
 const agentFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),

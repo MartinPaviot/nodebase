@@ -10,7 +10,7 @@
  * - maxStepsPerRun: limite de steps par exécution
  */
 
-import { AgentModel } from "../../src/generated/prisma";
+import { AgentModel } from "@prisma/client";
 
 // ============================================
 // CATEGORY PRESETS (Automatisables)

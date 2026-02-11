@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { ActivityType, Prisma } from "@/generated/prisma";
+import { ActivityType, Prisma } from "@prisma/client";
 import {
   sendEmail,
   createEvent,

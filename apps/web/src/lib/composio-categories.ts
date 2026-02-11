@@ -72,10 +72,10 @@ export function getCategoriesForApp(appKey: string): ActionCategory[] {
 /**
  * Filtre les apps Composio par catégorie
  */
-export function filterAppsByCategory(
-  apps: Array<{ key: string; name: string }>,
+export function filterAppsByCategory<T extends { key: string; name: string }>(
+  apps: T[],
   category: ActionCategory
-): Array<{ key: string; name: string }> {
+): T[] {
   return apps.filter((app) => {
     const categories = getCategoriesForApp(app.key);
     return categories.includes(category);

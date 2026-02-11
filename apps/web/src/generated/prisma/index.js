@@ -1070,7 +1070,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "c:\\Users\\marti\\nodebase-1\\apps\\web\\src\\generated\\prisma",
+      "value": "C:\\Users\\marti\\nodebase-1\\apps\\web\\src\\generated\\prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -1084,7 +1084,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "c:\\Users\\marti\\nodebase-1\\prisma\\schema.prisma",
+    "sourceFilePath": "C:\\Users\\marti\\nodebase-1\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

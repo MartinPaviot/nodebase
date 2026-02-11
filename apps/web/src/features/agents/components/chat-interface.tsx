@@ -14,7 +14,7 @@ import {
   Pulse,
 } from "@phosphor-icons/react";
 import { useRef, useEffect, useState, useCallback, Suspense, type FormEvent } from "react";
-import type { Message } from "@/generated/prisma";
+import type { Message } from "@prisma/client";
 import { ConfirmationDialog } from "./confirmation-dialog";
 import { toast } from "sonner";
 import {

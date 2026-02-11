@@ -17,7 +17,7 @@ export async function GET(
     const limit = parseInt(searchParams.get("limit") || "50");
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    // Verify agent belongs to user's workspace
+    // Verify agent belongs to user
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },
       select: { userId: true, workspaceId: true },
@@ -31,21 +31,21 @@ export async function GET(
     const traces = await prisma.agentTrace.findMany({
       where: {
         agentId,
-        workspaceId: agent.workspaceId,
+        ...(agent.workspaceId ? { workspaceId: agent.workspaceId } : {}),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { startedAt: "desc" },
       take: limit,
       skip: offset,
       select: {
         id: true,
         agentId: true,
-        triggeredBy: true,
-        totalTokensUsed: true,
+        totalTokensIn: true,
+        totalTokensOut: true,
         totalCost: true,
-        totalDuration: true,
-        stepsCount: true,
+        latencyMs: true,
+        totalSteps: true,
         status: true,
-        createdAt: true,
+        startedAt: true,
         completedAt: true,
       },
     });
@@ -53,7 +53,7 @@ export async function GET(
     const total = await prisma.agentTrace.count({
       where: {
         agentId,
-        workspaceId: agent.workspaceId,
+        ...(agent.workspaceId ? { workspaceId: agent.workspaceId } : {}),
       },
     });
 

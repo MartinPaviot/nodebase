@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { mapTwilioStatus } from "@/lib/integrations/twilio";
-import { CallStatus } from "@/generated/prisma";
+import { CallStatus } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {

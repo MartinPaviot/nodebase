@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActivityType } from "@/generated/prisma";
+import { ActivityType } from "@prisma/client";
 
 // ============================================
 // Types

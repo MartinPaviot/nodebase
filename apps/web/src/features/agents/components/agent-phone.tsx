@@ -50,7 +50,7 @@ import {
   Clock,
 } from "@phosphor-icons/react";
 import { formatDistanceToNow, format } from "date-fns";
-import { CallDirection, CallStatus } from "@/generated/prisma";
+import { CallDirection, CallStatus } from "@prisma/client";
 
 interface AgentPhoneProps {
   agentId: string;

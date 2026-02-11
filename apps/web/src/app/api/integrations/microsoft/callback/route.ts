@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { MICROSOFT_SCOPES } from "@/lib/integrations/microsoft";
-import type { IntegrationType } from "@/generated/prisma";
+import type { IntegrationType } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { useSuspenseTemplates, useCreateFromTemplate } from "../hooks/use-agents";
 import { CircleNotch, Sparkle, Plus } from "@phosphor-icons/react";
-import { TemplateCategory } from "@/generated/prisma";
+import { TemplateCategory } from "@prisma/client";
 import { useRouter } from "next/navigation";
 
 const categoryLabels: Record<TemplateCategory, string> = {

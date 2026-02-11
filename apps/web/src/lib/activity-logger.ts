@@ -1,5 +1,5 @@
 import prisma from "./db";
-import { ActivityType, Prisma } from "@/generated/prisma";
+import { ActivityType, Prisma } from "@prisma/client";
 
 /**
  * Log an activity for a conversation

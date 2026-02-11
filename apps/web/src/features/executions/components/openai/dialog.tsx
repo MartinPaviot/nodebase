@@ -25,7 +25,7 @@ import { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCredentialsByType } from "@/features/credentials/hooks/use-credentials";
-import { CredentialType } from "@/generated/prisma";
+import { CredentialType } from "@prisma/client";
 import {
     Select,
     SelectContent,

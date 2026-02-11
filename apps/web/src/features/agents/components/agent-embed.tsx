@@ -25,7 +25,7 @@ import {
   ChatCircle,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { EmbedPosition } from "@/generated/prisma";
+import { EmbedPosition } from "@prisma/client";
 
 interface AgentEmbedProps {
   agentId: string;

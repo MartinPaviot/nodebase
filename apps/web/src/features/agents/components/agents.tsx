@@ -16,7 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAgentsParams } from "../hooks/use-agents-params";
 import { useEntitySearch } from "../hooks/use-entity-search";
-import type { Agent } from "@/generated/prisma";
+import type { Agent } from "@prisma/client";
 import {
   Robot,
   Plus,
