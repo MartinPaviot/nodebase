@@ -1,55 +1,18 @@
-import {useInngestSubscription} from "@inngest/realtime/hooks";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { NodeStatus } from "@/components/react-flow/node-status-indicator";
 
 interface UseNodeStatusOptions {
     nodeId: string;
     channel: string;
     topic: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    refreshToken: () => Promise<any>;
-};
+    refreshToken: () => Promise<unknown>;
+}
 
-export function useNodeStatus({
-    nodeId,
-    channel,
-    topic,
-    refreshToken,
-}: UseNodeStatusOptions) {
-    const [status, setStatus] = useState<NodeStatus>("initial");
-
-    const { data } = useInngestSubscription({
-        refreshToken,
-        enabled: true,
-    });
-
-    useEffect(() => {
-        if (!data?.length) {
-            return;
-        }
-
-        // Find the latest message fo this node
-        const latestMessage = data
-            .filter(
-                (msg) =>
-                    msg.kind === "data" && 
-                    msg.channel === channel &&
-                    msg.topic === topic &&
-                    msg.data.nodeId === nodeId,
-            )
-            .sort((a, b) => {
-                if (a.kind === "data" && b.kind === "data") {
-                    return ( 
-                        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                    );
-                }
-                return 0;
-            })[0];
-
-        if (latestMessage?.kind === "data") {
-            setStatus(latestMessage.data.status as NodeStatus);
-        }
-    }, [data, nodeId, channel, topic]);
-
+/**
+ * Stub: will be replaced with Redis PubSub + SSE.
+ * For now returns "initial" — no live status updates.
+ */
+export function useNodeStatus(_options: UseNodeStatusOptions) {
+    const [status] = useState<NodeStatus>("initial");
     return status;
-};
+}

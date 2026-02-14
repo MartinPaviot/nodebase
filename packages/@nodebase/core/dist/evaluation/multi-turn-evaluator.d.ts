@@ -40,16 +40,49 @@ export declare class EvaluationQuery {
     /**
      * Get evaluation for a conversation
      */
-    static getEvaluation(conversationId: string): Promise<any>;
+    static getEvaluation(conversationId: string): Promise<{
+        conversation: {
+            id: string;
+            agentId: string;
+            title: string;
+        };
+    } & {
+        id: string;
+        conversationId: string;
+        evaluatedAt: Date;
+        goalCompleted: boolean;
+        goalCompletionConfidence: number;
+        userSatisfactionScore: number;
+        categories: string[];
+        failureModes: string[];
+        improvementSuggestions: string[];
+        metadata: import("@prisma/client/runtime/library").JsonValue;
+    }>;
     /**
      * Get evaluations for an agent
      */
-    static getAgentEvaluations(agentId: string, limit?: number): Promise<any>;
+    static getAgentEvaluations(agentId: string, limit?: number): Promise<({
+        conversation: {
+            id: string;
+            title: string;
+        };
+    } & {
+        id: string;
+        conversationId: string;
+        evaluatedAt: Date;
+        goalCompleted: boolean;
+        goalCompletionConfidence: number;
+        userSatisfactionScore: number;
+        categories: string[];
+        failureModes: string[];
+        improvementSuggestions: string[];
+        metadata: import("@prisma/client/runtime/library").JsonValue;
+    })[]>;
     /**
      * Get agent performance metrics from evaluations
      */
     static getPerformanceMetrics(agentId: string, days?: number): Promise<{
-        total: any;
+        total: number;
         goalCompletionRate: number;
         avgSatisfaction: number;
         failureModeCounts: Record<string, number>;

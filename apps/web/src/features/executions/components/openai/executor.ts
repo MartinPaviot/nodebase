@@ -1,9 +1,7 @@
 import type { NodeExecutor } from "@/features/executions/types";
-import { NonRetriableError } from "inngest";
 import { createOpenAI } from "@ai-sdk/openai"
 import { generateText } from "ai";
 import Handlebars from "handlebars";
-import { openAiChannel } from "@/inngest/channels/openai";
 import prisma from "@/lib/db";  
 import { decrypt } from "@/lib/encryption";
 
@@ -29,41 +27,21 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
     step,
     publish,
 }) => {
-    await publish(
-        openAiChannel().status({
-            nodeId,
-            status:"loading",
-        }),
-    );
+    await publish({ nodeId, status: "loading" });
 
     if (!data.variableName) {
-        await publish(
-            openAiChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("OpenAI node: Variable name is missing")
+        await publish({ nodeId, status: "error" });
+        throw new Error("OpenAI node: Variable name is missing")
     }
 
     if (!data.credentialId) {
-            await publish(
-                openAiChannel().status({
-                    nodeId, 
-                    status: "error"
-                })
-            );
-            throw new NonRetriableError("OpenAI node: Credential is required")
-        }
+        await publish({ nodeId, status: "error" });
+        throw new Error("OpenAI node: Credential is required")
+    }
 
     if (!data.userPrompt) {
-        await publish(
-            openAiChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("OpenAI node: User prompt is missing")
+        await publish({ nodeId, status: "error" });
+        throw new Error("OpenAI node: User prompt is missing")
     }
     
     const systemPrompt= data.systemPrompt
@@ -81,13 +59,8 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
     }); 
 
     if (!credential) {
-        await publish(
-            openAiChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("OpenAI node: Credential not found");
+        await publish({ nodeId, status: "error" });
+        throw new Error("OpenAI node: Credential not found");
     }
     
     const openai = createOpenAI({
@@ -115,12 +88,7 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
                 ? steps[0].content[0].text
                 : "";
 
-        await publish(
-            openAiChannel().status({
-                nodeId,
-                status: "success",
-            }),
-        );
+        await publish({ nodeId, status: "success" });
 
         return {
             ...context,
@@ -129,12 +97,7 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
             },
         }
     } catch (error) {
-        await publish(
-            openAiChannel().status({
-                nodeId,
-                status: "error",
-            }),
-        );
+        await publish({ nodeId, status: "error" });
         throw error;
     }
 };

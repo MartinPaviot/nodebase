@@ -10,6 +10,12 @@ const GOOGLE_SCOPES: Record<string, string[]> = {
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/userinfo.email",
   ],
+  GMAIL_MAILBOX: [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+  ],
   GOOGLE_CALENDAR: [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -42,6 +48,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid integration type" }, { status: 400 });
   }
 
-  const url = getGoogleAuthUrl(session.user.id, scopes);
+  // For mailbox connections, encode the type in state so the callback can route accordingly
+  const state = type === "GMAIL_MAILBOX"
+    ? JSON.stringify({ userId: session.user.id, type: "GMAIL_MAILBOX" })
+    : session.user.id;
+
+  const url = getGoogleAuthUrl(state, scopes);
   return NextResponse.json({ url });
 }

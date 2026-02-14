@@ -1,4 +1,12 @@
 import {
+  getEvalRegistry,
+  registerL1Assertion,
+  registerL2Criterion,
+  runL1Eval,
+  runL2Eval,
+  runL3Eval
+} from "./chunk-XWVGOFKV.mjs";
+import {
   AgentEngine,
   AgentTracer,
   costTrackingHook,
@@ -8,14 +16,6 @@ import {
   initAgentEngine,
   loggingHook
 } from "./chunk-CD4LBWGT.mjs";
-import {
-  getEvalRegistry,
-  registerL1Assertion,
-  registerL2Criterion,
-  runL1Eval,
-  runL2Eval,
-  runL3Eval
-} from "./chunk-XWVGOFKV.mjs";
 import {
   DEFAULT_SCAN_RULES,
   ScanEngine,

@@ -1,9 +1,8 @@
 import prisma from "@/lib/db";
-import { topologicalSort } from "@/inngest/utils";
+import { topologicalSort } from "@/lib/workflow/utils";
 import { getExecutor } from "@/features/executions/lib/executor-registry";
 import { NodeType } from "@prisma/client";
-import type { WorkflowContext, StepTools } from "@/features/executions/types";
-import type { Realtime } from "@inngest/realtime";
+import type { WorkflowContext, StepTools, PublishFn } from "@/features/executions/types";
 
 const WORKFLOW_TIMEOUT_MS = 30000; // 30 seconds per workflow
 
@@ -25,6 +24,7 @@ const TRIGGER_NODE_TYPES: string[] = [
   NodeType.MANUAL_TRIGGER,
   NodeType.GOOGLE_FORM_TRIGGER,
   NodeType.STRIPE_TRIGGER,
+  NodeType.CALENDAR_TRIGGER,
 ];
 
 /**
@@ -58,7 +58,7 @@ function createMockStepTools(): StepTools {
  * Mock publish function - no-op for sync execution
  * In async mode this would publish to Inngest realtime channels
  */
-const mockPublish: Realtime.PublishFn = async () => {};
+const mockPublish: PublishFn = async () => {};
 
 /**
  * Execute a workflow synchronously (blocking).

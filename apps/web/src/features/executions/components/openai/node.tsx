@@ -6,7 +6,6 @@ import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { OpenAiDialog, OpenAiFormValues } from "./dialog";
 import { useNodeStatus } from "../../hooks/use-node-status";
-import { OPENAI_CHANNEL_NAME } from "@/inngest/channels/openai";
 import { fetchOpenAiRealtimeToken } from "./actions";
 
 type OpenAiNodeData = {
@@ -24,7 +23,7 @@ export const OpenAiNode = memo((props: NodeProps<OpenAiNodeType>) => {
 
     const nodeStatus = useNodeStatus({
         nodeId: props.id,
-        channel: OPENAI_CHANNEL_NAME,
+        channel: "openai-execution",
         topic: "status",
         refreshToken: fetchOpenAiRealtimeToken,
     });

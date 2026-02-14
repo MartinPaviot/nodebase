@@ -6,8 +6,6 @@ import { memo, useState } from "react";
 import { BaseExecutionNode} from "../base-execution-node";
 import { DiscordDialog, DiscordFormValues } from "./dialog";
 import { useNodeStatus } from "../../hooks/use-node-status";
-import { GEMINI_CHANNEL_NAME } from "@/inngest/channels/gemini";
-import { DISCORD_CHANNEL_NAME } from "@/inngest/channels/discord";
 import { fetchDiscordRealtimeToken } from "../discord/actions";
 
 type DiscordNodeData = {
@@ -24,7 +22,7 @@ export const DiscordNode = memo((props: NodeProps<DiscordNodeType>) => {
 
     const nodeStatus = useNodeStatus({
         nodeId: props.id,
-        channel: DISCORD_CHANNEL_NAME,
+        channel: "discord-execution",
         topic: "status",
         refreshToken: fetchDiscordRealtimeToken,
     });

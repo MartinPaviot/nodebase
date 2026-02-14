@@ -11,6 +11,9 @@ import { useComposioApps, useComposioActions, useAddAgentTool } from "@/hooks/us
 import { filterAppsByCategory, type ActionCategory } from "@/lib/composio-categories";
 import { formatComposioActionName } from "@/lib/composio-action-names";
 import { AppWithActionsPreview } from "./app-with-actions-preview";
+import { GOOGLE_APPS } from "@/lib/google-actions-registry";
+import { useUserIntegrations } from "@/hooks/use-integrations";
+import { GoogleAppActions } from "./google-app-actions";
 
 const TABS = [
   { id: "top", label: "Top", icon: Star },
@@ -64,6 +67,51 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
   // Mutation for saving agent tools
   const addAgentTool = useAddAgentTool();
 
+  // Fetch user's connected integrations for Google status
+  const integrationsQuery = useUserIntegrations();
+  const connectedTypes = new Set(
+    (integrationsQuery.data || []).map((i: { type: string }) => i.type)
+  );
+
+  // Handle Google OAuth connect
+  const handleGoogleConnect = async (integrationType: string) => {
+    try {
+      const res = await fetch("/api/integrations/google/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: integrationType }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error("Failed to initiate Google connect:", error);
+    }
+  };
+
+  // Handle Google action selection
+  const handleGoogleActionSelect = async (
+    appKey: string,
+    integrationType: string,
+    actionKey: string,
+    actionData: { name: string; description: string }
+  ) => {
+    if (agentId) {
+      await addAgentTool.mutateAsync({
+        agentId,
+        appKey,
+        actionName: actionKey,
+        description: actionData.description,
+        provider: "google",
+        integrationType,
+      });
+    }
+    onSelectAction?.(appKey, actionKey, actionData);
+    onOpenChange(false);
+    setSearch("");
+  };
+
   // Only fetch Composio apps for tabs that need them
   const shouldFetchComposio = ["top", "apps", "chat", "scrapers"].includes(activeTab);
   const appsQuery = useComposioApps(shouldFetchComposio ? (search || undefined) : undefined);
@@ -94,7 +142,7 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
     : [];
 
   // Group items for display
-  const groupedItems: Record<string, Array<{ type: 'structural' | 'composio'; id?: string; key?: string; name: string; logo?: string; icon?: string; description?: string }>> = {};
+  const groupedItems: Record<string, Array<{ type: 'structural' | 'composio' | 'google'; id?: string; key?: string; name: string; logo?: string; icon?: string; description?: string }>> = {};
 
   // Add structural nodes first
   if (structuralNodes.length > 0) {
@@ -105,6 +153,31 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
       name: node.label,
       icon: node.icon,
       description: node.description,
+    }));
+  }
+
+  // Add Google Suite apps (for "top" and "apps" tabs, or when searching)
+  const showGoogleApps = activeTab === "top" || activeTab === "apps" || activeTab === "chat" || !!search;
+  const filteredGoogleApps = showGoogleApps
+    ? (search
+        ? GOOGLE_APPS.filter(
+            (app) =>
+              app.name.toLowerCase().includes(search.toLowerCase()) ||
+              app.actions.some(
+                (a) =>
+                  a.name.toLowerCase().includes(search.toLowerCase()) ||
+                  a.description.toLowerCase().includes(search.toLowerCase())
+              )
+          )
+        : GOOGLE_APPS)
+    : [];
+
+  if (filteredGoogleApps.length > 0) {
+    groupedItems["Google Suite"] = filteredGoogleApps.map((app) => ({
+      type: "google" as const,
+      key: app.key,
+      name: app.name,
+      icon: app.icon,
     }));
   }
 
@@ -122,7 +195,7 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
     });
   }
 
-  const handleItemClick = (item: { type: 'structural' | 'composio'; id?: string; key?: string }) => {
+  const handleItemClick = (item: { type: 'structural' | 'composio' | 'google'; id?: string; key?: string }) => {
     if (item.type === 'structural' && item.id) {
       // Structural node - use legacy callback
       onSelectStructuralNode?.(item.id);
@@ -272,7 +345,27 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
                         search ? "grid grid-cols-1 gap-y-2" : "grid grid-cols-2 gap-x-6"
                       )}>
                         {items.map((item, idx) => (
-                          item.type === 'composio' && item.key && search ? (
+                          item.type === 'google' && item.key ? (
+                            // Google Suite app with inline actions
+                            <GoogleAppActions
+                              key={item.key}
+                              app={GOOGLE_APPS.find((a) => a.key === item.key)!}
+                              isConnected={connectedTypes.has(GOOGLE_APPS.find((a) => a.key === item.key)?.integrationType || "")}
+                              onSelectAction={(actionKey, actionData) => {
+                                const googleApp = GOOGLE_APPS.find((a) => a.key === item.key);
+                                if (googleApp) {
+                                  handleGoogleActionSelect(
+                                    item.key!,
+                                    googleApp.integrationType,
+                                    actionKey,
+                                    actionData
+                                  );
+                                }
+                              }}
+                              onConnect={handleGoogleConnect}
+                              disabled={addAgentTool.isPending}
+                            />
+                          ) : item.type === 'composio' && item.key && search ? (
                             // Show app with actions preview when searching
                             <AppWithActionsPreview
                               key={item.key}

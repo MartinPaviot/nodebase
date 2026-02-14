@@ -118,7 +118,7 @@ var gmail_exports = {};
 __export(gmail_exports, {
   GmailConnector: () => GmailConnector
 });
-var import_zod, EmailSchema, SendEmailInput, SearchEmailsInput, GetEmailInput, ReplyEmailInput, GmailConnector;
+var import_zod, EmailSchema, SendEmailInput, SearchEmailsInput, GetEmailInput, ReplyEmailInput, SendColdEmailInput, SendColdEmailOutput, SearchRepliesInput, ReplyMessage, SearchRepliesOutput, SearchBouncesInput, BounceTypeEnum, BounceMessage, SearchBouncesOutput, GmailConnector;
 var init_gmail = __esm({
   "src/connectors/gmail.ts"() {
     "use strict";
@@ -158,6 +158,48 @@ var init_gmail = __esm({
       body: import_zod.z.string(),
       html: import_zod.z.boolean().optional()
     });
+    SendColdEmailInput = import_zod.z.object({
+      to: import_zod.z.string().email(),
+      subject: import_zod.z.string(),
+      body: import_zod.z.string(),
+      unsubscribeUrl: import_zod.z.string().url(),
+      replyToMessageId: import_zod.z.string().optional()
+    });
+    SendColdEmailOutput = import_zod.z.object({
+      id: import_zod.z.string(),
+      threadId: import_zod.z.string()
+    });
+    SearchRepliesInput = import_zod.z.object({
+      threadId: import_zod.z.string(),
+      afterDate: import_zod.z.string().optional()
+    });
+    ReplyMessage = import_zod.z.object({
+      messageId: import_zod.z.string(),
+      from: import_zod.z.string(),
+      date: import_zod.z.string(),
+      subject: import_zod.z.string(),
+      body: import_zod.z.string(),
+      snippet: import_zod.z.string()
+    });
+    SearchRepliesOutput = import_zod.z.array(ReplyMessage);
+    SearchBouncesInput = import_zod.z.object({
+      afterDate: import_zod.z.string()
+    });
+    BounceTypeEnum = import_zod.z.enum([
+      "hard_bounce",
+      "soft_bounce",
+      "mailbox_full",
+      "unknown"
+    ]);
+    BounceMessage = import_zod.z.object({
+      messageId: import_zod.z.string(),
+      date: import_zod.z.string(),
+      bounceType: BounceTypeEnum,
+      originalTo: import_zod.z.string(),
+      originalSubject: import_zod.z.string(),
+      snippet: import_zod.z.string()
+    });
+    SearchBouncesOutput = import_zod.z.array(BounceMessage);
     GmailConnector = class extends BaseConnector {
       id = "gmail";
       name = "Gmail";
@@ -216,6 +258,36 @@ var init_gmail = __esm({
           outputSchema: import_zod.z.object({ id: import_zod.z.string(), threadId: import_zod.z.string() }),
           execute: async (input, context) => {
             return this.replyEmail(input, context);
+          }
+        });
+        this.registerAction({
+          id: "send-cold-email",
+          name: "Send Cold Email",
+          description: "Send a cold outreach email with RFC 8058 one-click unsubscribe headers. Supports follow-ups in the same thread via replyToMessageId.",
+          inputSchema: SendColdEmailInput,
+          outputSchema: SendColdEmailOutput,
+          execute: async (input, context) => {
+            return this.sendColdEmail(input, context);
+          }
+        });
+        this.registerAction({
+          id: "search-replies",
+          name: "Search Replies",
+          description: "Search for replies from leads in a specific Gmail thread. Returns only messages NOT sent by the authenticated user.",
+          inputSchema: SearchRepliesInput,
+          outputSchema: SearchRepliesOutput,
+          execute: async (input, context) => {
+            return this.searchReplies(input, context);
+          }
+        });
+        this.registerAction({
+          id: "search-bounces",
+          name: "Search Bounces",
+          description: "Detect bounced emails by searching for mailer-daemon and postmaster messages. Classifies bounces as hard, soft, mailbox full, or unknown.",
+          inputSchema: SearchBouncesInput,
+          outputSchema: SearchBouncesOutput,
+          execute: async (input, context) => {
+            return this.searchBounces(input, context);
           }
         });
       }
@@ -326,6 +398,118 @@ var init_gmail = __esm({
         );
         return response;
       }
+      async sendColdEmail(input, context) {
+        const unsubscribeDomain = new URL(input.unsubscribeUrl).hostname;
+        const mimeOptions = {
+          to: input.to,
+          subject: input.subject,
+          body: input.body,
+          html: true,
+          listUnsubscribe: `<mailto:unsubscribe@${unsubscribeDomain}>, <${input.unsubscribeUrl}>`,
+          listUnsubscribePost: "List-Unsubscribe=One-Click"
+        };
+        if (input.replyToMessageId) {
+          mimeOptions.inReplyTo = input.replyToMessageId;
+          mimeOptions.references = input.replyToMessageId;
+        }
+        const email = this.createMimeMessage(mimeOptions);
+        const response = await this.apiRequest(
+          context,
+          "POST",
+          "/gmail/v1/users/me/messages/send",
+          { raw: email }
+        );
+        return response;
+      }
+      async searchReplies(input, context) {
+        const profileResponse = await this.apiRequest(
+          context,
+          "GET",
+          "/gmail/v1/users/me/profile"
+        );
+        if (!profileResponse.success || !profileResponse.data) {
+          return { success: false, error: "Failed to retrieve user profile" };
+        }
+        const userEmail = profileResponse.data.emailAddress.toLowerCase();
+        const threadResponse = await this.apiRequest(context, "GET", `/gmail/v1/users/me/threads/${input.threadId}?format=full`);
+        if (!threadResponse.success || !threadResponse.data?.messages) {
+          return { success: false, error: "Thread not found" };
+        }
+        const afterTimestamp = input.afterDate ? new Date(input.afterDate).getTime() : 0;
+        const replies = [];
+        for (const msg of threadResponse.data.messages) {
+          const getHeader = (name) => msg.payload.headers.find(
+            (h) => h.name.toLowerCase() === name.toLowerCase()
+          )?.value ?? "";
+          const fromHeader = getHeader("From").toLowerCase();
+          if (fromHeader.includes(userEmail)) {
+            continue;
+          }
+          const messageTimestamp = parseInt(msg.internalDate, 10);
+          if (messageTimestamp < afterTimestamp) {
+            continue;
+          }
+          let body = "";
+          if (msg.payload.body?.data) {
+            body = Buffer.from(msg.payload.body.data, "base64").toString("utf-8");
+          } else if (msg.payload.parts) {
+            const textPart = msg.payload.parts.find((p) => p.body?.data);
+            if (textPart?.body?.data) {
+              body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
+            }
+          }
+          replies.push({
+            messageId: msg.id,
+            from: getHeader("From"),
+            date: getHeader("Date"),
+            subject: getHeader("Subject"),
+            body,
+            snippet: msg.snippet
+          });
+        }
+        return { success: true, data: replies };
+      }
+      async searchBounces(input, context) {
+        const query = `from:mailer-daemon OR from:postmaster after:${input.afterDate}`;
+        const url = `/gmail/v1/users/me/messages?maxResults=50&q=${encodeURIComponent(query)}`;
+        const listResponse = await this.apiRequest(context, "GET", url);
+        if (!listResponse.success || !listResponse.data?.messages) {
+          return { success: true, data: [] };
+        }
+        const bounces = [];
+        for (const msg of listResponse.data.messages) {
+          const detail = await this.apiRequest(context, "GET", `/gmail/v1/users/me/messages/${msg.id}?format=full`);
+          if (!detail.success || !detail.data) {
+            continue;
+          }
+          const message = detail.data;
+          const getHeader = (name) => message.payload.headers.find(
+            (h) => h.name.toLowerCase() === name.toLowerCase()
+          )?.value ?? "";
+          let body = "";
+          if (message.payload.body?.data) {
+            body = Buffer.from(message.payload.body.data, "base64").toString("utf-8");
+          } else if (message.payload.parts) {
+            const textPart = message.payload.parts.find((p) => p.body?.data);
+            if (textPart?.body?.data) {
+              body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
+            }
+          }
+          const subject = getHeader("Subject");
+          const bounceType = this.detectBounceType(subject, body);
+          const originalTo = this.extractOriginalRecipient(body, getHeader("To"));
+          const originalSubject = this.extractOriginalSubject(subject, body);
+          bounces.push({
+            messageId: message.id,
+            date: getHeader("Date"),
+            bounceType,
+            originalTo,
+            originalSubject,
+            snippet: message.snippet
+          });
+        }
+        return { success: true, data: bounces };
+      }
       // ============================================
       // OAuth Methods
       // ============================================
@@ -410,9 +594,120 @@ var init_gmail = __esm({
         if (options.bcc) lines.push(`Bcc: ${options.bcc}`);
         if (options.inReplyTo) lines.push(`In-Reply-To: ${options.inReplyTo}`);
         if (options.references) lines.push(`References: ${options.references}`);
+        if (options.listUnsubscribe) lines.push(`List-Unsubscribe: ${options.listUnsubscribe}`);
+        if (options.listUnsubscribePost) lines.push(`List-Unsubscribe-Post: ${options.listUnsubscribePost}`);
         lines.push("", options.body);
         const message = lines.join("\r\n");
         return Buffer.from(message).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      }
+      detectBounceType(subject, body) {
+        const combined = `${subject} ${body}`.toLowerCase();
+        const hardBouncePatterns = [
+          "user unknown",
+          "no such user",
+          "does not exist",
+          "address rejected",
+          "invalid recipient",
+          "recipient rejected",
+          "unknown user",
+          "account disabled",
+          "account has been disabled",
+          "undeliverable",
+          "550 5.1.1",
+          "550-5.1.1",
+          "delivery status notification (failure)"
+        ];
+        const softBouncePatterns = [
+          "temporarily rejected",
+          "try again later",
+          "temporary failure",
+          "service unavailable",
+          "connection timed out",
+          "too many connections",
+          "rate limit",
+          "450 4.2.1",
+          "421 4.7.0",
+          "delivery status notification (delay)"
+        ];
+        const mailboxFullPatterns = [
+          "mailbox full",
+          "mailbox is full",
+          "over quota",
+          "quota exceeded",
+          "storage limit",
+          "insufficient storage",
+          "552 5.2.2"
+        ];
+        for (const pattern of mailboxFullPatterns) {
+          if (combined.includes(pattern)) {
+            return "mailbox_full";
+          }
+        }
+        for (const pattern of hardBouncePatterns) {
+          if (combined.includes(pattern)) {
+            return "hard_bounce";
+          }
+        }
+        for (const pattern of softBouncePatterns) {
+          if (combined.includes(pattern)) {
+            return "soft_bounce";
+          }
+        }
+        return "unknown";
+      }
+      extractOriginalRecipient(body, toHeader) {
+        const originalRecipientMatch = body.match(
+          /Original-Recipient:\s*rfc822;\s*([^\s<>\r\n]+)/i
+        );
+        if (originalRecipientMatch) {
+          return originalRecipientMatch[1];
+        }
+        const finalRecipientMatch = body.match(
+          /Final-Recipient:\s*rfc822;\s*([^\s<>\r\n]+)/i
+        );
+        if (finalRecipientMatch) {
+          return finalRecipientMatch[1];
+        }
+        const deliveredToMatch = body.match(
+          /(?:not delivered to|could not be delivered to|delivery to)\s+([^\s<>\r\n]+@[^\s<>\r\n]+)/i
+        );
+        if (deliveredToMatch) {
+          return deliveredToMatch[1];
+        }
+        const angleBracketMatch = body.match(
+          /(?:address|recipient)[:\s]*<([^>]+@[^>]+)>/i
+        );
+        if (angleBracketMatch) {
+          return angleBracketMatch[1];
+        }
+        return toHeader;
+      }
+      extractOriginalSubject(bounceSubject, body) {
+        const subjectMatch = body.match(
+          /(?:^|\n)Subject:\s*(.+?)(?:\r?\n(?!\s))/im
+        );
+        if (subjectMatch) {
+          return subjectMatch[1].trim();
+        }
+        const prefixes = [
+          "Delivery Status Notification (Failure)",
+          "Delivery Status Notification (Delay)",
+          "Delivery Status Notification",
+          "Undeliverable:",
+          "Undelivered Mail Returned to Sender",
+          "Mail delivery failed:",
+          "Returned mail:",
+          "Failure Notice:"
+        ];
+        for (const prefix of prefixes) {
+          if (bounceSubject.toLowerCase().startsWith(prefix.toLowerCase())) {
+            const remainder = bounceSubject.slice(prefix.length).trim();
+            if (remainder.length > 0) {
+              return remainder;
+            }
+          }
+        }
+        return bounceSubject;
       }
       async apiRequest(context, method, path, body) {
         const url = `https://www.googleapis.com${path}`;

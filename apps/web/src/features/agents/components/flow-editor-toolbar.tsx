@@ -7,6 +7,7 @@ import {
   ArrowUUpRight,
   MagicWand,
   Scan,
+  ChatCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,8 @@ interface FlowEditorToolbarProps {
   onRedo: () => void;
   onAutoLayout: () => void;
   onSettings: () => void;
+  onChat?: () => void;
+  isChatOpen?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
 }
@@ -28,6 +31,8 @@ export function FlowEditorToolbar({
   onRedo,
   onAutoLayout,
   onSettings,
+  onChat,
+  isChatOpen = false,
   canUndo = false,
   canRedo = false,
 }: FlowEditorToolbarProps) {
@@ -44,6 +49,25 @@ export function FlowEditorToolbar({
         </button>
 
         <Divider />
+
+        {/* Chat toggle */}
+        {onChat && (
+          <>
+            <button
+              onClick={onChat}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors",
+                isChatOpen
+                  ? "text-primary bg-primary/10"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151]"
+              )}
+            >
+              <ChatCircle className="size-4" weight={isChatOpen ? "fill" : "regular"} />
+              <span className="text-sm font-medium">Chat</span>
+            </button>
+            <Divider />
+          </>
+        )}
 
         {/* Add node */}
         <ToolbarButton onClick={onAdd}>

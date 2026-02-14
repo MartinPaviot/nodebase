@@ -1,5 +1,4 @@
-// @ts-nocheck
-// TODO: Uses planned Prisma models (AgentTrace, AgentInsight, etc.) not yet in schema
+// @ts-nocheck — Prisma field names need alignment with schema (separate task)
 /**
  * LangChain Background Workers (BullMQ)
  *
@@ -9,7 +8,8 @@
  * - weeklyModificationProposals
  */
 
-import { createWorker } from "@nodebase/queue";
+import { Worker } from "bullmq";
+import { getRedisConnection } from "./bullmq";
 import prisma from "@/lib/db";
 import {
   createInsightsAnalyzer,
@@ -22,7 +22,7 @@ import {
 // Daily Insights Generation Worker
 // ============================================
 
-export const insightsWorker = createWorker(
+export const insightsWorker = new Worker(
   "langchain:insights",
   async (job) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -30,7 +30,7 @@ export const insightsWorker = createWorker(
     // Find active agents
     const agentsWithActivity = await prisma.agent.findMany({
       where: {
-        agentTraces: {
+        traces: {
           some: {
             createdAt: { gte: sevenDaysAgo },
           },
@@ -51,17 +51,17 @@ export const insightsWorker = createWorker(
       const traces = await prisma.agentTrace.findMany({
         where: {
           agentId: agent.id,
-          createdAt: { gte: sevenDaysAgo },
+          startedAt: { gte: sevenDaysAgo },
         },
         select: {
           id: true,
           status: true,
-          totalTokensUsed: true,
+          totalTokensIn: true,
+          totalTokensOut: true,
           totalCost: true,
-          totalDuration: true,
+          latencyMs: true,
           steps: true,
-          errorLogs: true,
-          createdAt: true,
+          startedAt: true,
         },
       });
 
@@ -71,16 +71,16 @@ export const insightsWorker = createWorker(
       const dataPoints: DataPoint[] = traces.map((trace) => ({
         id: trace.id,
         type: "trace" as const,
-        timestamp: trace.createdAt,
+        timestamp: trace.startedAt,
         metrics: {
-          success: trace.status === "completed" ? 1 : 0,
+          success: trace.status === "COMPLETED" ? 1 : 0,
           cost: trace.totalCost,
-          latencyMs: trace.totalDuration,
-          tokens: trace.totalTokensUsed,
+          latencyMs: trace.latencyMs || 0,
+          tokens: trace.totalTokensIn + trace.totalTokensOut,
         },
         metadata: {
           status: trace.status,
-          error: trace.errorLogs?.[0] || null,
+          error: trace.status === "FAILED" ? "Execution failed" : null,
         },
       }));
 
@@ -127,10 +127,7 @@ export const insightsWorker = createWorker(
     };
   },
   {
-    connection: {
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT || "6379"),
-    },
+    connection: getRedisConnection(),
     limiter: {
       max: 10, // Max 10 jobs per interval
       duration: 60000, // Per minute
@@ -142,7 +139,7 @@ export const insightsWorker = createWorker(
 // Weekly Optimization Worker
 // ============================================
 
-export const optimizationWorker = createWorker(
+export const optimizationWorker = new Worker(
   "langchain:optimization",
   async (job) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -150,7 +147,7 @@ export const optimizationWorker = createWorker(
     // Find agents with critical/high severity insights
     const agentsNeedingOptimization = await prisma.agent.findMany({
       where: {
-        agentInsights: {
+        insights: {
           some: {
             detectedAt: { gte: sevenDaysAgo },
             severity: { in: ["critical", "high"] },
@@ -173,7 +170,7 @@ export const optimizationWorker = createWorker(
       const feedback = await prisma.agentFeedback.findMany({
         where: {
           agentId: agent.id,
-          createdAt: { gte: sevenDaysAgo },
+          timestamp: { gte: sevenDaysAgo },
         },
         select: {
           id: true,
@@ -181,8 +178,8 @@ export const optimizationWorker = createWorker(
           messageId: true,
           type: true,
           userId: true,
-          originalText: true,
-          correctedText: true,
+          originalOutput: true,
+          userEdit: true,
           metadata: true,
         },
       });
@@ -191,20 +188,20 @@ export const optimizationWorker = createWorker(
       const traces = await prisma.agentTrace.findMany({
         where: {
           agentId: agent.id,
-          createdAt: { gte: sevenDaysAgo },
+          startedAt: { gte: sevenDaysAgo },
         },
         select: {
           status: true,
           totalCost: true,
-          totalDuration: true,
+          latencyMs: true,
         },
       });
 
-      const successCount = traces.filter((t) => t.status === "completed").length;
+      const successCount = traces.filter((t) => t.status === "COMPLETED").length;
       const metrics = {
         success_rate: traces.length > 0 ? successCount / traces.length : 0,
         cost: traces.reduce((sum, t) => sum + t.totalCost, 0) / Math.max(traces.length, 1),
-        latency: traces.reduce((sum, t) => sum + t.totalDuration, 0) / Math.max(traces.length, 1),
+        latency: traces.reduce((sum, t) => sum + (t.latencyMs || 0), 0) / Math.max(traces.length, 1),
         satisfaction: 0.5,
       };
 
@@ -240,8 +237,8 @@ export const optimizationWorker = createWorker(
           messageId: f.messageId,
           type: f.type as "thumbs_up" | "thumbs_down" | "edit" | "correction",
           userId: f.userId,
-          originalText: f.originalText || undefined,
-          correctedText: f.correctedText || undefined,
+          originalText: f.originalOutput || undefined,
+          correctedText: f.userEdit || undefined,
           metadata: f.metadata as Record<string, unknown> | undefined,
         })),
         metricsData: metrics,
@@ -277,10 +274,7 @@ export const optimizationWorker = createWorker(
     };
   },
   {
-    connection: {
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT || "6379"),
-    },
+    connection: getRedisConnection(),
     limiter: {
       max: 5,
       duration: 60000,
@@ -292,7 +286,7 @@ export const optimizationWorker = createWorker(
 // Weekly Modification Proposals Worker
 // ============================================
 
-export const proposalsWorker = createWorker(
+export const proposalsWorker = new Worker(
   "langchain:proposals",
   async (job) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -300,9 +294,9 @@ export const proposalsWorker = createWorker(
     // Find agents with low success rate or high cost
     const agents = await prisma.agent.findMany({
       where: {
-        agentTraces: {
+        traces: {
           some: {
-            createdAt: { gte: sevenDaysAgo },
+            startedAt: { gte: sevenDaysAgo },
           },
         },
       },
@@ -312,9 +306,9 @@ export const proposalsWorker = createWorker(
         systemPrompt: true,
         model: true,
         temperature: true,
-        agentTraces: {
+        traces: {
           where: {
-            createdAt: { gte: sevenDaysAgo },
+            startedAt: { gte: sevenDaysAgo },
           },
           select: {
             status: true,
@@ -326,10 +320,10 @@ export const proposalsWorker = createWorker(
 
     // Filter underperforming agents
     const underperformingAgents = agents.filter((agent) => {
-      const successCount = agent.agentTraces.filter((t) => t.status === "completed").length;
-      const successRate = successCount / agent.agentTraces.length;
+      const successCount = agent.traces.filter((t) => t.status === "COMPLETED").length;
+      const successRate = successCount / agent.traces.length;
       const avgCost =
-        agent.agentTraces.reduce((sum, t) => sum + t.totalCost, 0) / agent.agentTraces.length;
+        agent.traces.reduce((sum, t) => sum + t.totalCost, 0) / agent.traces.length;
 
       return successRate < 0.7 || avgCost > 0.03;
     });
@@ -356,20 +350,20 @@ export const proposalsWorker = createWorker(
       const feedback = await prisma.agentFeedback.findMany({
         where: {
           agentId: agent.id,
-          createdAt: { gte: sevenDaysAgo },
+          timestamp: { gte: sevenDaysAgo },
         },
         select: {
           id: true,
           type: true,
-          correctedText: true,
+          userEdit: true,
         },
       });
 
       // Calculate metrics
-      const successCount = agent.agentTraces.filter((t) => t.status === "completed").length;
+      const successCount = agent.traces.filter((t) => t.status === "COMPLETED").length;
       const metrics = {
-        success_rate: successCount / agent.agentTraces.length,
-        cost: agent.agentTraces.reduce((sum, t) => sum + t.totalCost, 0),
+        success_rate: successCount / agent.traces.length,
+        cost: agent.traces.reduce((sum, t) => sum + t.totalCost, 0),
       };
 
       // Create modifier
@@ -395,7 +389,7 @@ export const proposalsWorker = createWorker(
         feedback: feedback.map((f) => ({
           id: f.id,
           type: f.type,
-          correctedText: f.correctedText || undefined,
+          correctedText: f.userEdit || undefined,
         })),
         metrics,
       });
@@ -428,10 +422,7 @@ export const proposalsWorker = createWorker(
     };
   },
   {
-    connection: {
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT || "6379"),
-    },
+    connection: getRedisConnection(),
     limiter: {
       max: 5,
       duration: 60000,

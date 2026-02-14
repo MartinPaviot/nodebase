@@ -12,11 +12,25 @@ import {
   Wrench,
   ShieldWarning,
   Pulse,
+  ThumbsUp,
+  ThumbsDown,
+  PencilSimple,
+  Stop,
 } from "@phosphor-icons/react";
-import { useRef, useEffect, useState, useCallback, Suspense, type FormEvent } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, Suspense, type FormEvent } from "react";
 import type { Message } from "@prisma/client";
 import { ConfirmationDialog } from "./confirmation-dialog";
 import { toast } from "sonner";
+import type { FlowExecutionState } from "./flow-editor-canvas";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -25,6 +39,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { ActivityLog } from "./activity-log";
+import { useTRPC } from "@/trpc/client";
+import { useMutation } from "@tanstack/react-query";
 
 interface ChatMessage {
   id: string;
@@ -42,11 +58,24 @@ interface PendingConfirmation {
   details: Record<string, unknown>;
 }
 
+interface FlowNode {
+  id: string;
+  type: string;
+  data?: {
+    label?: string;
+    composioActionName?: string;
+    actionId?: string;
+    [key: string]: unknown;
+  };
+}
+
 interface ChatInterfaceProps {
   conversationId: string;
   agentName: string;
   agentAvatar?: string | null;
   initialMessages?: Message[];
+  flowNodes?: FlowNode[];
+  onExecutionStateChange?: (state: FlowExecutionState | null) => void;
 }
 
 /**
@@ -162,12 +191,99 @@ function ToolCallMessage({
   );
 }
 
+/**
+ * Component to display an assistant message with feedback buttons (Phase 3.1)
+ */
+function AssistantMessage({
+  messageId,
+  content,
+  agentName,
+  agentAvatar,
+  onFeedback,
+  onEdit,
+}: {
+  messageId: string;
+  content: string;
+  agentName: string;
+  agentAvatar?: string | null;
+  onFeedback: (messageId: string, type: "thumbs_up" | "thumbs_down") => void;
+  onEdit: (messageId: string, content: string) => void;
+}) {
+  const [feedbackGiven, setFeedbackGiven] = useState<"thumbs_up" | "thumbs_down" | null>(null);
+
+  const handleFeedback = (type: "thumbs_up" | "thumbs_down") => {
+    setFeedbackGiven(type);
+    onFeedback(messageId, type);
+  };
+
+  return (
+    <div className="flex gap-4 group">
+      <Avatar className="size-10 shrink-0 shadow-sm ring-2 ring-primary/20">
+        {agentAvatar ? (
+          <AvatarImage src={agentAvatar} alt={agentName} />
+        ) : null}
+        <AvatarFallback className="bg-primary/10">
+          <Robot className="size-5 text-primary" />
+        </AvatarFallback>
+      </Avatar>
+
+      <div className="flex-1 space-y-2">
+        <div className="rounded-2xl bg-card border px-5 py-3 max-w-[85%] shadow-sm">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
+        </div>
+
+        {/* Feedback buttons - Phase 3.1 */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 px-2 text-xs",
+              feedbackGiven === "thumbs_up" && "text-green-600 bg-green-50 hover:bg-green-100"
+            )}
+            onClick={() => handleFeedback("thumbs_up")}
+            title="Good response"
+          >
+            <ThumbsUp className={cn("size-3.5", feedbackGiven === "thumbs_up" && "fill-green-600")} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 px-2 text-xs",
+              feedbackGiven === "thumbs_down" && "text-red-600 bg-red-50 hover:bg-red-100"
+            )}
+            onClick={() => handleFeedback("thumbs_down")}
+            title="Poor response"
+          >
+            <ThumbsDown className={cn("size-3.5", feedbackGiven === "thumbs_down" && "fill-red-600")} />
+          </Button>
+          <div className="w-px h-4 bg-border mx-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onEdit(messageId, content)}
+            title="Edit & improve"
+          >
+            <PencilSimple className="size-3.5 mr-1" />
+            Edit
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChatInterface({
   conversationId,
   agentName,
   agentAvatar,
   initialMessages = [],
+  flowNodes,
+  onExecutionStateChange,
 }: ChatInterfaceProps) {
+  const trpc = useTRPC();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages.map((msg) => ({
@@ -187,10 +303,44 @@ export function ChatInterface({
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // Feedback state - Phase 3.1
+  const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
+
+  // tRPC mutations - Phase 3.2
+  const submitFeedbackMutation = useMutation(trpc.agents.submitFeedback.mutationOptions());
+
   // Refs for batched streaming updates
   const pendingContentRef = useRef("");
   const updateScheduledRef = useRef(false);
   const assistantMessageIdRef = useRef<string | null>(null);
+
+  // AbortController for stopping execution
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Flow execution state tracking
+  const flowExecutionStateRef = useRef<FlowExecutionState>({
+    isRunning: false,
+    currentNodeId: null,
+    completedNodeIds: [],
+    errorNodeIds: [],
+    skippedNodeIds: [],
+  });
+
+  // Build tool → nodeId mapping from flowNodes
+  const toolNodeMap = useMemo(() => {
+    if (!flowNodes) return {};
+    const map: Record<string, string> = {};
+    for (const node of flowNodes) {
+      if (node.data?.composioActionName) map[node.data.composioActionName] = node.id;
+      if (node.data?.actionId) map[node.data.actionId] = node.id;
+      // Map by label keywords (lowercase)
+      if (node.data?.label) {
+        const label = node.data.label.toLowerCase().replace(/\s+/g, "_");
+        map[label] = node.id;
+      }
+    }
+    return map;
+  }, [flowNodes]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -216,6 +366,20 @@ export function ChatInterface({
       setError(null);
 
       try {
+        // Create AbortController for this request
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        // Reset execution state
+        flowExecutionStateRef.current = {
+          isRunning: true,
+          currentNodeId: null,
+          completedNodeIds: [],
+          errorNodeIds: [],
+          skippedNodeIds: [],
+        };
+        onExecutionStateChange?.(flowExecutionStateRef.current);
+
         const response = await fetch("/api/agents/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -223,6 +387,7 @@ export function ChatInterface({
             conversationId,
             messages: [{ role: "user", content: userMessage.content }],
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -300,6 +465,23 @@ export function ChatInterface({
                         toolName: data.toolName,
                       },
                     ]);
+
+                    // Update flow execution state
+                    const nodeId = toolNodeMap[data.toolName];
+                    if (nodeId && onExecutionStateChange) {
+                      const prev = flowExecutionStateRef.current;
+                      const newState: FlowExecutionState = {
+                        isRunning: true,
+                        currentNodeId: nodeId,
+                        completedNodeIds: prev.currentNodeId
+                          ? [...prev.completedNodeIds, prev.currentNodeId]
+                          : prev.completedNodeIds,
+                        errorNodeIds: prev.errorNodeIds,
+                        skippedNodeIds: prev.skippedNodeIds,
+                      };
+                      flowExecutionStateRef.current = newState;
+                      onExecutionStateChange(newState);
+                    }
                   }
                   break;
 
@@ -337,6 +519,20 @@ export function ChatInterface({
                         )
                       );
                       pendingToolCalls.delete(data.toolCallId);
+
+                      // Mark current node as completed
+                      if (onExecutionStateChange) {
+                        const prev = flowExecutionStateRef.current;
+                        const newState: FlowExecutionState = {
+                          ...prev,
+                          completedNodeIds: prev.currentNodeId
+                            ? [...prev.completedNodeIds, prev.currentNodeId]
+                            : prev.completedNodeIds,
+                          currentNodeId: null,
+                        };
+                        flowExecutionStateRef.current = newState;
+                        onExecutionStateChange(newState);
+                      }
                     }
                   }
                   break;
@@ -360,13 +556,25 @@ export function ChatInterface({
           )
         );
       } catch (err) {
-        setError(err instanceof Error ? err : new Error("Unknown error"));
+        if (err instanceof DOMException && err.name === "AbortError") {
+          // User stopped the execution
+          const prev = flowExecutionStateRef.current;
+          flowExecutionStateRef.current = { ...prev, isRunning: false };
+          onExecutionStateChange?.(flowExecutionStateRef.current);
+        } else {
+          setError(err instanceof Error ? err : new Error("Unknown error"));
+        }
       } finally {
         setIsLoading(false);
         assistantMessageIdRef.current = null;
+        abortControllerRef.current = null;
+        // Mark execution as complete
+        const prev = flowExecutionStateRef.current;
+        flowExecutionStateRef.current = { ...prev, isRunning: false };
+        onExecutionStateChange?.(flowExecutionStateRef.current);
       }
     },
-    [conversationId, input, isLoading]
+    [conversationId, input, isLoading, toolNodeMap, onExecutionStateChange]
   );
 
   // Handle confirmation action (Safe Mode)
@@ -449,6 +657,31 @@ export function ChatInterface({
     }
   }, [pendingConfirmation]);
 
+  // Handle feedback - Phase 3.2
+  const handleFeedback = useCallback(async (messageId: string, type: "thumbs_up" | "thumbs_down") => {
+    try {
+      // Find the message to get its content
+      const message = messages.find((m) => m.id === messageId);
+      const originalOutput = message?.content || "";
+
+      await submitFeedbackMutation.mutateAsync({
+        conversationId,
+        messageId,
+        type: type === "thumbs_up" ? "THUMBS_UP" : "THUMBS_DOWN",
+        originalOutput,
+      });
+
+      toast.success(type === "thumbs_up" ? "Thanks for the feedback!" : "Feedback noted, I'll try to improve");
+    } catch (err) {
+      toast.error("Failed to submit feedback");
+    }
+  }, [conversationId, messages, submitFeedbackMutation]);
+
+  // Handle edit - Phase 3.1
+  const handleEdit = useCallback((messageId: string, content: string) => {
+    setEditingMessage({ id: messageId, content });
+  }, []);
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Messages area */}
@@ -506,43 +739,31 @@ export function ChatInterface({
               );
             }
 
-            // User or assistant message
+            // Assistant message with feedback - Phase 3.1
+            if (message.role === "assistant") {
+              return (
+                <AssistantMessage
+                  key={message.id}
+                  messageId={message.id}
+                  content={message.content}
+                  agentName={agentName}
+                  agentAvatar={agentAvatar}
+                  onFeedback={handleFeedback}
+                  onEdit={handleEdit}
+                />
+              );
+            }
+
+            // User message
             return (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex gap-4",
-                  message.role === "user" ? "flex-row-reverse" : "flex-row"
-                )}
-              >
-                <Avatar className={cn(
-                  "size-10 shrink-0 shadow-sm",
-                  message.role === "assistant" && "ring-2 ring-primary/20"
-                )}>
-                  {message.role === "assistant" ? (
-                    <>
-                      {agentAvatar ? (
-                        <AvatarImage src={agentAvatar} alt={agentName} />
-                      ) : null}
-                      <AvatarFallback className="bg-primary/10">
-                        <Robot className="size-5 text-primary" />
-                      </AvatarFallback>
-                    </>
-                  ) : (
-                    <AvatarFallback className="bg-muted">
-                      <User className="size-5 text-muted-foreground" />
-                    </AvatarFallback>
-                  )}
+              <div key={message.id} className="flex gap-4 flex-row-reverse">
+                <Avatar className="size-10 shrink-0 shadow-sm">
+                  <AvatarFallback className="bg-muted">
+                    <User className="size-5 text-muted-foreground" />
+                  </AvatarFallback>
                 </Avatar>
 
-                <div
-                  className={cn(
-                    "rounded-2xl px-5 py-3 max-w-[85%] shadow-sm",
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border"
-                  )}
-                >
+                <div className="rounded-2xl px-5 py-3 max-w-[85%] shadow-sm bg-primary text-primary-foreground">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
@@ -575,6 +796,39 @@ export function ChatInterface({
           )}
         </div>
       </ScrollArea>
+
+      {/* Execution Progress Indicator */}
+      {isLoading && flowNodes && flowNodes.length > 0 && flowExecutionStateRef.current.isRunning && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 dark:bg-blue-950/30 border-t border-blue-200 dark:border-blue-800">
+          <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-sm text-blue-700 dark:text-blue-300 flex-1">
+            {flowExecutionStateRef.current.currentNodeId
+              ? `Running: ${flowNodes.find(n => n.id === flowExecutionStateRef.current.currentNodeId)?.data?.label || "Processing..."}`
+              : "Processing..."
+            }
+            {" "}
+            ({flowExecutionStateRef.current.completedNodeIds.length}/{flowNodes.filter(n => !["messageReceived", "chatOutcome", "conditionBranch"].includes(n.type)).length})
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            onClick={() => {
+              abortControllerRef.current?.abort();
+              flowExecutionStateRef.current = {
+                isRunning: false,
+                currentNodeId: null,
+                completedNodeIds: flowExecutionStateRef.current.completedNodeIds,
+                errorNodeIds: flowExecutionStateRef.current.errorNodeIds,
+                skippedNodeIds: flowExecutionStateRef.current.skippedNodeIds,
+              };
+              onExecutionStateChange?.(null);
+            }}
+          >
+            <Stop className="size-4 mr-1" /> Stop
+          </Button>
+        </div>
+      )}
 
       {/* Input area - Modern floating design */}
       <div className="border-t bg-background/80 backdrop-blur-sm p-4 md:p-6">
@@ -632,6 +886,69 @@ export function ChatInterface({
         actionDetails={pendingConfirmation?.details || {}}
         isLoading={isConfirming}
       />
+
+      {/* Edit Message Dialog - Phase 3.1 */}
+      <Dialog open={!!editingMessage} onOpenChange={(open) => !open && setEditingMessage(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit & Improve Response</DialogTitle>
+            <DialogDescription>
+              Make corrections to help the agent learn your preferred style and tone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Original Response</label>
+              <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground max-h-32 overflow-y-auto">
+                {editingMessage?.content}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Your Improved Version</label>
+              <Textarea
+                placeholder="Edit the response to your liking..."
+                className="min-h-[200px] font-sans"
+                defaultValue={editingMessage?.content || ""}
+                id="edited-content"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMessage(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const textarea = document.getElementById("edited-content") as HTMLTextAreaElement;
+                const editedContent = textarea?.value || "";
+
+                if (editingMessage && editedContent !== editingMessage.content) {
+                  try {
+                    await submitFeedbackMutation.mutateAsync({
+                      conversationId,
+                      messageId: editingMessage.id,
+                      type: "USER_EDIT",
+                      originalOutput: editingMessage.content,
+                      editedOutput: editedContent,
+                    });
+                    toast.success("Thanks! I'll learn from your edits.");
+                  } catch (err) {
+                    toast.error("Failed to save edit");
+                  }
+                }
+
+                setEditingMessage(null);
+              }}
+            >
+              <PencilSimple className="size-4 mr-2" />
+              Save Edits
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

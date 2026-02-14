@@ -4,8 +4,9 @@
  * Provides permission-checked access to agent execution records.
  */
 
-import { PermissionError, type LLMUsage, type EvalResult } from "@nodebase/types";
+import { PermissionError, type LLMUsage } from "@nodebase/types";
 import { prisma } from "../client";
+import type { Prisma } from "@prisma/client";
 import {
   BaseResource,
   type ResourceAuth,
@@ -124,11 +125,11 @@ export class AgentRunResource extends BaseResource<AgentRunData> {
         userId: auth.userId,
         workspaceId: auth.workspaceId,
         triggeredBy: data.triggeredBy,
-        dataSources: data.dataSources ?? [],
+        dataSources: (data.dataSources ?? []) as unknown as Prisma.InputJsonValue,
         llmModel: data.llmModel,
         llmTokensUsed: 0,
         llmCost: 0,
-        l1Assertions: [],
+        l1Assertions: [] as unknown as Prisma.InputJsonValue,
         l1Passed: false,
         l2Score: 0,
         l2Breakdown: {},
@@ -181,7 +182,16 @@ export class AgentRunResource extends BaseResource<AgentRunData> {
 
     const updated = await prisma.agentRun.update({
       where: { id: this.id },
-      data: eval_,
+      data: {
+        l1Assertions: eval_.l1Assertions as unknown as Prisma.InputJsonValue,
+        l1Passed: eval_.l1Passed,
+        l2Score: eval_.l2Score,
+        l2Breakdown: eval_.l2Breakdown as Prisma.InputJsonValue,
+        l3Triggered: eval_.l3Triggered,
+        l3Blocked: eval_.l3Blocked,
+        l3Reason: eval_.l3Reason,
+        status: eval_.status,
+      },
     });
 
     this._data = updated as AgentRunData;

@@ -6,7 +6,7 @@ import { Authenticator } from "@/lib/resources/authenticator";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 
 const CreateToolSchema = z.object({
-  type: z.enum(["composio_action", "custom"]),
+  type: z.enum(["composio_action", "google_action", "custom"]),
   name: z.string(),
   config: z.record(z.any()),
 });
@@ -39,15 +39,19 @@ export async function POST(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // Extract description from config if it exists
-    const description = (validatedData.config as Record<string, unknown>)?.description as string | undefined;
+    // Extract fields from config
+    const config = validatedData.config as Record<string, unknown>;
+    const description = config?.description as string | undefined;
+    const appKey = config?.appKey as string | undefined;
+    const actionName = config?.actionName as string | undefined;
 
     // Add tool via AgentResource (automatic permission check)
     const tool = await agent.addTool({
       name: validatedData.name,
       description: description || undefined,
-      type: validatedData.type,
-      config: validatedData.config,
+      composioAppKey: appKey,
+      composioActionName: actionName || validatedData.name,
+      composioConfig: config,
     });
 
     return NextResponse.json({ data: tool });

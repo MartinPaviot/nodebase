@@ -47,6 +47,7 @@ const categoryLabels: Record<MemoryCategory, string> = {
   CONTEXT: "Context",
   HISTORY: "History",
   INSTRUCTION: "Instruction",
+  STYLE_CORRECTION: "Style Correction",
 };
 
 const categoryColors: Record<MemoryCategory, string> = {
@@ -55,6 +56,7 @@ const categoryColors: Record<MemoryCategory, string> = {
   CONTEXT: "bg-purple-100 text-purple-800",
   HISTORY: "bg-green-100 text-green-800",
   INSTRUCTION: "bg-orange-100 text-orange-800",
+  STYLE_CORRECTION: "bg-indigo-100 text-indigo-800",
 };
 
 export function AgentMemory({ agentId }: AgentMemoryProps) {

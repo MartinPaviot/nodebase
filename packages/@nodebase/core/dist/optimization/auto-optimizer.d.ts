@@ -47,10 +47,32 @@ export declare class OptimizationQuery {
     /**
      * Get optimization runs for an agent
      */
-    static getOptimizationRuns(agentId: string, limit?: number): Promise<any>;
+    static getOptimizationRuns(agentId: string, limit?: number): Promise<{
+        id: string;
+        agentId: string;
+        status: string;
+        recommendation: string;
+        triggeredAt: Date;
+        triggeredBy: string;
+        editPatterns: import("@prisma/client/runtime/library").JsonValue;
+        promptVariations: import("@prisma/client/runtime/library").JsonValue;
+        testResults: import("@prisma/client/runtime/library").JsonValue;
+        abTestId: string | null;
+    }[]>;
     /**
      * Get latest optimization run
      */
-    static getLatestRun(agentId: string): Promise<any>;
+    static getLatestRun(agentId: string): Promise<{
+        id: string;
+        agentId: string;
+        status: string;
+        recommendation: string;
+        triggeredAt: Date;
+        triggeredBy: string;
+        editPatterns: import("@prisma/client/runtime/library").JsonValue;
+        promptVariations: import("@prisma/client/runtime/library").JsonValue;
+        testResults: import("@prisma/client/runtime/library").JsonValue;
+        abTestId: string | null;
+    }>;
 }
 //# sourceMappingURL=auto-optimizer.d.ts.map

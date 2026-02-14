@@ -9,6 +9,12 @@ import { openAiExecutor } from "../components/openai/executor";
 import { anthropicExecutor } from "../components/anthropic/executor";
 import { discordExecutor } from "../components/discord/executor";
 import { slackExecutor } from "../components/slack/executor";
+import { slackDMExecutor } from "../components/slack-dm/executor";
+import { calendarTriggerExecutor } from "../components/calendar-trigger/executor";
+import { conditionExecutor } from "../components/condition/executor";
+import { meetingRecorderExecutor } from "../components/meeting-recorder/executor";
+import { googleDocsExecutor } from "../components/google-docs/executor";
+import { gmailExecutor } from "../components/gmail/executor";
 
 export const executorRegistry: Record<NodeType, NodeExecutor> = {
     [NodeType.MANUAL_TRIGGER]: manualTriggerExecutor,
@@ -20,14 +26,26 @@ export const executorRegistry: Record<NodeType, NodeExecutor> = {
     [NodeType.ANTHROPIC]: anthropicExecutor,
     [NodeType.OPENAI]: openAiExecutor,
     [NodeType.DISCORD]: discordExecutor,
-    [NodeType.SLACK]: slackExecutor,
+    [NodeType.SLACK]: async (params) => {
+        // Route to DM executor if target is user_dm
+        const data = params.data as Record<string, unknown>;
+        if (data.target === "user_dm") {
+            return slackDMExecutor(params);
+        }
+        return slackExecutor(params);
+    },
+    [NodeType.CALENDAR_TRIGGER]: calendarTriggerExecutor,
+    [NodeType.CONDITION]: conditionExecutor as NodeExecutor,
+    [NodeType.MEETING_RECORDER]: meetingRecorderExecutor,
+    [NodeType.GOOGLE_DOCS]: googleDocsExecutor,
+    [NodeType.GMAIL]: gmailExecutor,
 };
 
 export const getExecutor = (type: NodeType): NodeExecutor => {
     const executor = executorRegistry[type];
     if (!executor) {
-        throw new Error ("No executor found for node type: ${type}");
+        throw new Error(`No executor found for node type: ${type}`);
     }
 
     return executor;
-} 
+};

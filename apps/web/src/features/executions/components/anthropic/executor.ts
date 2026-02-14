@@ -1,9 +1,7 @@
 import type { NodeExecutor } from "@/features/executions/types";
-import { NonRetriableError } from "inngest";
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { generateText } from "ai";
 import Handlebars from "handlebars";
-import { anthropicChannel } from "@/inngest/channels/anthropic";
 import prisma from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 
@@ -29,41 +27,21 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
     step,
     publish,
 }) => {
-    await publish(
-        anthropicChannel().status({
-            nodeId,
-            status:"loading",
-        }),
-    );
+    await publish({ nodeId, status: "loading" });
 
     if (!data.variableName) {
-        await publish(
-            anthropicChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("Anthropic node: Variable name is missing")
+        await publish({ nodeId, status: "error" });
+        throw new Error("Anthropic node: Variable name is missing")
     }
 
     if (!data.credentialId) {
-            await publish(
-                anthropicChannel().status({
-                    nodeId, 
-                    status: "error"
-                })
-            );
-            throw new NonRetriableError("Anthropic node: Credential is required")
-        }
+        await publish({ nodeId, status: "error" });
+        throw new Error("Anthropic node: Credential is required")
+    }
 
     if (!data.userPrompt) {
-        await publish(
-            anthropicChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("Anthropic node: User prompt is missing")
+        await publish({ nodeId, status: "error" });
+        throw new Error("Anthropic node: User prompt is missing")
     }
     
     const systemPrompt= data.systemPrompt
@@ -81,13 +59,8 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
     }); 
 
     if (!credential) {
-        await publish(
-                    anthropicChannel().status({
-                        nodeId, 
-                        status: "error"
-                    })
-                );
-        throw new NonRetriableError("Anthropic node: Credential not found");
+        await publish({ nodeId, status: "error" });
+        throw new Error("Anthropic node: Credential not found");
     }
 
     const anthropic = createAnthropic({
@@ -115,12 +88,7 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
                 ? steps[0].content[0].text
                 : "";
 
-        await publish(
-            anthropicChannel().status({
-                nodeId,
-                status: "success",
-            }),
-        );
+        await publish({ nodeId, status: "success" });
 
         return {
             ...context,
@@ -129,12 +97,7 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
             },
         }
     } catch (error) {
-        await publish(
-            anthropicChannel().status({
-                nodeId,
-                status: "error",
-            }),
-        );
+        await publish({ nodeId, status: "error" });
         throw error;
     }
 };

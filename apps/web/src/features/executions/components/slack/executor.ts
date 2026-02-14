@@ -1,8 +1,5 @@
-
 import type { NodeExecutor } from "@/features/executions/types";
-import { NonRetriableError } from "inngest";
 import Handlebars from "handlebars";
-import { slackChannel } from "@/inngest/channels/slack";
 import { decode } from "html-entities";
 import ky from "ky";
 
@@ -26,36 +23,21 @@ export const slackExecutor: NodeExecutor<SlackData> = async ({
     step,
     publish,
 }) => {
-    await publish(
-        slackChannel().status({
-            nodeId,
-            status:"loading",
-        }),
-    );
+    await publish({ nodeId, status: "loading" });
 
     if (!data.content) {
-        await publish(
-            slackChannel().status({
-                nodeId, 
-                status: "error"
-            })
-        );
-        throw new NonRetriableError("Slack node: Message content is required")
+        await publish({ nodeId, status: "error" });
+        throw new Error("Slack node: Message content is required")
     }
-    
+
     const rawContent = Handlebars.compile(data.content)(context);
     const content = decode(rawContent);
-   
+
     try {
         const result = await step.run("slack-webhook", async () => {
             if (!data.webhookUrl) {
-                await publish(
-                    slackChannel().status({
-                        nodeId, 
-                        status: "error"
-                    })
-                );
-                throw new NonRetriableError("Slack node: Webhook URL is required")
+                await publish({ nodeId, status: "error" });
+                throw new Error("Slack node: Webhook URL is required")
             }
 
             await ky.post(data.webhookUrl!, {
@@ -65,13 +47,8 @@ export const slackExecutor: NodeExecutor<SlackData> = async ({
             });
 
             if (!data.variableName) {
-                await publish(
-                    slackChannel().status({
-                        nodeId, 
-                        status: "error"
-                    })
-                );
-                throw new NonRetriableError("Slack node: Variable name is missing")
+                await publish({ nodeId, status: "error" });
+                throw new Error("Slack node: Variable name is missing")
             }
 
             return {
@@ -81,22 +58,11 @@ export const slackExecutor: NodeExecutor<SlackData> = async ({
                 },
             }
         });
-        await publish(
-            slackChannel().status({
-                nodeId,
-                status: "success",
-            }),
-        );
+        await publish({ nodeId, status: "success" });
 
         return result;
     } catch (error) {
-        await publish(
-            slackChannel().status({
-                nodeId,
-                status: "error",
-            }),
-        );
+        await publish({ nodeId, status: "error" });
         throw error;
     }
 };
-

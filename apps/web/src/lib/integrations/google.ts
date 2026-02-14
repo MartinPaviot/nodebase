@@ -300,6 +300,85 @@ export async function appendToDoc(
   });
 }
 
+// Google Docs in folder
+export async function createDocInFolder(
+  userId: string,
+  title: string,
+  content: string,
+  folderId?: string
+) {
+  // Create the document
+  const docResult = await createDoc(userId, title);
+  const documentId = docResult.data.documentId!;
+
+  // Add content to the document
+  if (content) {
+    await appendToDoc(userId, documentId, content);
+  }
+
+  // Move to folder if specified
+  if (folderId) {
+    const auth = await getGoogleClient(userId, "GOOGLE_DRIVE");
+    const drive = google.drive({ version: "v3", auth });
+
+    await drive.files.update({
+      fileId: documentId,
+      addParents: folderId,
+      fields: "id, parents",
+    });
+  }
+
+  // Get the document URL
+  const auth = await getGoogleClient(userId, "GOOGLE_DRIVE");
+  const drive = google.drive({ version: "v3", auth });
+  const file = await drive.files.get({
+    fileId: documentId,
+    fields: "webViewLink",
+  });
+
+  return {
+    documentId,
+    documentUrl: file.data.webViewLink || `https://docs.google.com/document/d/${documentId}/edit`,
+  };
+}
+
+// Gmail draft creation
+export async function createGmailDraft(
+  userId: string,
+  to: string,
+  subject: string,
+  body: string,
+  options?: { bcc?: string; cc?: string; fromName?: string }
+) {
+  const auth = await getGoogleClient(userId, "GMAIL");
+  const gmail = google.gmail({ version: "v1", auth });
+
+  const headers = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    options?.cc ? `Cc: ${options.cc}` : "",
+    options?.bcc ? `Bcc: ${options.bcc}` : "",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    body,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const encodedMessage = Buffer.from(headers)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  return gmail.users.drafts.create({
+    userId: "me",
+    requestBody: {
+      message: { raw: encodedMessage },
+    },
+  });
+}
+
 // Check if user has integration
 export async function hasIntegration(userId: string, type: GoogleIntegrationType | "SLACK" | "NOTION" | "OUTLOOK" | "OUTLOOK_CALENDAR" | "MICROSOFT_TEAMS") {
   const integration = await prisma.integration.findUnique({

@@ -15,13 +15,12 @@
  */
 
 import prisma from "./db";
-import { topologicalSort } from "@/inngest/utils";
+import { topologicalSort } from "@/lib/workflow/utils";
 import { getExecutor } from "@/features/executions/lib/executor-registry";
 import { NodeType } from "@prisma/client";
 import { WorkflowState, WorkflowStatus } from "./workflow-state";
 import { NotFoundError, WorkflowExecutionError } from "./errors";
-import type { StepTools } from "@/features/executions/types";
-import type { Realtime } from "@inngest/realtime";
+import type { StepTools, PublishFn } from "@/features/executions/types";
 
 const WORKFLOW_TIMEOUT_MS = 30000; // 30 seconds per workflow
 
@@ -46,7 +45,12 @@ const TRIGGER_NODE_TYPES: string[] = [
   NodeType.MANUAL_TRIGGER,
   NodeType.GOOGLE_FORM_TRIGGER,
   NodeType.STRIPE_TRIGGER,
+  NodeType.CALENDAR_TRIGGER,
 ];
+
+// Special context keys used by executors to control flow
+const SELECTED_BRANCH_KEY = "__selectedBranch";
+const PAUSE_KEY = "__pause";
 
 /**
  * Mock Inngest step tools for synchronous execution.
@@ -76,7 +80,7 @@ function createMockStepTools(): StepTools {
 /**
  * Mock publish function - no-op for sync execution
  */
-const mockPublish: Realtime.PublishFn = async () => {};
+const mockPublish: PublishFn = async () => {};
 
 // ============================================
 // MAIN EXECUTOR
@@ -145,17 +149,27 @@ async function executeWorkflowInternal({
     throw new NotFoundError("Workflow", workflowId);
   }
 
-  // Sort nodes topologically
-  const sortedNodes = topologicalSort(workflow.nodes, workflow.connections);
-  const executableNodes = sortedNodes.filter(
-    (node) => !TRIGGER_NODE_TYPES.includes(node.type)
+  // Build node map and adjacency list for graph traversal
+  const nodeMap = new Map(workflow.nodes.map((n) => [n.id, n]));
+  const adjacencyList = buildAdjacencyList(workflow.connections);
+
+  // Find start nodes (trigger nodes or nodes with no incoming connections)
+  const nodesWithIncoming = new Set(workflow.connections.map((c) => c.toNodeId));
+  const startNodes = workflow.nodes.filter(
+    (n) => !nodesWithIncoming.has(n.id) || TRIGGER_NODE_TYPES.includes(n.type)
   );
+
+  // Count executable nodes for progress tracking
+  const executableNodeCount = workflow.nodes.filter(
+    (n) => !TRIGGER_NODE_TYPES.includes(n.type)
+  ).length;
 
   // ============================================
   // STATE INITIALIZATION
   // ============================================
 
   let state: WorkflowState;
+  let resumeNodeId: string | null = null;
 
   if (resumeFromExecutionId) {
     // Resume from checkpoint
@@ -170,8 +184,18 @@ async function executeWorkflowInternal({
       );
     }
 
+    // Get the node to resume from (the next node after the last checkpoint)
+    const resumePoint = state.getResumePoint();
+    if (resumePoint) {
+      // Find the next nodes after the resume point
+      const edges = adjacencyList.get(resumePoint.nodeId);
+      if (edges && edges.length > 0) {
+        resumeNodeId = edges[0].toNodeId;
+      }
+    }
+
     console.log(
-      `Resuming workflow ${workflowId} from execution ${resumeFromExecutionId} at step ${state.getCurrentStep()}`
+      `Resuming workflow ${workflowId} from execution ${resumeFromExecutionId} at node ${resumeNodeId}`
     );
   } else {
     // Create new execution
@@ -179,34 +203,60 @@ async function executeWorkflowInternal({
       workflowId,
       userId,
       initialData,
-      executableNodes.length
+      executableNodeCount
     );
   }
+
+  // Inject execution ID into context so executors can reference it
+  state.updateContext({ __executionId: state.getExecutionId() });
 
   // Mark as running
   state.setStatus(WorkflowStatus.RUNNING);
   await state.saveCheckpoint();
 
   // ============================================
-  // NODE EXECUTION LOOP
+  // GRAPH TRAVERSAL EXECUTION
   // ============================================
 
   const step = createMockStepTools();
-  const resumePoint = state.getResumePoint();
-  let shouldSkip = resumePoint !== null;
 
-  for (const node of executableNodes) {
-    // Skip nodes until we reach resume point
-    if (shouldSkip) {
-      if (node.id === resumePoint?.nodeId) {
-        shouldSkip = false;
-        console.log(`Resumed at node: ${node.type} (${node.id})`);
+  // Determine starting point: resume node or first node after triggers
+  let currentNodeIds: string[];
+
+  if (resumeNodeId) {
+    currentNodeIds = [resumeNodeId];
+  } else {
+    // Start from the first non-trigger nodes connected to start nodes
+    currentNodeIds = [];
+    for (const startNode of startNodes) {
+      if (TRIGGER_NODE_TYPES.includes(startNode.type)) {
+        // Follow edges from trigger nodes to get first executable nodes
+        const edges = adjacencyList.get(startNode.id) || [];
+        for (const edge of edges) {
+          currentNodeIds.push(edge.toNodeId);
+        }
+      } else {
+        currentNodeIds.push(startNode.id);
       }
-      continue;
     }
+  }
+
+  const executedNodes = new Set<string>();
+
+  while (currentNodeIds.length > 0) {
+    const nodeId = currentNodeIds.shift()!;
+
+    // Skip already-executed nodes (prevents cycles)
+    if (executedNodes.has(nodeId)) continue;
+
+    const node = nodeMap.get(nodeId);
+    if (!node) continue;
+
+    // Skip trigger nodes
+    if (TRIGGER_NODE_TYPES.includes(node.type)) continue;
 
     console.log(
-      `Executing node ${state.getCurrentStep() + 1}/${state.getTotalSteps()}: ${node.type}`
+      `Executing node ${state.getCurrentStep() + 1}/${state.getTotalSteps()}: ${node.type} (${node.name})`
     );
 
     try {
@@ -224,16 +274,55 @@ async function executeWorkflowInternal({
         publish: mockPublish,
       });
 
+      // Check if the node requested a pause (async operations like recording)
+      if (newContext[PAUSE_KEY]) {
+        const { [PAUSE_KEY]: _, ...cleanContext } = newContext;
+        state.setContext(cleanContext);
+        state.incrementStep();
+        await state.createCheckpoint(node.id, node.type);
+        await state.markPaused(node.id);
+
+        console.log(`⏸ Node ${node.type} requested pause (async operation)`);
+
+        return {
+          success: true,
+          executionId: state.getExecutionId(),
+          output: cleanContext as Record<string, unknown>,
+          checkpointsCount: state.getCheckpoints().length,
+        };
+      }
+
       // Update state with new context
       state.setContext(newContext);
       state.incrementStep();
+      executedNodes.add(nodeId);
 
       // Create checkpoint after successful execution
       await state.createCheckpoint(node.id, node.type);
 
-      console.log(`✓ Node ${node.type} completed successfully`);
+      console.log(`✓ Node ${node.type} (${node.name}) completed successfully`);
+
+      // Determine next nodes based on branching
+      const edges = adjacencyList.get(nodeId) || [];
+
+      if (node.type === NodeType.CONDITION && newContext[SELECTED_BRANCH_KEY]) {
+        // CONDITION node: only follow the selected branch
+        const selectedBranch = newContext[SELECTED_BRANCH_KEY] as string;
+        const branchEdges = edges.filter((e) => e.fromOutput === selectedBranch);
+
+        for (const edge of branchEdges) {
+          currentNodeIds.push(edge.toNodeId);
+        }
+
+        console.log(`  → Branch selected: "${selectedBranch}" (${branchEdges.length} next nodes)`);
+      } else {
+        // Regular node: follow all outgoing edges
+        for (const edge of edges) {
+          currentNodeIds.push(edge.toNodeId);
+        }
+      }
     } catch (error) {
-      console.error(`✗ Node ${node.type} failed:`, error);
+      console.error(`✗ Node ${node.type} (${node.name}) failed:`, error);
 
       // Create error checkpoint
       await state.createErrorCheckpoint(
@@ -272,6 +361,38 @@ async function executeWorkflowInternal({
     output: state.getContext() as Record<string, unknown>,
     checkpointsCount: state.getCheckpoints().length,
   };
+}
+
+// ============================================
+// GRAPH HELPERS
+// ============================================
+
+interface AdjacencyEdge {
+  toNodeId: string;
+  fromOutput: string;
+  toInput: string;
+}
+
+/**
+ * Build adjacency list from connections for graph traversal.
+ * Each node maps to its outgoing edges with branch info.
+ */
+function buildAdjacencyList(
+  connections: Array<{ fromNodeId: string; toNodeId: string; fromOutput: string; toInput: string }>
+): Map<string, AdjacencyEdge[]> {
+  const adj = new Map<string, AdjacencyEdge[]>();
+
+  for (const conn of connections) {
+    const edges = adj.get(conn.fromNodeId) || [];
+    edges.push({
+      toNodeId: conn.toNodeId,
+      fromOutput: conn.fromOutput,
+      toInput: conn.toInput,
+    });
+    adj.set(conn.fromNodeId, edges);
+  }
+
+  return adj;
 }
 
 // ============================================

@@ -157,9 +157,9 @@ export function FlowEditorHeader({
   const IconComponent = config.icon;
 
   return (
-    <header className="h-14 border-b border-[#e5e7eb] flex items-center justify-between px-4 bg-white relative z-20 shrink-0">
+    <header className="h-14 border-b border-[#e5e7eb] flex items-center px-4 bg-white z-20 shrink-0">
       {/* Left side */}
-      <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex items-center gap-3">
         {!open && <SidebarTrigger />}
 
         {/* Agent icon - square with rounded corners and gradient */}
@@ -169,7 +169,7 @@ export function FlowEditorHeader({
               <div className={`size-6 rounded-[4px] bg-gradient-to-br ${config.gradient} flex items-center justify-center`}>
                 <IconComponent className="size-4 text-white" weight="fill" />
               </div>
-              <span className="font-semibold text-[15px] text-[#1a1a1a]">{agentName}</span>
+              <span className="font-semibold text-[15px] text-[#1a1a1a] truncate max-w-[200px]">{agentName}</span>
               <CaretDown className="size-4 text-[#9CA3AF]" />
             </button>
           </DropdownMenuTrigger>
@@ -217,7 +217,7 @@ export function FlowEditorHeader({
       </div>
 
       {/* Center - Tabs (Lindy style: simple text with icons) */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
+      <div className="flex-shrink-0 flex items-center gap-1">
         <TabButton
           icon={<SlidersHorizontal className="size-4" />}
           label="Settings"
@@ -239,7 +239,7 @@ export function FlowEditorHeader({
       </div>
 
       {/* Right side - Lindy style buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -267,7 +267,12 @@ export function FlowEditorHeader({
               : "bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#9CA3AF] font-medium shadow-none h-9 px-4"
           }
         >
-          {isSaving ? "Saving..." : "Publish Changes"}
+          {isSaving ? "Saving..." : (
+            <>
+              <span className="hidden sm:inline">Publish Changes</span>
+              <span className="sm:hidden">Publish</span>
+            </>
+          )}
         </Button>
       </div>
     </header>
@@ -293,7 +298,7 @@ function TabButton({ icon, label, isActive, onClick }: TabButtonProps) {
       )}
     >
       {icon}
-      {label}
+      <span className="hidden md:inline">{label}</span>
     </button>
   );
 }

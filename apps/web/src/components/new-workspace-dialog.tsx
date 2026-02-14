@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
     Dialog,
     DialogContent,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,7 @@ export function NewWorkspaceDialog({ open, onOpenChange }: NewWorkspaceDialogPro
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden">
+                <DialogTitle className="sr-only">Create a workspace</DialogTitle>
                 <div className="flex">
                     {/* Left side - Form */}
                     <div className="flex-1 p-8">

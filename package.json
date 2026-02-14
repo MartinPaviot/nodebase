@@ -18,13 +18,11 @@
     "redis:restart": "docker restart redis-nodebase",
     "redis:logs": "docker logs -f redis-nodebase",
     "redis:cli": "docker exec -it redis-nodebase redis-cli",
-    "inngest:dev": "inngest-cli dev",
     "dev:all": "dotenv -- mprocs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
     "dotenv-cli": "^11.0.0",
-    "inngest-cli": "^1.12.1",
     "mprocs": "^0.7.3",
     "prisma": "^6.16.3",
     "tsx": "^4.20.6",

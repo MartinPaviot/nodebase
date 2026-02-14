@@ -27,6 +27,8 @@ model User {
   credentials   Credential[]
   agents        Agent[]
   integrations  Integration[]
+  mailboxAccounts MailboxAccount[]
+  dailyBriefings DailyBriefing[]
 
   @@unique([email])
   @@map("user")
@@ -130,6 +132,11 @@ enum NodeType {
   OPENAI
   DISCORD
   SLACK
+  CALENDAR_TRIGGER
+  CONDITION
+  MEETING_RECORDER
+  GOOGLE_DOCS
+  GMAIL
 }
 
 model Node {
@@ -300,6 +307,9 @@ model Agent {
 
   // Meta-Agent (Phase 4)
   modificationProposals ModificationProposal[]
+
+  // Outreach campaigns
+  campaigns     Campaign[]
 
   @@index([userId, name])
   @@index([userId, updatedAt])
@@ -522,11 +532,12 @@ model AgentMemory {
 }
 
 enum MemoryCategory {
-  GENERAL      // General facts
-  PREFERENCE   // User preferences
-  CONTEXT      // Contextual information
-  HISTORY      // Historical events
-  INSTRUCTION  // Standing instructions
+  GENERAL           // General facts
+  PREFERENCE        // User preferences
+  CONTEXT           // Contextual information
+  HISTORY           // Historical events
+  INSTRUCTION       // Standing instructions
+  STYLE_CORRECTION  // Style Learner corrections (outreach)
 }
 
 // Knowledge base documents for RAG (like Lindy)
@@ -996,6 +1007,10 @@ model MeetingRecording {
   // Recording
   status         RecordingStatus @default(SCHEDULED)
   recordingUrl   String?
+  externalBotId  String?   // Recall.ai bot ID
+
+  // Workflow execution link (for pause/resume)
+  workflowExecutionId String?
 
   // Transcript & Summary
   transcript     String?   @db.Text
@@ -1174,6 +1189,7 @@ enum ScanCategory {
   HR
   FINANCE
   PROJECTS
+  OUTREACH
 }
 
 // Individual signal for better tracking
@@ -1592,4 +1608,311 @@ enum ProposalStatus {
   APPROVED
   REJECTED
   APPLIED
+}
+
+// ============================================
+// OUTREACH — Cold Email Campaign Infrastructure
+// ============================================
+
+model MailboxAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email           String
+  displayName     String?
+  domain          String
+
+  // OAuth tokens (encrypted via Cryptr)
+  accessToken     String   @db.Text
+  refreshToken    String   @db.Text
+  tokenExpiresAt  DateTime?
+
+  // Instantly warmup
+  instantlyAccountId       String?
+  instantlyWarmupEnabled   Boolean @default(false)
+
+  // Status
+  status          MailboxStatus @default(CONNECTING)
+  warmupScore     Int     @default(0)
+
+  // Volume control
+  dailySendLimit  Int     @default(40)
+  dailySentCount  Int     @default(0)
+  coldEmailRatio  Float   @default(0)
+
+  // Health (synced from Instantly + custom checks)
+  healthScore     Int     @default(0)
+  deliveryRate    Float   @default(0)
+  spamRate        Float   @default(0)
+
+  // Errors
+  lastError       String?
+  errorCount      Int     @default(0)
+  lastErrorAt     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaignEmails  CampaignEmail[]
+
+  @@unique([userId, email])
+  @@index([userId, status])
+  @@map("mailbox_account")
+}
+
+enum MailboxStatus {
+  CONNECTING
+  WARMING
+  READY
+  PAUSED
+  ERROR
+}
+
+model DomainHealth {
+  id          String   @id @default(cuid())
+  userId      String
+  domain      String
+
+  spfStatus   DnsCheckStatus @default(UNKNOWN)
+  spfRecord   String?
+  dkimStatus  DnsCheckStatus @default(UNKNOWN)
+  dkimRecord  String?
+  dmarcStatus DnsCheckStatus @default(UNKNOWN)
+  dmarcRecord String?
+  dmarcPolicy String?
+  mxStatus    DnsCheckStatus @default(UNKNOWN)
+  mxRecords   String[]       @default([])
+
+  isBlacklisted      Boolean  @default(false)
+  blacklistedOn      String[] @default([])
+  lastBlacklistCheck DateTime?
+
+  overallScore  Int @default(0)
+
+  lastCheckedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, domain])
+  @@map("domain_health")
+}
+
+enum DnsCheckStatus {
+  UNKNOWN
+  PASS
+  WARN
+  FAIL
+}
+
+// Campaign — Linked to an Agent (not standalone)
+model Campaign {
+  id              String   @id @default(cuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  name            String
+  status          CampaignStatus @default(DRAFT)
+
+  // Sequence steps (directives for the agent LLM, not templates)
+  steps           Json     @default("[]")
+  totalSteps      Int      @default(0)
+
+  // Sending configuration
+  sendingSchedule Json?
+  dailySendLimit  Int      @default(50)
+  mailboxStrategy MailboxStrategy @default(ROUND_ROBIN)
+
+  // Denormalized stats
+  totalLeads      Int      @default(0)
+  leadsContacted  Int      @default(0)
+  leadsReplied    Int      @default(0)
+  leadsPositive   Int      @default(0)
+  leadsBounced    Int      @default(0)
+
+  // A/B testing
+  abTestEnabled   Boolean  @default(false)
+  winningVariant  String?
+
+  startedAt       DateTime?
+  pausedAt        DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  leads           Lead[]
+  emails          CampaignEmail[]
+  dailyStats      CampaignDailyStats[]
+
+  @@index([agentId, status])
+  @@map("campaign")
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum MailboxStrategy {
+  ROUND_ROBIN
+  RANDOM
+  LEAST_USED
+  DOMAIN_MATCH
+}
+
+model Lead {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  email           String
+  firstName       String?
+  lastName        String?
+  company         String?
+  jobTitle        String?
+  linkedinUrl     String?
+  phone           String?
+  enrichmentData  Json?
+  customVariables Json?
+
+  // Sequence state
+  status          LeadStatus @default(PENDING)
+  currentStep     Int      @default(0)
+  nextSendAt      DateTime?
+
+  // Tracking
+  totalEmailsSent Int      @default(0)
+  lastEmailSentAt DateTime?
+  repliedAt       DateTime?
+  replyContent    String?  @db.Text
+  replySentiment  ReplySentiment?
+  bouncedAt       DateTime?
+  bounceType      String?
+  unsubscribedAt  DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  emails          CampaignEmail[]
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+  @@index([status, nextSendAt])
+  @@map("lead")
+}
+
+enum LeadStatus {
+  PENDING
+  IN_SEQUENCE
+  REPLIED
+  POSITIVE
+  NEGATIVE
+  BOUNCED
+  UNSUBSCRIBED
+  COMPLETED
+  PAUSED
+}
+
+enum ReplySentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  OUT_OF_OFFICE
+  BOUNCE
+}
+
+model CampaignEmail {
+  id                String   @id @default(cuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leadId            String
+  lead              Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  mailboxAccountId  String
+  mailboxAccount    MailboxAccount @relation(fields: [mailboxAccountId], references: [id])
+
+  sequenceStep      Int
+  variant           String?
+
+  subject           String
+  body              String  @db.Text
+  personalizedFields Json?
+
+  gmailMessageId    String?
+  gmailThreadId     String?
+
+  status            CampaignEmailStatus @default(QUEUED)
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  openedAt          DateTime?
+  repliedAt         DateTime?
+  bouncedAt         DateTime?
+  bounceReason      String?
+  unsubscribeUrl    String?
+
+  createdAt         DateTime @default(now())
+
+  @@index([campaignId, sequenceStep])
+  @@index([leadId, sequenceStep])
+  @@index([mailboxAccountId, sentAt])
+  @@index([status, createdAt])
+  @@map("campaign_email")
+}
+
+enum CampaignEmailStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  REPLIED
+  BOUNCED
+  FAILED
+}
+
+model CampaignDailyStats {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date
+
+  emailsSent      Int @default(0)
+  emailsDelivered Int @default(0)
+  emailsOpened    Int @default(0)
+  emailsReplied   Int @default(0)
+  emailsBounced   Int @default(0)
+  positiveReplies Int @default(0)
+  negativeReplies Int @default(0)
+  unsubscribes    Int @default(0)
+
+  deliveryRate    Float @default(0)
+  openRate        Float @default(0)
+  replyRate       Float @default(0)
+  bounceRate      Float @default(0)
+  positiveRate    Float @default(0)
+
+  @@unique([campaignId, date])
+  @@map("campaign_daily_stats")
+}
+
+// ============================================
+// Daily Briefing (Phase 7.2)
+// ============================================
+
+model DailyBriefing {
+  id            String    @id @default(cuid())
+  userId        String
+  date          DateTime  @db.Date
+  content       String    @db.Text
+  agentsSummary Json
+  sentAt        DateTime?
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_briefing")
 }

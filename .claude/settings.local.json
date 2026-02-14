@@ -72,7 +72,8 @@
       "WebFetch(domain:docs.anthropic.com)",
       "WebFetch(domain:python.langchain.com)",
       "WebFetch(domain:docs.composio.dev)",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "Bash(npx turbo run build:*)"
     ]
   }
 }

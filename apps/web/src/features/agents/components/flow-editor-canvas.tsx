@@ -41,6 +41,8 @@ import {
   Note,
   CaretUp,
   DotsThree,
+  Check,
+  X,
 } from "@phosphor-icons/react";
 import { Icon } from "@iconify/react";
 import { AddActionModal } from "./add-action-modal";
@@ -49,6 +51,73 @@ import { PDLIcon } from "@/components/icons/pdl-icon";
 
 // Standard node width for consistency
 const NODE_WIDTH = 200;
+
+// Execution status types for workflow animation
+type ExecutionStatus = "idle" | "running" | "completed" | "error" | "skipped";
+
+function getExecutionStyles(status?: ExecutionStatus) {
+  switch (status) {
+    case "running":
+      return {
+        containerClass: "ring-2 ring-blue-400 ring-offset-2 animate-[node-pulse_2s_ease-in-out_infinite]",
+        overlayIcon: null as null,
+        opacity: "",
+      };
+    case "completed":
+      return {
+        containerClass: "ring-2 ring-emerald-400 ring-offset-1",
+        overlayIcon: "check-circle" as const,
+        opacity: "",
+      };
+    case "error":
+      return {
+        containerClass: "ring-2 ring-red-400 ring-offset-1",
+        overlayIcon: "x-circle" as const,
+        opacity: "",
+      };
+    case "skipped":
+      return {
+        containerClass: "opacity-40",
+        overlayIcon: null as null,
+        opacity: "opacity-40",
+      };
+    default:
+      return { containerClass: "", overlayIcon: null as null, opacity: "" };
+  }
+}
+
+// Execution status overlay badge component
+function ExecutionBadge({ status }: { status?: ExecutionStatus }) {
+  const styles = getExecutionStyles(status);
+  if (!styles.overlayIcon) return null;
+
+  if (styles.overlayIcon === "check-circle") {
+    return (
+      <div className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-emerald-500 flex items-center justify-center z-10">
+        <Check className="size-2.5 text-white" weight="bold" />
+      </div>
+    );
+  }
+  if (styles.overlayIcon === "x-circle") {
+    return (
+      <div className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-red-500 flex items-center justify-center z-10">
+        <X className="size-2.5 text-white" weight="bold" />
+      </div>
+    );
+  }
+  return null;
+}
+
+// Credits badge for nodes that consume credits (Lindy-style "⊙ 0.5")
+function CreditsBadge({ credits }: { credits?: number }) {
+  if (credits == null) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[8px] text-slate-400 mt-0.5">
+      <span className="size-2 rounded-full border border-slate-300 inline-block" />
+      {credits}
+    </span>
+  );
+}
 
 // Icons for menu options
 import { TextT, ShieldCheck, Sliders, Trash } from "@phosphor-icons/react";
@@ -213,17 +282,20 @@ const INTEGRATION_ICONS: Record<string, { icon: string; label: string }> = {
 };
 
 // Message Received Node (Trigger) - Sleek minimal design
-function MessageReceivedNode({ selected }: { selected?: boolean }) {
+function MessageReceivedNode({ data, selected }: { data?: { executionStatus?: ExecutionStatus }; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data?.executionStatus);
 
   return (
-    <div
-      className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
-        selected ? "border-2 border-cyan-400" : "border border-slate-200/80"
-      }`}
-      style={{ width: NODE_WIDTH }}
-    >
+    <div className="relative">
+      <ExecutionBadge status={data?.executionStatus} />
+      <div
+        className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
+          selected ? "border-2 border-cyan-400" : "border border-slate-200/80"
+        } ${execStyles.containerClass}`}
+        style={{ width: NODE_WIDTH }}
+      >
       <div className="flex items-center gap-2">
         <div className="size-6 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
           <Chats className="size-3.5 text-white" weight="fill" />
@@ -246,17 +318,21 @@ function MessageReceivedNode({ selected }: { selected?: boolean }) {
         position={Position.Bottom}
         className="!bg-blue-500 !border-white !border-2 !size-2.5 !-bottom-1"
       />
+      </div>
     </div>
   );
 }
 
 // Chat Agent Node - for "Chat with this Agent" actions (Observe messages / Send message)
-function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: string; variant?: "observe" | "send"; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; variant?: "observe" | "send"; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const variant = data.variant || "observe";
   const label = data.label || (variant === "observe" ? "Observe messages" : "Send message");
+  const execStyles = getExecutionStyles(data.executionStatus);
+  const iconBg = variant === "send" ? "bg-amber-500" : "bg-blue-500";
+  const borderColor = variant === "send" ? "border-amber-200" : "border-blue-200";
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -272,18 +348,24 @@ function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: str
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
-          selected ? "border-2 border-cyan-400" : "border border-blue-200"
-        }`}
+          selected ? "border-2 border-cyan-400" : `border ${borderColor}`
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+          <div className={`size-6 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
             <Chats className="size-3.5 text-white" weight="fill" />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">{label}</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">{label}</span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+          </div>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -384,6 +466,7 @@ function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: str
 interface AgentStepDataExtended extends AgentStepData, NodeCallbacks {
   hasOutgoingEdge?: boolean;
   fieldsMode?: "manual" | "auto";
+  executionStatus?: ExecutionStatus;
 }
 
 // Agent Step Node - Compact Lindy-style design
@@ -391,6 +474,7 @@ function AgentStepNode({ id, data, selected }: { id: string; data: AgentStepData
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -406,11 +490,12 @@ function AgentStepNode({ id, data, selected }: { id: string; data: AgentStepData
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       <div
         className={`bg-white rounded-xl px-3 py-2.5 shadow-sm hover:shadow transition-all ${
           selected ? "border-2 border-cyan-400" : "border border-slate-200/80"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         {/* Header */}
@@ -606,9 +691,10 @@ function AddNodePlaceholder({ data }: { data: { onSelectAction?: (actionId: stri
 }
 
 // Condition Node - Lindy style (purple icon, multiple outputs for branches)
-function ConditionNode({ id, data, selected }: { id: string; data: { label?: string; conditions?: Array<{ id: string; text: string }>; onAddCondition?: (nodeId: string) => void; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function ConditionNode({ id, data, selected }: { id: string; data: { label?: string; conditions?: Array<{ id: string; text: string }>; onAddCondition?: (nodeId: string) => void; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
   // Capitalize first letter of label
   const label = data.label || "Condition";
   const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
@@ -621,11 +707,12 @@ function ConditionNode({ id, data, selected }: { id: string; data: { label?: str
   const totalDivisions = conditionCount + 2;
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow relative ${
           selected ? "border-2 border-cyan-400" : "border border-violet-200"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
@@ -728,19 +815,21 @@ function ConditionNode({ id, data, selected }: { id: string; data: { label?: str
 }
 
 // Condition Branch Node - subtle pill style like Lindy
-function ConditionBranchNode({ id, data, selected }: { id: string; data: { conditionText?: string; conditionIndex?: number; hasWarning?: boolean; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function ConditionBranchNode({ id, data, selected }: { id: string; data: { conditionText?: string; branchLabel?: string; conditionIndex?: number; hasWarning?: boolean; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const text = data.conditionText || "";
-  const isEmpty = text.trim() === "";
+  const isEmpty = text.trim() === "" && !data.branchLabel;
 
-  // Truncate text for display - longer than main nodes
-  const displayText = isEmpty
-    ? "Define a condition"
-    : text.length > 28
-      ? text.substring(0, 25) + "..."
-      : text;
+  // Use branchLabel if provided (e.g. "Yes", "No"), otherwise truncate text
+  const displayText = data.branchLabel
+    ? `${data.branchLabel} ...`
+    : isEmpty
+      ? "Define a condition"
+      : text.length > 28
+        ? text.substring(0, 25) + "..."
+        : text;
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -865,6 +954,7 @@ const ACTION_ICONS: Record<string, { icon: string; color: string }> = {
   "google-drive": { icon: "logos:google-drive", color: "bg-blue-500" },
   "google-calendar": { icon: "logos:google-calendar", color: "bg-blue-500" },
   "gmail": { icon: "logos:google-gmail", color: "bg-red-500" },
+  "google": { icon: "logos:google-icon", color: "bg-white border border-gray-200" },
   // Communication
   "slack": { icon: "logos:slack-icon", color: "bg-purple-500" },
   "discord": { icon: "logos:discord-icon", color: "bg-indigo-500" },
@@ -916,8 +1006,8 @@ const ACTION_ICONS: Record<string, { icon: string; color: string }> = {
   "twitter": { icon: "logos:twitter", color: "bg-blue-500" },
   "facebook": { icon: "logos:facebook", color: "bg-blue-500" },
   "instagram": { icon: "logos:instagram-icon", color: "bg-pink-500" },
-  "linkedin": { icon: "logos:linkedin-icon", color: "bg-blue-500" },
-  "youtube": { icon: "logos:youtube-icon", color: "bg-red-500" },
+  "linkedin": { icon: "logos:linkedin-icon", color: "bg-white border border-gray-200" },
+  "youtube": { icon: "ph:youtube-logo-fill", color: "bg-red-500" },
   "tiktok": { icon: "logos:tiktok-icon", color: "bg-slate-800" },
   "reddit": { icon: "logos:reddit-icon", color: "bg-orange-500" },
   "pinterest": { icon: "logos:pinterest", color: "bg-red-500" },
@@ -928,7 +1018,7 @@ const ACTION_ICONS: Record<string, { icon: string; color: string }> = {
   "typeform": { icon: "simple-icons:typeform", color: "bg-slate-800" },
   "calendly": { icon: "simple-icons:calendly", color: "bg-blue-500" },
   // AI & Research
-  "perplexity": { icon: "ph:compass-fill", color: "bg-violet-500" },
+  "perplexity": { icon: "ph:compass-fill", color: "bg-teal-600" },
   "people-data-labs": { icon: "mdi:account-search", color: "bg-[#7F35FD]" },
   "ai": { icon: "ph:sparkle-fill", color: "bg-violet-500" },
   // Utilities
@@ -949,7 +1039,7 @@ const ACTION_ICONS: Record<string, { icon: string; color: string }> = {
 };
 
 // Action Node (colored based on icon type)
-function ActionNode({ id, data, selected }: { id: string; data: { label?: string; icon?: string; hasWarning?: boolean; outputs?: string[]; hasOutgoingEdge?: boolean; onSelectAction?: (actionId: string, sourceNodeId?: string) => void; onOpenReplaceModal?: (nodeId: string) => void }; selected?: boolean }) {
+function ActionNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; icon?: string; hasWarning?: boolean; warningText?: string; credits?: number; outputs?: string[]; hasOutgoingEdge?: boolean; executionStatus?: ExecutionStatus; onSelectAction?: (actionId: string, sourceNodeId?: string) => void; onOpenReplaceModal?: (nodeId: string) => void }; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -958,6 +1048,7 @@ function ActionNode({ id, data, selected }: { id: string; data: { label?: string
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const outputs = data.outputs || [];
   const hasMultipleOutputs = outputs.length > 1;
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   // Update menu position when showing
   useEffect(() => {
@@ -1010,20 +1101,27 @@ function ActionNode({ id, data, selected }: { id: string; data: { label?: string
 
   return (
     <div ref={nodeRef} className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Main node card */}
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
           selected ? "border-2 border-cyan-400" : "border border-emerald-200"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
           <div className={`size-6 rounded-lg ${iconConfig.color} flex items-center justify-center flex-shrink-0`}>
-            <Icon icon={iconConfig.icon} className="size-3.5 text-white" />
+            <Icon icon={iconConfig.icon} className={`size-3.5 ${iconConfig.icon.startsWith("logos:") ? "" : "text-white"}`} />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-            {data.label || "Action"}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">
+              {data.label || "Action"}
+            </span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+            {data.credits != null && <CreditsBadge credits={data.credits} />}
+          </div>
           {data.hasWarning && (
             <Warning className="size-3 text-amber-500 flex-shrink-0" weight="fill" />
           )}
@@ -1048,6 +1146,13 @@ function ActionNode({ id, data, selected }: { id: string; data: { label?: string
             )}
           </div>
         </div>
+
+        {/* Warning sticky note annotation */}
+        {data.warningText && (
+          <div className="absolute -right-2 top-1/2 -translate-y-1/2 translate-x-full max-w-[180px] bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 text-[9px] text-amber-700 leading-tight shadow-sm z-10">
+            <span className="mr-0.5">&larr;</span> {data.warningText}
+          </div>
+        )}
 
         {/* Output labels for multi-output actions */}
         {hasMultipleOutputs && (
@@ -1135,24 +1240,33 @@ function ActionNode({ id, data, selected }: { id: string; data: { label?: string
 }
 
 // Send Email Node (orange - with warning and dual outputs)
-function SendEmailNode({ id, data, selected }: { id: string; data: { label?: string; hasWarning?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function SendEmailNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; credits?: number; hasWarning?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   return (
-    <div
-      className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
-        selected ? "border-2 border-cyan-400" : "border border-orange-200"
-      }`}
-      style={{ width: NODE_WIDTH }}
-    >
+    <div className="relative">
+      <ExecutionBadge status={data.executionStatus} />
+      <div
+        className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
+          selected ? "border-2 border-cyan-400" : "border border-orange-200"
+        } ${execStyles.containerClass}`}
+        style={{ width: NODE_WIDTH }}
+      >
       <div className="flex items-center gap-2">
         <div className="size-6 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
           <Envelope className="size-3.5 text-white" weight="fill" />
         </div>
-        <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-          {data.label || "Send email"}
-        </span>
+        <div className="flex-1 min-w-0">
+          <span className="font-medium text-slate-700 text-xs block truncate">
+            {data.label || "Send email"}
+          </span>
+          {data.subtitle && (
+            <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+          )}
+          {data.credits != null && <CreditsBadge credits={data.credits} />}
+        </div>
         {data.hasWarning && (
           <Warning className="size-3 text-amber-500 flex-shrink-0" weight="fill" />
         )}
@@ -1219,16 +1333,18 @@ function SendEmailNode({ id, data, selected }: { id: string; data: { label?: str
         id="reply"
         className="!bg-orange-500 !border-white !border-2 !size-2.5 !-bottom-1 !left-[75%]"
       />
+      </div>
     </div>
   );
 }
 
 // People Data Labs Node - Search for leads
-function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; credits?: number; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Search for leads";
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -1244,12 +1360,13 @@ function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Main node card */}
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
           selected ? "border-2 border-cyan-400" : "border border-[#7F35FD]/30"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
@@ -1257,9 +1374,15 @@ function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?
           <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <PDLIcon size={14} />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-            {label}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">
+              {label}
+            </span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+            {data.credits != null && <CreditsBadge credits={data.credits} />}
+          </div>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -1354,11 +1477,12 @@ function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?
 }
 
 // Google Sheets Node
-function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: string; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Google Sheets";
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -1374,12 +1498,13 @@ function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: 
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Main node card */}
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
           selected ? "border-2 border-cyan-400" : "border border-[#34A853]/30"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
@@ -1387,9 +1512,14 @@ function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: 
           <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <Icon icon="logos:google-sheets" className="size-4" />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-            {label}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">
+              {label}
+            </span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+          </div>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -1497,10 +1627,11 @@ const INTEGRATION_NODE_CONFIG: Record<string, { icon: string; color: string; bor
 };
 
 // Generic Integration Node (for gmail, googleDrive, etc.)
-function IntegrationNode({ id, data, selected, type }: { id: string; type: string; data: { label?: string; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function IntegrationNode({ id, data, selected, type }: { id: string; type: string; data: { label?: string; subtitle?: string; credits?: number; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   const config = INTEGRATION_NODE_CONFIG[type] || { icon: "mdi:cog", color: "#6B7280", borderColor: "#6B7280" };
   const label = data.label || type.replace(/([A-Z])/g, ' $1').trim();
@@ -1519,12 +1650,13 @@ function IntegrationNode({ id, data, selected, type }: { id: string; type: strin
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Main node card */}
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
           selected ? "border-2 border-cyan-400" : `border`
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH, borderColor: selected ? undefined : `${config.borderColor}30` }}
       >
         <div className="flex items-center gap-2">
@@ -1532,9 +1664,15 @@ function IntegrationNode({ id, data, selected, type }: { id: string; type: strin
           <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <Icon icon={config.icon} className="size-4" />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-            {label}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">
+              {label}
+            </span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+            {data.credits != null && <CreditsBadge credits={data.credits} />}
+          </div>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -1631,24 +1769,39 @@ function IntegrationNode({ id, data, selected, type }: { id: string; type: strin
 }
 
 // Enter Loop Node
-function EnterLoopNode({ id, data, selected }: { id: string; data: { label?: string; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function EnterLoopNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; loopNumber?: number; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   return (
-    <div
-      className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
-        selected ? "border-2 border-cyan-400" : "border border-teal-200"
-      }`}
-      style={{ width: NODE_WIDTH }}
-    >
+    <div className="relative">
+      <ExecutionBadge status={data.executionStatus} />
+      <div
+        className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
+          selected ? "border-2 border-cyan-400" : "border border-teal-200"
+        } ${execStyles.containerClass}`}
+        style={{ width: NODE_WIDTH }}
+      >
       <div className="flex items-center gap-2">
         <div className="size-6 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
           <Play className="size-3.5 text-white" weight="fill" />
         </div>
-        <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-          {data.label || "Enter loop"}
-        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="font-medium text-slate-700 text-xs truncate">
+              {data.label || "Enter loop"}
+            </span>
+            {data.loopNumber != null && (
+              <span className="ml-0.5 size-4 rounded-full bg-violet-100 text-violet-600 text-[9px] font-semibold inline-flex items-center justify-center flex-shrink-0">
+                {data.loopNumber}
+              </span>
+            )}
+          </div>
+          {data.subtitle && (
+            <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+          )}
+        </div>
         <div className="relative flex-shrink-0">
           <button
             ref={optionsBtnRef}
@@ -1699,68 +1852,84 @@ function EnterLoopNode({ id, data, selected }: { id: string; data: { label?: str
         position={Position.Bottom}
         className="!bg-teal-500 !border-white !border-2 !size-2.5 !-bottom-1"
       />
+      </div>
     </div>
   );
 }
 
 // Exit Loop Node
-function ExitLoopNode({ id, data, selected }: { id: string; data: { label?: string; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function ExitLoopNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; loopNumber?: number; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   return (
-    <div
-      className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
-        selected ? "border-2 border-cyan-400" : "border border-teal-200"
-      }`}
-      style={{ width: NODE_WIDTH }}
-    >
-      <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
-          <Stop className="size-3.5 text-white" weight="fill" />
+    <div className="relative">
+      <ExecutionBadge status={data.executionStatus} />
+      <div
+        className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
+          selected ? "border-2 border-cyan-400" : "border border-teal-200"
+        } ${execStyles.containerClass}`}
+        style={{ width: NODE_WIDTH }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="size-6 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
+            <Stop className="size-3.5 text-white" weight="fill" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="font-medium text-slate-700 text-xs truncate">
+                {data.label || "Exit loop"}
+              </span>
+              {data.loopNumber != null && (
+                <span className="ml-0.5 size-4 rounded-full bg-violet-100 text-violet-600 text-[9px] font-semibold inline-flex items-center justify-center flex-shrink-0">
+                  {data.loopNumber}
+                </span>
+              )}
+            </div>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+          </div>
+          <div className="relative flex-shrink-0">
+            <button
+              ref={optionsBtnRef}
+              onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
+              className="text-slate-400 hover:text-slate-600 p-0.5 flex items-center justify-center"
+            >
+              <DotsThree className="size-4" weight="bold" />
+            </button>
+            {showOptions && (
+              <NodeOptionsMenu
+                type="action"
+                buttonRef={optionsBtnRef}
+                onClose={() => setShowOptions(false)}
+                fieldsMode={data.fieldsMode || "auto"}
+                onRename={() => {
+                  setShowOptions(false);
+                  data.onRename?.(id);
+                }}
+                onReplace={() => {
+                  setShowOptions(false);
+                  data.onOpenReplaceModal?.(id);
+                }}
+                onAddErrorHandling={() => {
+                  setShowOptions(false);
+                  data.onAddErrorHandling?.(id);
+                }}
+                onSetFieldsToManual={() => {
+                  setShowOptions(false);
+                  const newMode = data.fieldsMode === "manual" ? "auto" : "manual";
+                  data.onSetFieldsMode?.(id, newMode);
+                }}
+                onDelete={() => {
+                  setShowOptions(false);
+                  data.onDelete?.(id);
+                }}
+              />
+            )}
+          </div>
         </div>
-        <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-          {data.label || "Exit loop"}
-        </span>
-        <div className="relative flex-shrink-0">
-          <button
-            ref={optionsBtnRef}
-            onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
-            className="text-slate-400 hover:text-slate-600 p-0.5 flex items-center justify-center"
-          >
-            <DotsThree className="size-4" weight="bold" />
-          </button>
-          {showOptions && (
-            <NodeOptionsMenu
-              type="action"
-              buttonRef={optionsBtnRef}
-              onClose={() => setShowOptions(false)}
-              fieldsMode={data.fieldsMode || "auto"}
-              onRename={() => {
-                setShowOptions(false);
-                data.onRename?.(id);
-              }}
-              onReplace={() => {
-                setShowOptions(false);
-                data.onOpenReplaceModal?.(id);
-              }}
-              onAddErrorHandling={() => {
-                setShowOptions(false);
-                data.onAddErrorHandling?.(id);
-              }}
-              onSetFieldsToManual={() => {
-                setShowOptions(false);
-                const newMode = data.fieldsMode === "manual" ? "auto" : "manual";
-                data.onSetFieldsMode?.(id, newMode);
-              }}
-              onDelete={() => {
-                setShowOptions(false);
-                data.onDelete?.(id);
-              }}
-            />
-          )}
-        </div>
-      </div>
 
       <Handle
         type="target"
@@ -1772,6 +1941,7 @@ function ExitLoopNode({ id, data, selected }: { id: string; data: { label?: stri
         position={Position.Bottom}
         className="!bg-teal-500 !border-white !border-2 !size-2.5 !-bottom-1"
       />
+      </div>
     </div>
   );
 }
@@ -2224,12 +2394,66 @@ function AddButtonEdge({
   );
 }
 
+// Animated Edge - shows flow animation when execution is active
+function AnimatedEdge({
+  id,
+  source,
+  target,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data,
+}: EdgeProps) {
+  const isActive = (data as { isActive?: boolean })?.isActive;
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      {/* Base edge */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          stroke: isActive ? "#3B82F6" : "#94A3B8",
+          strokeWidth: isActive ? 2.5 : 1.5,
+        }}
+      />
+      {/* Animated dashed overlay when active */}
+      {isActive && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="#3B82F6"
+          strokeWidth={2.5}
+          strokeDasharray="8 4"
+          style={{ animation: "edge-flow 0.6s linear infinite" }}
+        />
+      )}
+    </>
+  );
+}
+
 // Chat Outcome Node - subtle pill style like Lindy ("After message sent" / "After reply received")
-function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
+function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Outcome";
+  const execStyles = getExecutionStyles(data.executionStatus);
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -2245,12 +2469,13 @@ function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: s
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Subtle outcome pill - Lindy style */}
       <div
         className={`bg-gray-200 rounded-full px-3 py-1.5 border transition-all ${
           selected ? "border-cyan-400 border-2" : "border-slate-200"
-        }`}
+        } ${execStyles.containerClass}`}
       >
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">{label}</span>
@@ -2350,11 +2575,14 @@ function ComposioActionNode({
   id: string;
   data: {
     label?: string;
+    subtitle?: string;
+    credits?: number;
     description?: string;
     composioAppKey?: string;
     composioActionName?: string;
     icon?: string;
     hasOutgoingEdge?: boolean;
+    executionStatus?: ExecutionStatus;
     onSelectAction?: (actionId: string, sourceNodeId?: string) => void;
     onOpenReplaceModal?: (nodeId: string) => void;
   };
@@ -2363,24 +2591,37 @@ function ComposioActionNode({
   const [showMenu, setShowMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const execStyles = getExecutionStyles(data.executionStatus);
+
+  // Resolve icon from ACTION_ICONS mapping or use raw icon string
+  const iconConfig = data.icon && ACTION_ICONS[data.icon]
+    ? ACTION_ICONS[data.icon]
+    : { icon: data.icon || "ph:plug", color: "bg-blue-500" };
 
   return (
     <div className="flex flex-col items-center relative">
+      <ExecutionBadge status={data.executionStatus} />
       {/* Main node card */}
       <div
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow ${
           selected ? "border-2 border-cyan-400" : "border border-blue-200"
-        }`}
+        } ${execStyles.containerClass}`}
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
           {/* Icon for Composio action */}
-          <div className="size-6 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
-            <Icon icon={data.icon || "ph:plug"} className="size-3.5 text-white" />
+          <div className={`size-6 rounded-lg ${iconConfig.color} flex items-center justify-center flex-shrink-0`}>
+            <Icon icon={iconConfig.icon} className={`size-3.5 ${iconConfig.icon.startsWith("logos:") ? "" : "text-white"}`} />
           </div>
-          <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
-            {data.label || data.composioActionName || "Composio Action"}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-slate-700 text-xs block truncate">
+              {data.label || data.composioActionName || "Composio Action"}
+            </span>
+            {data.subtitle && (
+              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
+            )}
+            {data.credits != null && <CreditsBadge credits={data.credits} />}
+          </div>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -2435,6 +2676,20 @@ function ComposioActionNode({
   );
 }
 
+// Loop Container Node - visual dashed border around loop children (no handles, purely decorative)
+function LoopContainerNode({ data }: { data: { width?: number; height?: number } }) {
+  return (
+    <div
+      className="rounded-2xl border-2 border-dashed border-violet-200/60 bg-violet-50/20"
+      style={{
+        width: data.width || 400,
+        height: data.height || 300,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
 // Node types
 const nodeTypes: NodeTypes = {
   messageReceived: MessageReceivedNode,
@@ -2447,10 +2702,11 @@ const nodeTypes: NodeTypes = {
   searchKnowledgeBase: SearchKnowledgeBaseNode,
   loop: LoopNode,
   action: ActionNode,
-  composioAction: ComposioActionNode,  // NEW: Composio action node
+  composioAction: ComposioActionNode,
   sendEmail: SendEmailNode,
   peopleDataLabs: PeopleDataLabsNode,
   googleSheets: GoogleSheetsNode,
+  loopContainer: LoopContainerNode,
   // Integration node types
   gmail: IntegrationNode,
   googleDrive: IntegrationNode,
@@ -2469,6 +2725,7 @@ const nodeTypes: NodeTypes = {
 // Edge types
 const edgeTypes: EdgeTypes = {
   addButton: AddButtonEdge,
+  animated: AnimatedEdge,
 };
 
 // Common callbacks interface for node options menu
@@ -2484,6 +2741,15 @@ interface NodeCallbacks {
 interface AgentStepData {
   rolePreview?: string;
   integrations?: string[];
+}
+
+// Execution state for workflow animation
+export interface FlowExecutionState {
+  isRunning: boolean;
+  currentNodeId: string | null;
+  completedNodeIds: string[];
+  errorNodeIds: string[];
+  skippedNodeIds: string[];
 }
 
 // Flow data from template
@@ -2515,6 +2781,7 @@ interface FlowEditorCanvasProps {
   onConditionAdded?: (conditionNodeId: string, conditions: Array<{id: string; text: string}>) => void;
   onOpenReplaceModal?: (nodeId: string) => void;
   initialFlowData?: TemplateFlowData;
+  executionState?: FlowExecutionState;
 }
 
 export interface FlowEditorCanvasRef {
@@ -2536,6 +2803,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
   onConditionAdded,
   onOpenReplaceModal,
   initialFlowData,
+  executionState,
 }: FlowEditorCanvasProps, ref) {
   // Modal state for adding actions
   const [showActionModal, setShowActionModal] = useState(false);
@@ -2601,6 +2869,83 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
     style: edgeStyle,
   }), [edgeStyle]);
 
+  // ── Dynamic metadata derivation for ALL templates ──────────────────
+
+  // Capitalize helper
+  function capitalize(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // Format Composio action names: "GMAIL_SEND_EMAIL" → "Send Email"
+  function formatActionName(name: string): string {
+    return name
+      .replace(/^[A-Z_]+?_/, "") // Remove APP_PREFIX_
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+
+  // Credits lookup by icon key
+  const CREDITS_BY_ICON: Record<string, number> = {
+    perplexity: 0.5,
+    "people-data-labs": 15,
+    google: 1,
+    linkedin: 0.1,
+  };
+
+  // Derive subtitle from node data
+  function deriveSubtitle(
+    nodeType: string,
+    data: Record<string, unknown>,
+  ): string | undefined {
+    const icon = data.icon as string | undefined;
+    const composioActionName = data.composioActionName as string | undefined;
+    const composioAppKey = data.composioAppKey as string | undefined;
+
+    // Action nodes with icon → "Service → Action"
+    if (icon) {
+      const serviceName = capitalize(icon.replace(/-/g, " "));
+      if (composioActionName) {
+        return `${serviceName} → ${formatActionName(composioActionName)}`;
+      }
+      // Well-known defaults
+      const defaultActions: Record<string, string> = {
+        perplexity: "Search with Perplexity",
+        google: "Google Search",
+        ai: "Write",
+      };
+      if (defaultActions[icon]) return `${serviceName} → ${defaultActions[icon]}`;
+      return serviceName;
+    }
+
+    // Composio action nodes without icon
+    if (composioAppKey) {
+      const appName = capitalize(composioAppKey.replace(/_/g, " ").toLowerCase());
+      if (composioActionName) {
+        return `${appName} → ${formatActionName(composioActionName)}`;
+      }
+      return appName;
+    }
+
+    // Built-in node types
+    const typeSubtitles: Record<string, string> = {
+      sendEmail: "Gmail",
+      googleSheets: "Google Sheets",
+      googleCalendar: "Google Calendar",
+      chatAgent: "Chat with this Agent",
+      enterLoop: "Enter loop",
+      exitLoop: "Exit loop",
+    };
+    return typeSubtitles[nodeType];
+  }
+
+  // Derive credits from node data
+  function deriveCredits(data: Record<string, unknown>): number | undefined {
+    const icon = data.icon as string | undefined;
+    if (icon && icon in CREDITS_BY_ICON) return CREDITS_BY_ICON[icon];
+    return undefined;
+  }
+
   // Initialize nodes from template flowData or use defaults
   const initialNodes = useMemo<Node[]>(() => {
     // If we have template flowData, use it
@@ -2640,6 +2985,17 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
               : {}),
           },
         };
+
+        // Enrich with computed metadata (template data takes priority)
+        if (!baseNode.data.subtitle) {
+          baseNode.data.subtitle = deriveSubtitle(baseNode.type ?? "", baseNode.data as Record<string, unknown>);
+        }
+        if ((baseNode.data as Record<string, unknown>).credits == null) {
+          const computedCredits = deriveCredits(baseNode.data as Record<string, unknown>);
+          if (computedCredits != null) {
+            (baseNode.data as Record<string, unknown>).credits = computedCredits;
+          }
+        }
 
         flowNodes.push(baseNode);
 
@@ -2688,6 +3044,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
               position: branchPosition,
               data: {
                 conditionText: condition.text || "",
+                branchLabel: (condition as { label?: string }).label,
                 conditionIndex: index + 1,
                 hasOutgoingEdge,
                 onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId),
@@ -2703,6 +3060,75 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
 
       // Add branch nodes
       flowNodes.push(...branchNodesToAdd);
+
+      // Auto-assign loopNumber to enterLoop/exitLoop nodes that don't have one
+      const enterLoopsForNumbering = flowNodes
+        .filter(n => n.type === "enterLoop" && (n.data as Record<string, unknown>).loopNumber == null)
+        .sort((a, b) => a.position.y - b.position.y);
+
+      if (enterLoopsForNumbering.length > 0) {
+        // Find highest existing loopNumber to continue from
+        let maxExisting = 0;
+        flowNodes.forEach(n => {
+          const ln = (n.data as Record<string, unknown>).loopNumber as number | undefined;
+          if (ln != null && ln > maxExisting) maxExisting = ln;
+        });
+
+        let loopCounter = maxExisting;
+        enterLoopsForNumbering.forEach(enterNode => {
+          loopCounter++;
+          (enterNode.data as Record<string, unknown>).loopNumber = loopCounter;
+
+          // Find the closest exitLoop below this enterLoop without a loopNumber
+          const exitLoop = flowNodes
+            .filter(n =>
+              n.type === "exitLoop" &&
+              (n.data as Record<string, unknown>).loopNumber == null &&
+              n.position.y > enterNode.position.y,
+            )
+            .sort((a, b) => a.position.y - b.position.y)[0];
+
+          if (exitLoop) {
+            (exitLoop.data as Record<string, unknown>).loopNumber = loopCounter;
+          }
+        });
+      }
+
+      // Calculate loop container bounding boxes
+      const enterLoopNodes = flowNodes.filter(n => n.type === "enterLoop");
+      enterLoopNodes.forEach(enterNode => {
+        const loopNum = (enterNode.data as { loopNumber?: number }).loopNumber;
+        if (loopNum == null) return;
+        const exitNode = flowNodes.find(
+          n => n.type === "exitLoop" && (n.data as { loopNumber?: number }).loopNumber === loopNum
+        );
+        if (!exitNode) return;
+
+        // Find all nodes between enter and exit (by position Y)
+        const childNodes = flowNodes.filter(n =>
+          n.id !== enterNode.id && n.id !== exitNode.id &&
+          n.type !== "loopContainer" &&
+          n.position.y >= enterNode.position.y &&
+          n.position.y <= exitNode.position.y
+        );
+
+        const allNodes = [enterNode, exitNode, ...childNodes];
+        const padding = 40;
+        const minX = Math.min(...allNodes.map(n => n.position.x)) - padding;
+        const maxX = Math.max(...allNodes.map(n => n.position.x)) + NODE_WIDTH + padding;
+        const minY = enterNode.position.y - 10;
+        const maxY = exitNode.position.y + 60;
+
+        flowNodes.push({
+          id: `loop-container-${loopNum}`,
+          type: "loopContainer",
+          position: { x: minX, y: minY },
+          data: { width: maxX - minX, height: maxY - minY },
+          selectable: false,
+          draggable: false,
+          zIndex: -1,
+        });
+      });
 
       // Only add the "add" node if there are no condition nodes
       // (branches have their own "+" buttons)
@@ -2867,6 +3293,55 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
     stroke: "#94A3B8",
     strokeWidth: 1.5,
   };
+
+  // Inject execution status into nodes and animate edges when executionState changes
+  useEffect(() => {
+    if (!executionState) return;
+
+    // Update node execution status
+    setNodes((nds) =>
+      nds.map((node) => {
+        let status: ExecutionStatus = "idle";
+        if (executionState.currentNodeId === node.id) status = "running";
+        else if (executionState.completedNodeIds.includes(node.id)) status = "completed";
+        else if (executionState.errorNodeIds.includes(node.id)) status = "error";
+        else if (executionState.skippedNodeIds.includes(node.id)) status = "skipped";
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            executionStatus: status,
+          },
+        };
+      })
+    );
+
+    // Update edges: animate edges leading to running or completed nodes
+    setEdges((eds) =>
+      eds.map((edge) => {
+        const targetIsActive = executionState.completedNodeIds.includes(edge.target)
+          || executionState.currentNodeId === edge.target;
+
+        if (targetIsActive) {
+          return {
+            ...edge,
+            type: "animated",
+            data: { ...edge.data, isActive: true },
+          };
+        }
+        // Reset to normal for non-active edges
+        if (edge.type === "animated") {
+          return {
+            ...edge,
+            type: "addButton",
+            data: { ...edge.data, isActive: false },
+          };
+        }
+        return edge;
+      })
+    );
+  }, [executionState, setNodes, setEdges]);
 
   // Expose methods to update canvas from parent
   useImperativeHandle(ref, () => ({

@@ -38,10 +38,35 @@ export declare class InsightsQuery {
     /**
      * Get latest insights for an agent
      */
-    static getLatestInsights(agentId: string): Promise<any>;
+    static getLatestInsights(agentId: string): Promise<{
+        agent: {
+            id: string;
+            name: string;
+        };
+    } & {
+        id: string;
+        agentId: string;
+        clusters: import("@prisma/client/runtime/library").JsonValue;
+        patterns: import("@prisma/client/runtime/library").JsonValue;
+        anomalies: import("@prisma/client/runtime/library").JsonValue;
+        opportunities: import("@prisma/client/runtime/library").JsonValue;
+        generatedAt: Date;
+        timeframeStart: Date;
+        timeframeEnd: Date;
+    }>;
     /**
      * Get all insights for an agent
      */
-    static getAgentInsights(agentId: string, limit?: number): Promise<any>;
+    static getAgentInsights(agentId: string, limit?: number): Promise<{
+        id: string;
+        agentId: string;
+        clusters: import("@prisma/client/runtime/library").JsonValue;
+        patterns: import("@prisma/client/runtime/library").JsonValue;
+        anomalies: import("@prisma/client/runtime/library").JsonValue;
+        opportunities: import("@prisma/client/runtime/library").JsonValue;
+        generatedAt: Date;
+        timeframeStart: Date;
+        timeframeEnd: Date;
+    }[]>;
 }
 //# sourceMappingURL=insights-engine.d.ts.map

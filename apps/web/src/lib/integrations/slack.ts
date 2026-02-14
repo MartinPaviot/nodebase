@@ -11,6 +11,7 @@ export function getSlackAuthUrl(userId: string) {
     "channels:read",
     "channels:history",
     "users:read",
+    "users:read.email",
     "app_mentions:read",
   ].join(",");
 
@@ -54,6 +55,54 @@ export async function sendSlackMessage(
   }
 
   return data;
+}
+
+/**
+ * Send a Slack DM to a user by their email address.
+ * Looks up the Slack user ID by email, opens a DM, then sends a message.
+ */
+export async function sendSlackDM(
+  userId: string,
+  recipientEmail: string,
+  text: string,
+  blocks?: unknown[]
+) {
+  const token = await getSlackClient(userId);
+
+  // Look up Slack user by email
+  const lookupResponse = await fetch(
+    `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(recipientEmail)}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  const lookupData = await lookupResponse.json();
+
+  if (!lookupData.ok) {
+    throw new Error(`Slack user lookup failed for ${recipientEmail}: ${lookupData.error}`);
+  }
+
+  const slackUserId = lookupData.user.id;
+
+  // Open DM conversation
+  const openResponse = await fetch("https://slack.com/api/conversations.open", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ users: slackUserId }),
+  });
+  const openData = await openResponse.json();
+
+  if (!openData.ok) {
+    throw new Error(`Failed to open Slack DM: ${openData.error}`);
+  }
+
+  const dmChannelId = openData.channel.id;
+
+  // Send the message via the DM channel
+  return sendSlackMessage(userId, dmChannelId, text, blocks);
 }
 
 export async function listSlackChannels(userId: string) {

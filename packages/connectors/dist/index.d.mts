@@ -424,6 +424,9 @@ declare class GmailConnector extends BaseConnector {
     private searchEmails;
     private getEmail;
     private replyEmail;
+    private sendColdEmail;
+    private searchReplies;
+    private searchBounces;
     testConnection(context: ConnectorContext): Promise<ActionResult<boolean>>;
     getOAuthUrl(state: string, redirectUri: string): string;
     exchangeOAuthCode(code: string, redirectUri: string): Promise<ActionResult<{
@@ -437,6 +440,9 @@ declare class GmailConnector extends BaseConnector {
         expiresAt?: Date;
     }>>;
     private createMimeMessage;
+    private detectBounceType;
+    private extractOriginalRecipient;
+    private extractOriginalSubject;
     private apiRequest;
 }
 
