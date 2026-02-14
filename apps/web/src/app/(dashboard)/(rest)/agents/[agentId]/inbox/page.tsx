@@ -212,11 +212,11 @@ export default function InboxPage() {
       campaignId: campaignFilter === 'all' ? undefined : campaignFilter,
       sentiment: sentimentFilter === 'all' ? undefined : sentimentFilter,
     })
-  );
+  ) as { data: Reply[] | undefined; isLoading: boolean };
 
   const { data: campaigns } = useQuery(
     trpc.agents.getCampaigns.queryOptions({ agentId })
-  );
+  ) as { data: { id: string; name: string }[] | undefined };
 
   if (repliesLoading) {
     return <LoadingSkeleton />;

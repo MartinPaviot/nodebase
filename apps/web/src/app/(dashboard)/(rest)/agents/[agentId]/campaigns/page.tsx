@@ -158,7 +158,7 @@ export default function CampaignsPage() {
 
   const { data: campaigns, isLoading } = useQuery(
     trpc.agents.getCampaigns.queryOptions({ agentId })
-  );
+  ) as { data: CampaignSummary[] | undefined; isLoading: boolean };
 
   if (isLoading) {
     return <LoadingSkeleton />;
