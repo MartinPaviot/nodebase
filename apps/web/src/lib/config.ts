@@ -229,10 +229,16 @@ export function validateConfig(): void {
 // ============================================
 
 /**
- * Pre-loaded configuration instance
- * Use this for convenience in most cases
+ * Lazy configuration instance
+ * Config is only validated when a property is actually accessed,
+ * not at module import time. This prevents build failures when
+ * env vars are unavailable during Next.js static page generation.
  */
-export const config = getConfig();
+export const config: Config = new Proxy({} as Config, {
+  get(_, prop: string) {
+    return getConfig()[prop as keyof Config];
+  },
+});
 
 // ============================================
 // HELPER FUNCTIONS
