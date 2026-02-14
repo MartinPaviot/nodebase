@@ -46,6 +46,9 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 
+# package build outputs
+packages/**/dist/
+
 # turbo cache
 .turbo/
 

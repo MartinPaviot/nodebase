@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,10 @@ import {
   Calendar,
   Hash,
   Search,
+  AlertTriangle,
+  TrendingUp,
+  ShieldCheck,
+  Lightbulb,
 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -133,7 +138,17 @@ function ApprovalCard({
 }) {
   const config = getActionConfig(item.type);
   const ActionIcon = config.icon;
-  const details = item.details as Record<string, unknown> | null;
+  const details = item.details as (Record<string, unknown> & {
+    evalResult?: {
+      l1Passed?: boolean;
+      l2Score?: number;
+      l2Passed?: boolean;
+      l3Triggered?: boolean;
+      l3Passed?: boolean;
+      suggestions?: string[];
+      blockReason?: string;
+    };
+  }) | null;
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -161,6 +176,94 @@ function ApprovalCard({
       <CardContent className="space-y-4">
         {/* Title */}
         <div className="font-medium">{item.title}</div>
+
+        {/* Eval Results - Phase 2.3 */}
+        {details?.evalResult && (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 space-y-3 border border-blue-200/50 dark:border-blue-800/50">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck className="h-4 w-4 text-blue-600" />
+              Quality Evaluation
+            </div>
+
+            {/* L2 Score Gauge */}
+            {typeof details.evalResult.l2Score === "number" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Quality Score</span>
+                  <span className="font-semibold">
+                    {details.evalResult.l2Score}/100
+                  </span>
+                </div>
+                <Progress
+                  value={details.evalResult.l2Score}
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {details.evalResult.l2Score >= 85
+                    ? "Excellent quality"
+                    : details.evalResult.l2Score >= 60
+                    ? "Good quality, review recommended"
+                    : "Needs improvement"}
+                </p>
+              </div>
+            )}
+
+            {/* L3 Reason */}
+            {details.evalResult.l3Triggered && details.evalResult.blockReason && (
+              <div className="flex items-start gap-2 text-sm bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium text-yellow-900 dark:text-yellow-100">
+                    Advanced Check Triggered
+                  </div>
+                  <div className="text-yellow-700 dark:text-yellow-300 mt-1">
+                    {details.evalResult.blockReason}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Suggestions */}
+            {Array.isArray(details.evalResult.suggestions) &&
+              details.evalResult.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-purple-700 dark:text-purple-300">
+                    <Lightbulb className="h-4 w-4" />
+                    Suggestions
+                  </div>
+                  <ul className="space-y-1 text-sm text-muted-foreground pl-6">
+                    {details.evalResult.suggestions.map((suggestion: string, idx: number) => (
+                      <li key={idx} className="list-disc">
+                        {suggestion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+            {/* Validation Status */}
+            <div className="flex items-center gap-3 text-xs pt-2 border-t border-blue-200/50 dark:border-blue-800/50">
+              {details.evalResult.l1Passed !== false && (
+                <div className="flex items-center gap-1 text-green-600">
+                  <CheckCircle className="h-3 w-3" />
+                  <span>Basic checks passed</span>
+                </div>
+              )}
+              {details.evalResult.l1Passed === false && (
+                <div className="flex items-center gap-1 text-red-600">
+                  <XCircle className="h-3 w-3" />
+                  <span>Basic checks failed</span>
+                </div>
+              )}
+              {details.evalResult.l3Triggered && (
+                <div className="flex items-center gap-1 text-yellow-600">
+                  <TrendingUp className="h-3 w-3" />
+                  <span>Advanced check performed</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Details */}
         {details && (

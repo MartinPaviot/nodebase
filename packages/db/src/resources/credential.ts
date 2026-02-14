@@ -5,24 +5,23 @@
  * NEVER returns decrypted credentials - use getCrypto() separately.
  */
 
-import { PermissionError, type ConnectorCategory } from "@nodebase/types";
+import { PermissionError } from "@nodebase/types";
 import { prisma } from "../client";
+import type { CredentialType } from "@prisma/client";
 import {
   BaseResource,
   type ResourceAuth,
   type QueryOptions,
   buildQueryOptions,
-  workspaceScope,
 } from "./base";
 
+// Type matching actual Prisma Credential model
 interface CredentialData {
   id: string;
-  workspaceId: string;
-  userId: string;
   name: string;
-  type: string;
-  encryptedData: string;
-  expiresAt: Date | null;
+  value: string; // encrypted
+  type: CredentialType;
+  userId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,7 +44,7 @@ export class CredentialResource extends BaseResource<CredentialData> {
 
     if (!credential) return null;
 
-    if (credential.workspaceId !== auth.workspaceId) {
+    if (credential.userId !== auth.userId) {
       throw new PermissionError(auth.userId, "Credential", "read");
     }
 
@@ -53,14 +52,14 @@ export class CredentialResource extends BaseResource<CredentialData> {
   }
 
   /**
-   * Find all credentials in the workspace.
+   * Find all credentials for the user.
    */
   static async findAll(
     auth: ResourceAuth,
     options?: QueryOptions
   ): Promise<CredentialResource[]> {
     const credentials = await prisma.credential.findMany({
-      where: workspaceScope(auth),
+      where: { userId: auth.userId },
       ...buildQueryOptions(options),
     });
 
@@ -74,12 +73,12 @@ export class CredentialResource extends BaseResource<CredentialData> {
    */
   static async findByType(
     auth: ResourceAuth,
-    type: string,
+    type: CredentialType,
     options?: QueryOptions
   ): Promise<CredentialResource[]> {
     const credentials = await prisma.credential.findMany({
       where: {
-        ...workspaceScope(auth),
+        userId: auth.userId,
         type,
       },
       ...buildQueryOptions(options),
@@ -92,21 +91,21 @@ export class CredentialResource extends BaseResource<CredentialData> {
 
   /**
    * Create a new credential.
-   * NOTE: Data should already be encrypted before calling this.
+   * NOTE: Value should already be encrypted before calling this.
    */
   static async create(
     auth: ResourceAuth,
     data: {
       name: string;
-      type: string;
-      encryptedData: string;
-      expiresAt?: Date;
+      type: CredentialType;
+      value: string;
     }
   ): Promise<CredentialResource> {
     const credential = await prisma.credential.create({
       data: {
-        ...data,
-        workspaceId: auth.workspaceId,
+        name: data.name,
+        type: data.type,
+        value: data.value,
         userId: auth.userId,
       },
     });
@@ -117,10 +116,10 @@ export class CredentialResource extends BaseResource<CredentialData> {
   /**
    * Check if a credential exists for a type.
    */
-  static async exists(auth: ResourceAuth, type: string): Promise<boolean> {
+  static async exists(auth: ResourceAuth, type: CredentialType): Promise<boolean> {
     const count = await prisma.credential.count({
       where: {
-        ...workspaceScope(auth),
+        userId: auth.userId,
         type,
       },
     });
@@ -133,14 +132,14 @@ export class CredentialResource extends BaseResource<CredentialData> {
   // ============================================
 
   /**
-   * Update credential metadata (not the encrypted data).
+   * Update credential name.
    */
-  async updateMetadata(data: { name?: string; expiresAt?: Date }): Promise<CredentialResource> {
+  async updateName(name: string): Promise<CredentialResource> {
     this.assertWrite();
 
     const updated = await prisma.credential.update({
       where: { id: this.id },
-      data,
+      data: { name },
     });
 
     this._data = updated as CredentialData;
@@ -148,14 +147,14 @@ export class CredentialResource extends BaseResource<CredentialData> {
   }
 
   /**
-   * Update the encrypted data (for key rotation).
+   * Update the encrypted value (for key rotation).
    */
-  async updateEncryptedData(encryptedData: string): Promise<CredentialResource> {
+  async updateValue(value: string): Promise<CredentialResource> {
     this.assertWrite();
 
     const updated = await prisma.credential.update({
       where: { id: this.id },
-      data: { encryptedData },
+      data: { value },
     });
 
     this._data = updated as CredentialData;
@@ -173,14 +172,6 @@ export class CredentialResource extends BaseResource<CredentialData> {
     });
   }
 
-  /**
-   * Check if the credential is expired.
-   */
-  isExpired(): boolean {
-    if (!this._data.expiresAt) return false;
-    return this._data.expiresAt < new Date();
-  }
-
   // ============================================
   // Getters
   // ============================================
@@ -189,29 +180,21 @@ export class CredentialResource extends BaseResource<CredentialData> {
     return this._data.name;
   }
 
-  get type(): string {
+  get type(): CredentialType {
     return this._data.type;
-  }
-
-  get workspaceId(): string {
-    return this._data.workspaceId;
   }
 
   get userId(): string {
     return this._data.userId;
   }
 
-  get expiresAt(): Date | null {
-    return this._data.expiresAt;
-  }
-
   /**
-   * Get encrypted data for decryption.
-   * Should only be used by the connector layer.
+   * Get encrypted value for decryption.
+   * Should only be used by the connector/crypto layer.
    */
-  getEncryptedData(): string {
+  getEncryptedValue(): string {
     this.assertRead();
-    return this._data.encryptedData;
+    return this._data.value;
   }
 
   // ============================================
@@ -219,7 +202,7 @@ export class CredentialResource extends BaseResource<CredentialData> {
   // ============================================
 
   /**
-   * Returns metadata only - NEVER includes encrypted data.
+   * Returns metadata only - NEVER includes encrypted value.
    */
   toJSON(): Record<string, unknown> {
     this.assertRead();
@@ -228,10 +211,7 @@ export class CredentialResource extends BaseResource<CredentialData> {
       id: this.id,
       name: this.name,
       type: this.type,
-      workspaceId: this.workspaceId,
       userId: this.userId,
-      expiresAt: this._data.expiresAt?.toISOString() ?? null,
-      isExpired: this.isExpired(),
       createdAt: this._data.createdAt.toISOString(),
       updatedAt: this._data.updatedAt.toISOString(),
     };

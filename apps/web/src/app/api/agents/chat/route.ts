@@ -1,13 +1,7 @@
-// @ts-nocheck
-// TODO: AgentTracer API mismatch - uses planned methods (startTrace, completeTrace, etc.) not yet in @nodebase/core
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { headers } from "next/headers";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { streamText, stepCountIs, type CoreMessage } from "ai";
 import { z } from "zod";
 import { AgentModel, MessageRole, ActivityType, MemoryCategory } from "@prisma/client";
 import { executeWorkflowSync } from "@/lib/workflow-executor";
@@ -23,6 +17,17 @@ import {
   listEvents,
   createEvent,
   hasIntegration,
+  readSheet,
+  appendToSheet,
+  updateSheet,
+  createSpreadsheet,
+  listDriveFiles,
+  getDriveFile,
+  uploadDriveFile,
+  deleteDriveFile,
+  createDoc,
+  getDoc,
+  appendToDoc,
 } from "@/lib/integrations/google";
 import {
   sendSlackMessage,
@@ -40,6 +45,10 @@ import {
 import { recordMetric } from "@/lib/agent-analytics";
 import { logActivity } from "@/lib/activity-logger";
 import { AgentTracer } from "@nodebase/core";
+import { ClaudeClient, type ClaudeTool, type ClaudeToolResult, type StreamEvent, type ModelTier } from "@/lib/ai/claude-client";
+import { calculateCost } from "@/lib/config";
+import { EvalEngine, type EvalConfig, type EvalResult, type Assertion } from "@/lib/eval";
+import { formatStyleCorrectionsForPrompt } from "@/lib/style-learner";
 
 export const maxDuration = 300; // 5 minutes for Pro plan
 
@@ -50,6 +59,13 @@ const SIDE_EFFECT_ACTIONS = new Set([
   "send_slack_message",
   "create_notion_page",
   "append_to_notion",
+  "append_to_sheet",
+  "update_sheet",
+  "create_spreadsheet",
+  "upload_drive_file",
+  "delete_drive_file",
+  "create_doc",
+  "append_to_doc",
 ]);
 
 // Map action types to activity types for logging
@@ -59,6 +75,13 @@ const ACTION_TO_ACTIVITY_TYPE: Record<string, ActivityType> = {
   send_slack_message: ActivityType.SLACK_MESSAGE_SENT,
   create_notion_page: ActivityType.TOOL_CALLED,
   append_to_notion: ActivityType.TOOL_CALLED,
+  append_to_sheet: ActivityType.TOOL_CALLED,
+  update_sheet: ActivityType.TOOL_CALLED,
+  create_spreadsheet: ActivityType.TOOL_CALLED,
+  upload_drive_file: ActivityType.TOOL_CALLED,
+  delete_drive_file: ActivityType.TOOL_CALLED,
+  create_doc: ActivityType.TOOL_CALLED,
+  append_to_doc: ActivityType.TOOL_CALLED,
 };
 
 // Action labels for user display
@@ -68,6 +91,13 @@ const ACTION_LABELS: Record<string, string> = {
   send_slack_message: "Send Slack Message",
   create_notion_page: "Create Notion Page",
   append_to_notion: "Append to Notion Page",
+  append_to_sheet: "Append to Google Sheet",
+  update_sheet: "Update Google Sheet",
+  create_spreadsheet: "Create Spreadsheet",
+  upload_drive_file: "Upload to Google Drive",
+  delete_drive_file: "Delete from Google Drive",
+  create_doc: "Create Google Doc",
+  append_to_doc: "Append to Google Doc",
 };
 
 type AgentToolWithWorkflow = AgentTool & { workflow: Workflow | null };
@@ -93,12 +123,12 @@ export async function POST(request: Request) {
       return new Response("Missing conversationId", { status: 400 });
     }
 
-    // useChat sends messages array - get the last user message
+    // Frontend sends messages array - get the last user message
     const lastMessage = incomingMessages?.[incomingMessages.length - 1];
     if (!lastMessage || lastMessage.role !== "user") {
       return new Response("Missing user message", { status: 400 });
     }
-    const message = lastMessage.content;
+    const message = lastMessage.content as string;
 
     // Get conversation with agent and messages
     const conversation = await prisma.conversation.findUnique({
@@ -112,7 +142,6 @@ export async function POST(request: Request) {
                 workflow: true,
               },
             },
-            // Multi-agent connections
             connectedTo: {
               where: { enabled: true },
               include: {
@@ -142,16 +171,44 @@ export async function POST(request: Request) {
     const agent = conversation.agent;
 
     // Initialize AgentTracer for observability
-    tracer = new AgentTracer({
-      agentId: agent.id,
-      conversationId,
-      userId: session.user.id,
-      workspaceId: agent.workspaceId || session.user.id, // Use workspaceId or fallback to userId
-      maxSteps: 5,
-    });
-
-    // Start tracing
-    await tracer.startTrace();
+    tracer = new AgentTracer(
+      {
+        agentId: agent.id,
+        conversationId,
+        userId: session.user.id,
+        workspaceId: agent.workspaceId || session.user.id,
+        triggeredBy: "user",
+        userMessage: message,
+      },
+      async (trace) => {
+        // Persist trace to AgentTrace table
+        try {
+          await prisma.agentTrace.create({
+            data: {
+              id: trace.id,
+              agentId: trace.agentId,
+              conversationId: trace.conversationId || conversationId,
+              userId: trace.userId,
+              workspaceId: trace.workspaceId,
+              status: trace.status === "completed" ? "COMPLETED" : trace.status === "failed" ? "FAILED" : "COMPLETED",
+              steps: JSON.parse(JSON.stringify(trace.steps)),
+              totalSteps: trace.metrics.stepsCount,
+              maxSteps: 5,
+              totalTokensIn: trace.metrics.totalTokensIn,
+              totalTokensOut: trace.metrics.totalTokensOut,
+              totalCost: trace.metrics.totalCost,
+              toolCalls: [],
+              toolSuccesses: trace.metrics.toolCalls,
+              toolFailures: 0,
+              latencyMs: trace.durationMs,
+              completedAt: trace.completedAt,
+            },
+          });
+        } catch (saveError) {
+          console.warn("Failed to persist trace:", saveError);
+        }
+      }
+    );
 
     // Get API key
     let apiKey: string | undefined;
@@ -165,8 +222,13 @@ export async function POST(request: Request) {
       });
     }
 
-    // Create model instance based on agent configuration
-    const model = createModel(agent.model, apiKey);
+    // Only Anthropic models supported with ClaudeClient streaming
+    if (agent.model !== AgentModel.ANTHROPIC) {
+      return new Response(
+        `Model ${agent.model} is not yet supported. Please use an Anthropic model.`,
+        { status: 400 }
+      );
+    }
 
     // Save user message to database
     await prisma.message.create({
@@ -177,19 +239,15 @@ export async function POST(request: Request) {
       },
     });
 
-    // Build message history for context (only user and assistant messages)
-    const messageHistory: CoreMessage[] = conversation.messages
+    // Build message history (user + assistant messages only)
+    const messageHistory = conversation.messages
       .filter((msg) => msg.role !== MessageRole.TOOL)
       .map((msg) => ({
-        role: msg.role.toLowerCase() as "user" | "assistant" | "system",
+        role: msg.role.toLowerCase() as "user" | "assistant",
         content: msg.content,
       }));
 
-    // Add current message
-    messageHistory.push({
-      role: "user" as const,
-      content: message,
-    });
+    messageHistory.push({ role: "user" as const, content: message });
 
     // RAG: Search knowledge base for relevant context
     let ragContext = "";
@@ -199,7 +257,6 @@ export async function POST(request: Request) {
         ragContext = formatSearchResultsForContext(knowledgeResults);
       }
     } catch (error) {
-      // Log but don't fail the request if RAG search fails
       console.warn("RAG search failed:", error);
     }
 
@@ -209,246 +266,374 @@ export async function POST(request: Request) {
       select: { key: true, value: true, category: true },
     });
 
-    // Build enhanced system prompt with Context, Memories, and RAG
+    // Build enhanced system prompt
     let enhancedSystemPrompt = agent.systemPrompt;
 
-    // Add Context (read-only global instructions)
     if (agent.context) {
       enhancedSystemPrompt += `\n\n## Context (Always keep in mind)\n${agent.context}`;
     }
 
-    // Add Memories (agent-editable data)
     if (memories.length > 0) {
       enhancedSystemPrompt += `\n\n## Memories\n${memories.map(m => `- ${m.key}: ${m.value}`).join("\n")}`;
     }
 
-    // Add RAG context if available
+    // Phase 3.4: Inject style corrections
+    const styleGuide = await formatStyleCorrectionsForPrompt(agent.id);
+    if (styleGuide) {
+      enhancedSystemPrompt += `\n\n${styleGuide}`;
+    }
+
     if (ragContext) {
       enhancedSystemPrompt += `\n\n${ragContext}\n\nUse the above knowledge base context to inform your responses when relevant. If the context doesn't contain relevant information, rely on your general knowledge.`;
     }
 
-    // Add memory tools instructions
     enhancedSystemPrompt += `\n\nYou have access to memory tools to save, retrieve, and delete memories. Use these to remember important information across conversations (like user preferences, important facts, or standing instructions).`;
 
-    // Create tools from agent tools (connected workflows)
+    // Create tools from all sources
     const workflowTools = createToolsFromAgentTools(
       agent.agentTools as AgentToolWithWorkflow[],
       session.user.id
     );
 
-    // Create tools from multi-agent connections
     const agentConnectionTools = createToolsFromAgentConnections(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      agent.connectedTo as any[]
+      agent.connectedTo as AgentConnectionWithTarget[]
     );
 
-    // Create integration tools (Gmail, Calendar)
-    // Pass safeMode and conversationId for confirmation handling
     const integrationTools = await createIntegrationTools(
       session.user.id,
       agent.safeMode,
-      conversationId
+      conversationId,
+      { id: agent.id, evalRules: agent.evalRules }
     );
 
-    // Create memory tools for the agent to manage its own memories
     const memoryTools = createMemoryTools(agent.id);
 
-    // Merge all tools
-    const tools = { ...workflowTools, ...agentConnectionTools, ...integrationTools, ...memoryTools };
+    // Merge all tools (Zod + execute format)
+    const toolMap: Record<string, ToolDef> = {
+      ...workflowTools,
+      ...agentConnectionTools,
+      ...integrationTools,
+      ...memoryTools,
+    };
 
-    // Stream the response
-    const result = streamText({
-      model,
-      system: enhancedSystemPrompt,
-      messages: messageHistory,
-      temperature: agent.temperature,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: Object.keys(tools).length > 0 ? (tools as any) : undefined,
-      stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
-      onFinish: async ({ text, steps, usage }) => {
-        // Record LLM call in trace (aggregate usage from all steps)
+    // Convert to Anthropic API format
+    const claudeTools: ClaudeTool[] = Object.entries(toolMap).map(([name, tool]) => ({
+      name,
+      description: tool.description,
+      input_schema: zodToInputSchema(tool.parameters),
+    }));
+
+    // Initialize ClaudeClient
+    const claudeClient = new ClaudeClient(apiKey);
+    const llmTier: ModelTier = "smart";
+
+    // Track state for post-processing
+    let assistantContent = "";
+    let totalToolCallCount = 0;
+    const tracerRef = tracer;
+    const encoder = new TextEncoder();
+
+    // Track eval results for Phase 2.2
+    const evalResults: Array<{
+      toolName: string;
+      l1Passed: boolean;
+      l2Score: number;
+      l2Passed: boolean;
+      l3Triggered: boolean;
+      l3Passed: boolean;
+    }> = [];
+
+    // Create SSE stream
+    const readable = new ReadableStream({
+      async start(controller) {
         try {
-          const totalLatency = Date.now() - startTime;
-          const tokensIn = usage?.promptTokens || 0;
-          const tokensOut = usage?.completionTokens || 0;
-
-          // Estimate cost based on model (rough approximation)
-          const costPerInputToken = agent.model === AgentModel.ANTHROPIC ? 0.003 / 1000 : 0.01 / 1000;
-          const costPerOutputToken = agent.model === AgentModel.ANTHROPIC ? 0.015 / 1000 : 0.03 / 1000;
-          const totalCost = (tokensIn * costPerInputToken) + (tokensOut * costPerOutputToken);
-
-          await tracer.recordLlmCall({
-            agentId: agent.id,
+          const streamGen = claudeClient.chatStream({
+            model: llmTier,
+            messages: messageHistory,
+            systemPrompt: enhancedSystemPrompt,
+            temperature: agent.temperature,
+            maxSteps: 5,
+            tools: claudeTools.length > 0 ? claudeTools : undefined,
             userId: session.user.id,
-            workspaceId: agent.workspaceId || session.user.id,
-            model: agent.model,
-            tokensIn,
-            tokensOut,
-            cost: totalCost,
-            latencyMs: totalLatency,
-            stepNumber: steps.length,
-            action: 'response',
-          });
-        } catch (traceError) {
-          console.warn('Failed to record LLM call in trace:', traceError);
-        }
-
-        // Log user message activity
-        try {
-          await logActivity(
+            agentId: agent.id,
             conversationId,
-            "MESSAGE_RECEIVED",
-            "User sent a message",
-            { preview: message.slice(0, 100) }
-          );
-        } catch (e) {
-          console.warn("Failed to log message activity:", e);
-        }
 
-        // Save tool call messages from all steps and log activities
-        for (const step of steps) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const toolCalls = step.toolCalls as any[] | undefined;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const toolResults = step.toolResults as any[] | undefined;
-
-          if (toolCalls && toolCalls.length > 0) {
-            for (let i = 0; i < toolCalls.length; i++) {
-              const toolCall = toolCalls[i];
-              const toolResult = toolResults?.[i];
-
-              // Save message to database
-              await prisma.message.create({
-                data: {
-                  conversationId,
-                  role: MessageRole.TOOL,
-                  content: `Called tool: ${toolCall.toolName}`,
-                  toolName: toolCall.toolName,
-                  toolInput: toolCall.args ?? undefined,
-                  toolOutput: toolResult?.result ?? undefined,
-                },
-              });
-
-              // Log activity for tool call
+            onStepComplete: async (aiEvent) => {
+              // Log LLM call in tracer
               try {
-                // Determine if tool succeeded or failed
-                const result = toolResult?.result as Record<string, unknown> | undefined;
-                const hasError = result?.error === true;
-
-                if (hasError) {
-                  await logActivity(
-                    conversationId,
-                    "TOOL_FAILED",
-                    `Failed: ${toolCall.toolName}`,
-                    { error: result?.message || "Unknown error" }
-                  );
-                } else {
-                  // Log specific activity types for known tools
-                  const activityType = ACTION_TO_ACTIVITY_TYPE[toolCall.toolName] || "TOOL_COMPLETED";
-                  await logActivity(
-                    conversationId,
-                    activityType as ActivityType,
-                    `Completed: ${toolCall.toolName}`,
-                    { args: toolCall.args, result: result }
-                  );
-                }
-              } catch (e) {
-                console.warn("Failed to log tool activity:", e);
+                tracerRef.logLLMCall({
+                  model: aiEvent.model,
+                  input: `Step ${aiEvent.stepNumber}`,
+                  output: aiEvent.action,
+                  tokensIn: aiEvent.tokensIn,
+                  tokensOut: aiEvent.tokensOut,
+                  cost: aiEvent.cost,
+                  durationMs: aiEvent.latency,
+                });
+              } catch (traceError) {
+                console.warn("Failed to log LLM call in trace:", traceError);
               }
-            }
-          }
-        }
+            },
 
-        // Save assistant message (final response)
-        if (text) {
-          await prisma.message.create({
-            data: {
-              conversationId,
-              role: MessageRole.ASSISTANT,
-              content: text,
+            onToolCall: async (toolCall) => {
+              const tool = toolMap[toolCall.name];
+              if (!tool) {
+                return {
+                  tool_use_id: toolCall.id,
+                  content: JSON.stringify({ error: true, message: `Unknown tool: ${toolCall.name}` }),
+                  is_error: true,
+                };
+              }
+
+              try {
+                const result = await tool.execute(toolCall.input);
+                totalToolCallCount++;
+
+                // Collect eval results if present (Phase 2.2)
+                const resultWithEval = result as Record<string, unknown> & {
+                  evalResult?: {
+                    l1Passed?: boolean;
+                    l2Score?: number;
+                    l2Passed?: boolean;
+                    l3Triggered?: boolean;
+                    l3Passed?: boolean;
+                  };
+                };
+                if (resultWithEval?.evalResult) {
+                  evalResults.push({
+                    toolName: toolCall.name,
+                    l1Passed: resultWithEval.evalResult.l1Passed ?? true,
+                    l2Score: resultWithEval.evalResult.l2Score ?? 100,
+                    l2Passed: resultWithEval.evalResult.l2Passed ?? true,
+                    l3Triggered: resultWithEval.evalResult.l3Triggered ?? false,
+                    l3Passed: resultWithEval.evalResult.l3Passed ?? true,
+                  });
+                }
+
+                // Save tool message to DB
+                await prisma.message.create({
+                  data: {
+                    conversationId,
+                    role: MessageRole.TOOL,
+                    content: `Called tool: ${toolCall.name}`,
+                    toolName: toolCall.name,
+                    toolInput: toolCall.input as Record<string, string | number | boolean | null>,
+                    toolOutput: result as Record<string, string | number | boolean | null>,
+                  },
+                });
+
+                // Log activity
+                try {
+                  const hasError = result?.error === true;
+                  if (hasError) {
+                    await logActivity(
+                      conversationId,
+                      ActivityType.TOOL_FAILED,
+                      `Failed: ${toolCall.name}`,
+                      { error: result?.message || "Unknown error" }
+                    );
+                  } else {
+                    const activityType = ACTION_TO_ACTIVITY_TYPE[toolCall.name] || ActivityType.TOOL_COMPLETED;
+                    await logActivity(
+                      conversationId,
+                      activityType,
+                      `Completed: ${toolCall.name}`,
+                      { args: toolCall.input, result }
+                    );
+                  }
+                } catch (e) {
+                  console.warn("Failed to log tool activity:", e);
+                }
+
+                // Log tool call in tracer
+                try {
+                  tracerRef.logToolCall({
+                    toolName: toolCall.name,
+                    input: toolCall.input as Record<string, unknown>,
+                    output: (result as Record<string, unknown>) ?? null,
+                    success: result?.error !== true,
+                    durationMs: 0,
+                  });
+                } catch (traceError) {
+                  console.warn("Failed to log tool call in trace:", traceError);
+                }
+
+                return {
+                  tool_use_id: toolCall.id,
+                  content: JSON.stringify(result),
+                } satisfies ClaudeToolResult;
+              } catch (error) {
+                console.error(`Tool "${toolCall.name}" execution error:`, error);
+
+                await logActivity(
+                  conversationId,
+                  ActivityType.TOOL_FAILED,
+                  `Failed: ${toolCall.name}`,
+                  { error: error instanceof Error ? error.message : "Unknown error" }
+                ).catch(() => {});
+
+                return {
+                  tool_use_id: toolCall.id,
+                  content: JSON.stringify({
+                    error: true,
+                    message: error instanceof Error ? error.message : "Tool execution failed",
+                  }),
+                  is_error: true,
+                } satisfies ClaudeToolResult;
+              }
             },
           });
 
-          // Log assistant message activity
+          // Consume stream and emit SSE events
+          for await (const event of streamGen) {
+            if (event.type === "text-delta") {
+              assistantContent += event.delta;
+            }
+
+            // Skip internal events that the frontend doesn't need
+            if (event.type === "step-complete") continue;
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          }
+
+          // Post-processing after stream completes
+          // Log user message activity
           try {
             await logActivity(
               conversationId,
-              "MESSAGE_SENT",
-              "Assistant sent a message",
-              { preview: text.slice(0, 100) }
+              ActivityType.MESSAGE_RECEIVED,
+              "User sent a message",
+              { preview: message.slice(0, 100) }
             );
           } catch (e) {
-            console.warn("Failed to log assistant message activity:", e);
+            console.warn("Failed to log message activity:", e);
           }
-        }
 
-        // Update conversation timestamp
-        await prisma.conversation.update({
-          where: { id: conversationId },
-          data: { updatedAt: new Date() },
-        });
+          // Save assistant message
+          if (assistantContent) {
+            await prisma.message.create({
+              data: {
+                conversationId,
+                role: MessageRole.ASSISTANT,
+                content: assistantContent,
+              },
+            });
 
-        // Auto-generate title if this is the first exchange
-        if (conversation.messages.length === 0 && !conversation.title) {
-          // Use first few words of user message as title
-          const title =
-            message.slice(0, 50) + (message.length > 50 ? "..." : "");
-          await prisma.conversation.update({
-            where: { id: conversationId },
-            data: { title },
-          });
-        }
-
-        // Record analytics metrics
-        try {
-          // Count tool calls from all steps
-          let totalToolCalls = 0;
-          for (const step of steps) {
-            const toolCalls = step.toolCalls as unknown[] | undefined;
-            if (toolCalls) {
-              totalToolCalls += toolCalls.length;
+            try {
+              await logActivity(
+                conversationId,
+                ActivityType.MESSAGE_SENT,
+                "Assistant sent a message",
+                { preview: assistantContent.slice(0, 100) }
+              );
+            } catch (e) {
+              console.warn("Failed to log assistant message activity:", e);
             }
           }
 
-          // Record metrics for this agent
-          await recordMetric(agent.id, {
-            messages: 2, // User message + assistant response
-            toolCalls: totalToolCalls > 0 ? totalToolCalls : undefined,
+          // Update conversation timestamp
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: { updatedAt: new Date() },
           });
 
-          // If this is the first message in conversation, also count new conversation
-          if (conversation.messages.length === 0) {
-            await recordMetric(agent.id, {
-              conversations: 1,
+          // Auto-generate title if first exchange
+          if (conversation.messages.length === 0 && !conversation.title) {
+            const title = message.slice(0, 50) + (message.length > 50 ? "..." : "");
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: { title },
             });
           }
-        } catch (metricError) {
-          // Don't fail the request if metrics recording fails
-          console.warn("Failed to record metrics:", metricError);
-        }
 
-        // Complete the trace
-        try {
-          await tracer.completeTrace({
-            latencyMs: Date.now() - startTime,
-          });
-        } catch (traceError) {
-          console.warn('Failed to complete trace:', traceError);
+          // Record analytics metrics
+          try {
+            await recordMetric(agent.id, {
+              messages: 2,
+              toolCalls: totalToolCallCount > 0 ? totalToolCallCount : undefined,
+            });
+
+            if (conversation.messages.length === 0) {
+              await recordMetric(agent.id, { conversations: 1 });
+            }
+          } catch (metricError) {
+            console.warn("Failed to record metrics:", metricError);
+          }
+
+          // Save eval results to AgentTrace (Phase 2.2)
+          if (evalResults.length > 0) {
+            try {
+              const traceId = tracerRef.getTraceId();
+
+              // Aggregate eval results
+              const allL1Passed = evalResults.every((r) => r.l1Passed);
+              const avgL2Score = evalResults.reduce((sum, r) => sum + r.l2Score, 0) / evalResults.length;
+              const anyL3Triggered = evalResults.some((r) => r.l3Triggered);
+              const anyL3Blocked = evalResults.some((r) => !r.l3Passed && r.l3Triggered);
+
+              await prisma.agentTrace.update({
+                where: { id: traceId },
+                data: {
+                  l1Passed: allL1Passed,
+                  l2Score: Math.round(avgL2Score),
+                  l3Triggered: anyL3Triggered,
+                  l3Blocked: anyL3Blocked,
+                },
+              });
+
+              console.log(`[AgentTracer] Eval results saved for trace ${traceId}: L1=${allL1Passed}, L2=${Math.round(avgL2Score)}, L3Triggered=${anyL3Triggered}`);
+            } catch (evalSaveError) {
+              console.warn("Failed to save eval results to AgentTrace:", evalSaveError);
+            }
+          }
+
+          // Complete the trace and persist to DB via onSave callback
+          try {
+            await tracerRef.complete({ status: "completed" });
+          } catch (completeError) {
+            console.warn("Failed to complete trace:", completeError);
+          }
+        } catch (error) {
+          console.error("Stream error:", error);
+
+          // Send error event to client
+          const errorEvent: StreamEvent = {
+            type: "error",
+            message: error instanceof Error ? error.message : "Stream error",
+          };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
+
+          // Log error in trace
+          try {
+            tracerRef.logError(error instanceof Error ? error : new Error("Unknown error"));
+            await tracerRef.complete({ status: "failed" });
+          } catch (traceError) {
+            console.warn("Failed to log error in trace:", traceError);
+          }
+        } finally {
+          controller.close();
         }
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     console.error("Chat error:", error);
 
-    // Fail the trace if it was initialized
+    // Log error in trace if initialized
     try {
-      if (typeof tracer !== 'undefined' && tracer) {
-        await tracer.failTrace(error instanceof Error ? error : new Error('Unknown error'));
+      if (tracer) {
+        tracer.logError(error instanceof Error ? error : new Error("Unknown error"));
+        await tracer.complete({ status: "failed" });
       }
     } catch (traceError) {
-      console.warn('Failed to record trace failure:', traceError);
+      console.warn("Failed to log error in trace:", traceError);
     }
 
     return new Response(
@@ -458,27 +643,87 @@ export async function POST(request: Request) {
   }
 }
 
-function createModel(modelType: AgentModel, apiKey: string) {
-  switch (modelType) {
-    case AgentModel.ANTHROPIC: {
-      const anthropic = createAnthropic({ apiKey });
-      return anthropic("claude-sonnet-4-5");
-    }
-    case AgentModel.OPENAI: {
-      const openai = createOpenAI({ apiKey });
-      return openai("gpt-4o");
-    }
-    case AgentModel.GEMINI: {
-      const google = createGoogleGenerativeAI({ apiKey });
-      return google("gemini-1.5-pro");
-    }
-    default:
-      throw new Error(`Unsupported model type: ${modelType}`);
-  }
+// ============================================
+// TOOL TYPES & ZOD → JSON SCHEMA CONVERTER
+// ============================================
+
+interface ToolDef {
+  description: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parameters: z.ZodObject<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute: (args: any) => Promise<Record<string, unknown>>;
 }
 
 /**
- * Sanitize tool name to match AI SDK requirements (alphanumeric + underscores)
+ * Convert a Zod schema to JSON Schema format for Anthropic API
+ */
+function zodToInputSchema(schema: z.ZodTypeAny): ClaudeTool["input_schema"] {
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape;
+    const properties: Record<string, unknown> = {};
+    const required: string[] = [];
+
+    for (const [key, value] of Object.entries(shape)) {
+      const { jsonSchema, isOptional } = convertZodType(value as z.ZodTypeAny);
+      properties[key] = jsonSchema;
+      if (!isOptional) {
+        required.push(key);
+      }
+    }
+
+    return { type: "object", properties, ...(required.length > 0 ? { required } : {}) };
+  }
+
+  return { type: "object", properties: {} };
+}
+
+function convertZodType(zodType: z.ZodTypeAny): { jsonSchema: Record<string, unknown>; isOptional: boolean } {
+  let isOptional = false;
+  let current = zodType;
+
+  // Unwrap optional and default wrappers
+  while (true) {
+    if (current instanceof z.ZodOptional) {
+      isOptional = true;
+      current = current.unwrap();
+    } else if (current instanceof z.ZodDefault) {
+      isOptional = true;
+      current = current.removeDefault();
+    } else {
+      break;
+    }
+  }
+
+  const description = current.description;
+  let schema: Record<string, unknown> = {};
+
+  if (current instanceof z.ZodString) {
+    schema = { type: "string" };
+  } else if (current instanceof z.ZodNumber) {
+    schema = { type: "number" };
+  } else if (current instanceof z.ZodBoolean) {
+    schema = { type: "boolean" };
+  } else if (current instanceof z.ZodArray) {
+    const itemSchema = convertZodType(current.element);
+    schema = { type: "array", items: itemSchema.jsonSchema };
+  } else if (current instanceof z.ZodEnum) {
+    schema = { type: "string", enum: current.options };
+  } else if (current instanceof z.ZodObject) {
+    schema = zodToInputSchema(current);
+  } else {
+    schema = { type: "string" };
+  }
+
+  if (description) {
+    schema.description = description;
+  }
+
+  return { jsonSchema: schema, isOptional };
+}
+
+/**
+ * Sanitize tool name to match API requirements (alphanumeric + underscores)
  */
 function sanitizeToolName(name: string): string {
   return name
@@ -515,7 +760,7 @@ function createToolsFromAgentTools(
           // Parse input if provided
           const initialData = args.input ? JSON.parse(args.input) : {};
 
-          // Workflow-based tool (legacy)
+          // Workflow-based tool
           if (agentTool.workflowId) {
             const result = await executeWorkflowSync({
               workflowId: agentTool.workflowId,
@@ -533,39 +778,10 @@ function createToolsFromAgentTools(
             return result.output ?? { success: true };
           }
 
-          // Composio-based tool (new)
-          if (agentTool.type === "composio_action") {
-            const config = agentTool.config as Record<string, unknown>;
-            const appKey = config?.appKey as string;
-            const actionName = config?.actionName as string;
-
-            if (!appKey || !actionName) {
-              return {
-                error: true,
-                message: "Invalid Composio tool configuration: missing appKey or actionName",
-              };
-            }
-
-            const { getComposio } = await import("@/lib/composio-server");
-            const composio = getComposio();
-
-            // Merge saved config with runtime input
-            const actionInput = {
-              ...initialData,
-            };
-
-            const result = await composio.executeAction(userId, {
-              name: actionName,
-              input: actionInput,
-            });
-
-            return result as Record<string, unknown>;
-          }
-
-          // Invalid tool configuration
+          // No valid tool configuration
           return {
             error: true,
-            message: "Invalid tool configuration: missing workflowId or Composio config",
+            message: "Invalid tool configuration: missing workflowId",
           };
         } catch (error) {
           console.error(`Tool "${agentTool.name}" execution error:`, error);
@@ -597,7 +813,7 @@ type AgentConnectionWithTarget = {
 };
 
 /**
- * Convert agent connections to AI SDK tool format for multi-agent communication
+ * Convert agent connections to tool format for multi-agent communication
  */
 function createToolsFromAgentConnections(
   connections: AgentConnectionWithTarget[]
@@ -621,7 +837,6 @@ function createToolsFromAgentConnections(
         try {
           const targetAgent = connection.targetAgent;
 
-          // Get API key for target agent
           if (!targetAgent.credential) {
             return {
               error: true,
@@ -629,22 +844,30 @@ function createToolsFromAgentConnections(
             };
           }
 
-          const apiKey = decrypt(targetAgent.credential.value);
-          const model = createModel(targetAgent.model, apiKey);
+          const targetApiKey = decrypt(targetAgent.credential.value);
 
-          // Generate response from target agent
-          const result = await import("ai").then(({ generateText }) =>
-            generateText({
-              model,
-              system: targetAgent.systemPrompt,
-              prompt: args.message,
+          // Use ClaudeClient for Anthropic models
+          if (targetAgent.model === AgentModel.ANTHROPIC) {
+            const client = new ClaudeClient(targetApiKey);
+            const result = await client.chat({
+              model: "smart",
+              messages: [{ role: "user", content: args.message }],
+              systemPrompt: targetAgent.systemPrompt,
               temperature: targetAgent.temperature,
-            })
-          );
+              userId: "", // Multi-agent call, no user context
+              maxSteps: 3,
+            });
 
+            return {
+              agentName: targetAgent.name,
+              response: result.content,
+            };
+          }
+
+          // Unsupported model for multi-agent
           return {
-            agentName: targetAgent.name,
-            response: result.text,
+            error: true,
+            message: `Agent "${targetAgent.name}" uses unsupported model: ${targetAgent.model}`,
           };
         } catch (error) {
           console.error(
@@ -667,20 +890,122 @@ function createToolsFromAgentConnections(
 }
 
 /**
- * Helper function to create a safe mode wrapper for side-effect tools
+ * Get default eval rules if agent.evalRules is null
+ */
+function getDefaultEvalRules(): {
+  assertions: Assertion[];
+  minConfidence: number;
+  l3Trigger: "always" | "on_irreversible_action" | "on_l2_fail";
+  autoSendThreshold: number;
+} {
+  return {
+    assertions: [
+      { check: "no_placeholders", severity: "block" },
+      { check: "has_real_content", severity: "block" },
+      { check: "contains_recipient_name", severity: "warn" },
+    ],
+    minConfidence: 60,
+    l3Trigger: "on_irreversible_action",
+    autoSendThreshold: 85,
+  };
+}
+
+/**
+ * Extract content to evaluate from tool args
+ */
+function extractContentForEval(toolName: string, args: Record<string, unknown>): string {
+  switch (toolName) {
+    case "send_email":
+      return (args.body as string) || "";
+    case "send_slack_message":
+      return (args.text as string) || (args.message as string) || "";
+    case "create_notion_page":
+    case "append_to_notion":
+      return (args.content as string) || "";
+    case "create_doc":
+    case "append_to_doc":
+      return (args.content as string) || (args.text as string) || "";
+    default:
+      return JSON.stringify(args);
+  }
+}
+
+/**
+ * Helper function to create a safe mode wrapper for side-effect tools with EvalEngine integration
  */
 function createSafeModeWrapper(
   toolName: string,
   originalExecute: (args: Record<string, unknown>) => Promise<Record<string, unknown>>,
   safeMode: boolean,
-  conversationId: string
+  conversationId: string,
+  agent: { id: string; evalRules: unknown },
+  userId: string
 ) {
   if (!safeMode || !SIDE_EFFECT_ACTIONS.has(toolName)) {
     return originalExecute;
   }
 
   return async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
-    // Create a ConversationActivity requiring confirmation
+    // Extract content to evaluate
+    const contentToEval = extractContentForEval(toolName, args);
+
+    // Get eval rules from agent or use defaults
+    const evalRules = agent.evalRules
+      ? (agent.evalRules as {
+          assertions?: Assertion[];
+          minConfidence?: number;
+          l3Trigger?: "always" | "on_irreversible_action" | "on_l2_fail";
+          autoSendThreshold?: number;
+        })
+      : getDefaultEvalRules();
+
+    // Run evaluation
+    const evalResult: EvalResult = await EvalEngine.evaluate({
+      text: contentToEval,
+      userId,
+      action: toolName,
+      context: args,
+      enableL1: true,
+      l1Assertions: evalRules.assertions || getDefaultEvalRules().assertions,
+      enableL2: true,
+      l2MinScore: evalRules.minConfidence || 60,
+      enableL3: true,
+      l3Trigger: evalRules.l3Trigger || "on_irreversible_action",
+      l3AutoSendThreshold: evalRules.autoSendThreshold || 85,
+    });
+
+    // L1 or L3 hard block - return error immediately
+    if (!evalResult.passed && (evalResult.blockReason?.includes("L1") || evalResult.blockReason?.includes("L3"))) {
+      return {
+        error: true,
+        blocked: true,
+        reason: evalResult.blockReason,
+        suggestions: evalResult.suggestions,
+        evalResult: {
+          l1Passed: evalResult.l1Passed,
+          l2Score: evalResult.l2Score,
+          l3Triggered: evalResult.l3Triggered,
+          l3Passed: evalResult.l3Passed,
+        },
+      };
+    }
+
+    // Can auto-send - execute directly without confirmation
+    if (evalResult.canAutoSend && evalResult.passed) {
+      const result = await originalExecute(args);
+      return {
+        ...result,
+        autoSent: true,
+        evalResult: {
+          l1Passed: evalResult.l1Passed,
+          l2Score: evalResult.l2Score,
+          l3Triggered: evalResult.l3Triggered,
+          l3Passed: evalResult.l3Passed,
+        },
+      };
+    }
+
+    // Requires approval - create ConversationActivity with eval details
     const activity = await prisma.conversationActivity.create({
       data: {
         conversationId,
@@ -689,6 +1014,15 @@ function createSafeModeWrapper(
         details: {
           actionType: toolName,
           actionArgs: args as Record<string, string | number | boolean | null>,
+          evalResult: {
+            l1Passed: evalResult.l1Passed,
+            l2Score: evalResult.l2Score,
+            l2Passed: evalResult.l2Passed,
+            l3Triggered: evalResult.l3Triggered,
+            l3Passed: evalResult.l3Passed,
+            suggestions: evalResult.suggestions,
+            blockReason: evalResult.blockReason,
+          },
         },
         requiresConfirmation: true,
       },
@@ -701,6 +1035,14 @@ function createSafeModeWrapper(
       actionLabel: ACTION_LABELS[toolName] || toolName,
       message: `This action requires your confirmation. Please review the details and confirm or reject the action.`,
       details: args,
+      evalResult: {
+        l1Passed: evalResult.l1Passed,
+        l2Score: evalResult.l2Score,
+        l2Passed: evalResult.l2Passed,
+        l3Triggered: evalResult.l3Triggered,
+        l3Passed: evalResult.l3Passed,
+        suggestions: evalResult.suggestions,
+      },
     };
   };
 }
@@ -711,7 +1053,8 @@ function createSafeModeWrapper(
 async function createIntegrationTools(
   userId: string,
   safeMode: boolean = false,
-  conversationId?: string
+  conversationId?: string,
+  agent?: { id: string; evalRules: unknown }
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: Record<string, any> = {};
@@ -886,6 +1229,203 @@ async function createIntegrationTools(
             error: true,
             message: error instanceof Error ? error.message : "Failed to create calendar event",
           };
+        }
+      },
+    };
+  }
+
+  // Check Google Sheets integration
+  const hasSheets = await hasIntegration(userId, "GOOGLE_SHEETS");
+  if (hasSheets) {
+    tools.read_sheet = {
+      description: "Read data from a Google Spreadsheet",
+      parameters: z.object({
+        spreadsheetId: z.string().describe("The ID of the spreadsheet"),
+        range: z.string().describe("The A1 notation range to read (e.g., 'Sheet1!A1:D10')"),
+      }),
+      execute: async (args: { spreadsheetId: string; range: string }): Promise<Record<string, unknown>> => {
+        try {
+          const values = await readSheet(userId, args.spreadsheetId, args.range);
+          return { success: true, range: args.range, rowCount: values?.length || 0, values: values || [] };
+        } catch (error) {
+          console.error("Read sheet error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to read sheet" };
+        }
+      },
+    };
+
+    tools.append_to_sheet = {
+      description: "Append rows to a Google Spreadsheet",
+      parameters: z.object({
+        spreadsheetId: z.string().describe("The ID of the spreadsheet"),
+        range: z.string().describe("The A1 notation range to append to (e.g., 'Sheet1!A:D')"),
+        values: z.array(z.array(z.string())).describe("2D array of values to append as rows"),
+      }),
+      execute: async (args: { spreadsheetId: string; range: string; values: string[][] }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await appendToSheet(userId, args.spreadsheetId, args.range, args.values);
+          return { success: true, updatedRange: result.data.updates?.updatedRange, rowsAppended: args.values.length, message: `Appended ${args.values.length} rows` };
+        } catch (error) {
+          console.error("Append to sheet error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to append to sheet" };
+        }
+      },
+    };
+
+    tools.update_sheet = {
+      description: "Update cells in a Google Spreadsheet",
+      parameters: z.object({
+        spreadsheetId: z.string().describe("The ID of the spreadsheet"),
+        range: z.string().describe("The A1 notation range to update (e.g., 'Sheet1!A1:D5')"),
+        values: z.array(z.array(z.string())).describe("2D array of values to write"),
+      }),
+      execute: async (args: { spreadsheetId: string; range: string; values: string[][] }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await updateSheet(userId, args.spreadsheetId, args.range, args.values);
+          return { success: true, updatedRange: result.data.updatedRange, updatedCells: result.data.updatedCells, message: `Updated ${result.data.updatedCells} cells` };
+        } catch (error) {
+          console.error("Update sheet error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to update sheet" };
+        }
+      },
+    };
+
+    tools.create_spreadsheet = {
+      description: "Create a new Google Spreadsheet",
+      parameters: z.object({
+        title: z.string().describe("The title for the new spreadsheet"),
+      }),
+      execute: async (args: { title: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await createSpreadsheet(userId, args.title);
+          return { success: true, spreadsheetId: result.data.spreadsheetId, url: result.data.spreadsheetUrl, message: `Spreadsheet "${args.title}" created` };
+        } catch (error) {
+          console.error("Create spreadsheet error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to create spreadsheet" };
+        }
+      },
+    };
+  }
+
+  // Check Google Drive integration
+  const hasDrive = await hasIntegration(userId, "GOOGLE_DRIVE");
+  if (hasDrive) {
+    tools.list_drive_files = {
+      description: "List files in the user's Google Drive",
+      parameters: z.object({
+        pageSize: z.number().optional().default(20).describe("Number of files to return (default: 20)"),
+        query: z.string().optional().describe("Optional search query (Google Drive query syntax)"),
+      }),
+      execute: async (args: { pageSize?: number; query?: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await listDriveFiles(userId, { pageSize: args.pageSize, query: args.query });
+          return { success: true, count: result.data.files?.length || 0, files: result.data.files || [] };
+        } catch (error) {
+          console.error("List drive files error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to list drive files" };
+        }
+      },
+    };
+
+    tools.get_drive_file = {
+      description: "Get metadata for a specific Google Drive file",
+      parameters: z.object({
+        fileId: z.string().describe("The ID of the file to get"),
+      }),
+      execute: async (args: { fileId: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await getDriveFile(userId, args.fileId);
+          return { success: true, file: result.data };
+        } catch (error) {
+          console.error("Get drive file error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to get drive file" };
+        }
+      },
+    };
+
+    tools.upload_drive_file = {
+      description: "Upload a file to Google Drive",
+      parameters: z.object({
+        name: z.string().describe("The file name"),
+        mimeType: z.string().describe("The MIME type of the file (e.g., 'text/plain', 'application/pdf')"),
+        content: z.string().describe("The file content as a string"),
+      }),
+      execute: async (args: { name: string; mimeType: string; content: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await uploadDriveFile(userId, args.name, args.mimeType, args.content);
+          return { success: true, fileId: result.data.id, name: result.data.name, webViewLink: result.data.webViewLink, message: `File "${args.name}" uploaded` };
+        } catch (error) {
+          console.error("Upload drive file error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to upload drive file" };
+        }
+      },
+    };
+
+    tools.delete_drive_file = {
+      description: "Delete a file from Google Drive",
+      parameters: z.object({
+        fileId: z.string().describe("The ID of the file to delete"),
+      }),
+      execute: async (args: { fileId: string }): Promise<Record<string, unknown>> => {
+        try {
+          await deleteDriveFile(userId, args.fileId);
+          return { success: true, message: `File deleted successfully` };
+        } catch (error) {
+          console.error("Delete drive file error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to delete drive file" };
+        }
+      },
+    };
+  }
+
+  // Check Google Docs integration
+  const hasDocs = await hasIntegration(userId, "GOOGLE_DOCS");
+  if (hasDocs) {
+    tools.create_doc = {
+      description: "Create a new Google Doc",
+      parameters: z.object({
+        title: z.string().describe("The title for the new document"),
+      }),
+      execute: async (args: { title: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await createDoc(userId, args.title);
+          return { success: true, documentId: result.data.documentId, title: result.data.title, message: `Document "${args.title}" created` };
+        } catch (error) {
+          console.error("Create doc error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to create document" };
+        }
+      },
+    };
+
+    tools.get_doc = {
+      description: "Get the content of a Google Doc",
+      parameters: z.object({
+        documentId: z.string().describe("The ID of the document to read"),
+      }),
+      execute: async (args: { documentId: string }): Promise<Record<string, unknown>> => {
+        try {
+          const result = await getDoc(userId, args.documentId);
+          return { success: true, documentId: result.data.documentId, title: result.data.title, body: result.data.body };
+        } catch (error) {
+          console.error("Get doc error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to get document" };
+        }
+      },
+    };
+
+    tools.append_to_doc = {
+      description: "Append text to a Google Doc",
+      parameters: z.object({
+        documentId: z.string().describe("The ID of the document"),
+        text: z.string().describe("The text to append to the document"),
+      }),
+      execute: async (args: { documentId: string; text: string }): Promise<Record<string, unknown>> => {
+        try {
+          await appendToDoc(userId, args.documentId, args.text);
+          return { success: true, message: `Text appended to document` };
+        } catch (error) {
+          console.error("Append to doc error:", error);
+          return { error: true, message: error instanceof Error ? error.message : "Failed to append to document" };
         }
       },
     };
@@ -1132,7 +1672,7 @@ async function createIntegrationTools(
   }
 
   // Wrap side-effect tools with Safe Mode if enabled
-  if (safeMode && conversationId) {
+  if (safeMode && conversationId && agent) {
     for (const toolName of SIDE_EFFECT_ACTIONS) {
       if (tools[toolName]) {
         const originalExecute = tools[toolName].execute;
@@ -1140,7 +1680,9 @@ async function createIntegrationTools(
           toolName,
           originalExecute,
           safeMode,
-          conversationId
+          conversationId,
+          agent,
+          userId
         );
       }
     }

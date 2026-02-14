@@ -27,12 +27,35 @@ export declare class FeedbackCollector {
     /**
      * Get feedback for an agent
      */
-    getFeedback(agentId: string, types?: FeedbackType[], limit?: number): Promise<any>;
+    getFeedback(agentId: string, types?: FeedbackType[], limit?: number): Promise<({
+        trace: {
+            id: string;
+            totalSteps: number;
+            totalCost: number;
+        };
+        conversation: {
+            id: string;
+            title: string;
+        };
+    } & {
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        stepNumber: number;
+        timestamp: Date;
+        traceId: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        type: import("@prisma/client").$Enums.FeedbackType;
+        originalOutput: string;
+        userEdit: string | null;
+        correctionText: string | null;
+    })[]>;
     /**
      * Get feedback count by type
      */
     getFeedbackStats(agentId: string, days?: number): Promise<{
-        total: any;
+        total: number;
         byType: Record<string, number>;
         positiveRate: number;
         negativeRate: number;
@@ -47,10 +70,36 @@ export declare class FeedbackQuery {
     /**
      * Get all feedback for a conversation
      */
-    static getConversationFeedback(conversationId: string): Promise<any>;
+    static getConversationFeedback(conversationId: string): Promise<{
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        stepNumber: number;
+        timestamp: Date;
+        traceId: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        type: import("@prisma/client").$Enums.FeedbackType;
+        originalOutput: string;
+        userEdit: string | null;
+        correctionText: string | null;
+    }[]>;
     /**
      * Get edits dataset for optimization
      */
-    static getEditsForOptimization(agentId: string, limit?: number): Promise<any>;
+    static getEditsForOptimization(agentId: string, limit?: number): Promise<{
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        stepNumber: number;
+        timestamp: Date;
+        traceId: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        type: import("@prisma/client").$Enums.FeedbackType;
+        originalOutput: string;
+        userEdit: string | null;
+        correctionText: string | null;
+    }[]>;
 }
 //# sourceMappingURL=feedback-collector.d.ts.map

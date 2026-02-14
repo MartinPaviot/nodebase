@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef } from "react";
 import { FlowEditorHeader } from "./flow-editor-header";
-import { FlowEditorCanvas, type FlowEditorCanvasRef } from "./flow-editor-canvas";
+import { FlowEditorCanvas, type FlowEditorCanvasRef, type FlowExecutionState } from "./flow-editor-canvas";
 import { FlowEditorSidebar } from "./flow-editor-sidebar";
 import { FlowEditorToolbar } from "./flow-editor-toolbar";
 import { FlowEditorSettings } from "./flow-editor-settings";
@@ -14,6 +14,8 @@ import { ConditionSettings } from "./condition-settings";
 import { PeopleDataLabsSettings } from "./people-data-labs-settings";
 import { IntegrationActionPanel } from "./integration-action-panel";
 import { AddActionModal } from "./add-action-modal";
+import { ChatInterface } from "./chat-interface";
+import { X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useConversations, useCreateConversation, useSaveFlowData } from "../hooks/use-agents";
 
@@ -64,6 +66,11 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
 
   const [activeTab, setActiveTab] = useState<"settings" | "flow" | "tasks">("flow");
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Chat split view state
+  const [showChat, setShowChat] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null);
+  const [flowExecutionState, setFlowExecutionState] = useState<FlowExecutionState | null>(null);
   const [sidebarMessages, setSidebarMessages] = useState<
     { id: string; role: "user" | "assistant"; content: string }[]
   >([]);
@@ -307,6 +314,39 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
       }
     );
   };
+
+  // Toggle chat split view
+  const handleToggleChat = useCallback(() => {
+    if (showChat) {
+      setShowChat(false);
+      setFlowExecutionState(null);
+      return;
+    }
+    // Open chat - create a conversation if none exists
+    if (chatConversationId) {
+      setShowChat(true);
+    } else {
+      createConversation.mutate(
+        { agentId: agent.id },
+        {
+          onSuccess: (conversation) => {
+            setChatConversationId(conversation.id);
+            setShowChat(true);
+          },
+        }
+      );
+    }
+  }, [showChat, chatConversationId, createConversation, agent.id]);
+
+  // Build flow nodes list for chat execution tracking
+  const flowNodesList = useMemo(() => {
+    if (!templateFlowData?.nodes) return undefined;
+    return templateFlowData.nodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      data: node.data as { label?: string; composioActionName?: string; actionId?: string; [key: string]: unknown } | undefined,
+    }));
+  }, [templateFlowData]);
 
   const handleSelectConversation = (conversationId: string) => {
     router.push(`/agents/${agent.id}/chat/${conversationId}`);
@@ -709,6 +749,7 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                   onConditionAdded={handleConditionAdded}
                   onOpenReplaceModal={handleOpenReplaceModal}
                   initialFlowData={templateFlowData}
+                  executionState={flowExecutionState ?? undefined}
                 />
                 <FlowEditorToolbar
                   onAsk={() => setShowSidebar(true)}
@@ -717,8 +758,34 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                   onRedo={() => console.log("Redo")}
                   onAutoLayout={() => console.log("Auto layout")}
                   onSettings={() => setActiveTab("settings")}
+                  onChat={handleToggleChat}
+                  isChatOpen={showChat}
                 />
               </div>
+
+              {/* Chat split panel */}
+              {showChat && chatConversationId && (
+                <div className="w-[420px] border-l border-[#E5E7EB] bg-white h-full flex flex-col min-h-0">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-[#E5E7EB]">
+                    <span className="text-sm font-medium text-[#374151]">Chat with {agent.name}</span>
+                    <button
+                      onClick={() => { setShowChat(false); setFlowExecutionState(null); }}
+                      className="size-7 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <ChatInterface
+                      conversationId={chatConversationId}
+                      agentName={agent.name}
+                      agentAvatar={agent.avatar}
+                      flowNodes={flowNodesList}
+                      onExecutionStateChange={setFlowExecutionState}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Right panel for selected node - don't show for addNode or chatOutcome */}
               {selectedNode && selectedNode.type !== "addNode" && selectedNode.type !== "chatOutcome" && (

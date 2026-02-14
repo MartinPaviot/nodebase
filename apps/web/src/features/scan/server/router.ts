@@ -304,6 +304,122 @@ export const scanRouter = createTRPCRouter({
         });
       }
 
+      // Scan Outreach (mailbox health, campaign replies, bounce rates)
+      if (!input?.categories || input.categories.includes("OUTREACH")) {
+        const outreachSignals: ScanSignal[] = [];
+
+        try {
+          // Check for positive replies pending action
+          const pendingReplies = await prisma.lead.count({
+            where: {
+              status: "REPLIED",
+              replySentiment: "POSITIVE",
+              campaign: { agent: { userId } },
+            },
+          });
+          if (pendingReplies > 0) {
+            outreachSignals.push({
+              id: `outreach_positive_replies_${Date.now()}`,
+              type: "positive-replies-pending",
+              severity: "high",
+              title: `${pendingReplies} positive replies pending`,
+              description: `${pendingReplies} positive replies from leads are waiting for your response`,
+              metadata: { count: pendingReplies },
+              connectorId: "outreach",
+              detectedAt: new Date().toISOString(),
+            });
+          }
+
+          // Check for mailboxes with low health
+          const lowHealthMailboxes = await prisma.mailboxAccount.findMany({
+            where: { userId, healthScore: { lt: 50 }, status: { not: "PAUSED" } },
+            select: { email: true, healthScore: true },
+          });
+          if (lowHealthMailboxes.length > 0) {
+            outreachSignals.push({
+              id: `outreach_health_low_${Date.now()}`,
+              type: "mailbox-health-low",
+              severity: "critical",
+              title: `${lowHealthMailboxes.length} mailboxes with low health`,
+              description: `Mailboxes at risk: ${lowHealthMailboxes.map((m) => m.email).join(", ")}`,
+              metadata: { mailboxes: lowHealthMailboxes },
+              connectorId: "outreach",
+              detectedAt: new Date().toISOString(),
+            });
+          }
+
+          // Check for high bounce rate on active campaigns
+          const activeCampaigns = await prisma.campaign.findMany({
+            where: { status: "ACTIVE", agent: { userId } },
+            select: { id: true, name: true, leadsContacted: true, leadsBounced: true },
+          });
+          for (const campaign of activeCampaigns) {
+            if (campaign.leadsContacted > 50) {
+              const bounceRate = campaign.leadsBounced / campaign.leadsContacted;
+              if (bounceRate > 0.02) {
+                outreachSignals.push({
+                  id: `outreach_bounce_${campaign.id}`,
+                  type: "bounce-rate-high",
+                  severity: "high",
+                  title: `Bounce rate ${(bounceRate * 100).toFixed(1)}% on "${campaign.name}"`,
+                  description: `Campaign "${campaign.name}" has ${campaign.leadsBounced} bounces out of ${campaign.leadsContacted} contacted (threshold: 2%)`,
+                  metadata: { campaignId: campaign.id, bounceRate },
+                  connectorId: "outreach",
+                  detectedAt: new Date().toISOString(),
+                });
+              }
+            }
+          }
+
+          // Check for completed campaigns
+          const recentlyCompleted = await prisma.campaign.findMany({
+            where: {
+              status: "COMPLETED",
+              completedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+              agent: { userId },
+            },
+            select: { id: true, name: true, leadsPositive: true },
+          });
+          for (const campaign of recentlyCompleted) {
+            outreachSignals.push({
+              id: `outreach_complete_${campaign.id}`,
+              type: "campaign-complete",
+              severity: "medium",
+              title: `Campaign "${campaign.name}" completed`,
+              description: `${campaign.leadsPositive} positive replies collected`,
+              metadata: { campaignId: campaign.id, positiveReplies: campaign.leadsPositive },
+              connectorId: "outreach",
+              detectedAt: new Date().toISOString(),
+            });
+          }
+
+          // Check for warmup-ready mailboxes
+          const warmupReady = await prisma.mailboxAccount.count({
+            where: { userId, status: "WARMING", warmupScore: { gte: 80 } },
+          });
+          if (warmupReady > 0) {
+            outreachSignals.push({
+              id: `outreach_warmup_ready_${Date.now()}`,
+              type: "warmup-ready",
+              severity: "low",
+              title: `${warmupReady} mailboxes ready for cold sending`,
+              description: `${warmupReady} mailboxes have reached warmup score 80+ and are ready to send cold emails`,
+              metadata: { count: warmupReady },
+              connectorId: "outreach",
+              detectedAt: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          console.error("Failed to scan Outreach:", error);
+        }
+
+        results.push({
+          category: "OUTREACH",
+          signals: outreachSignals,
+          scannedAt: new Date().toISOString(),
+        });
+      }
+
       // Marketing, Finance, Projects - placeholder for now
       const emptyCategories: ScanCategory[] = ["MARKETING", "FINANCE", "PROJECTS"];
       for (const category of emptyCategories) {
@@ -346,6 +462,7 @@ export const scanRouter = createTRPCRouter({
         "HR",
         "FINANCE",
         "PROJECTS",
+        "OUTREACH",
       ];
 
       const results = await Promise.all(

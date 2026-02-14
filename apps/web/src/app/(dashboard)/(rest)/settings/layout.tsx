@@ -15,6 +15,7 @@ import {
     Shield,
     Users,
     CaretLeft,
+    Envelope,
 } from "@phosphor-icons/react";
 
 const SETTINGS_NAV = [
@@ -24,6 +25,7 @@ const SETTINGS_NAV = [
             { label: "General", href: "/settings", icon: Gear },
             { label: "Speech to text", href: "/settings/speech", icon: Waveform },
             { label: "Connections", href: "/settings/connections", icon: LinkIcon },
+            { label: "Mailboxes", href: "/settings/mailboxes", icon: Envelope },
             { label: "Phone numbers", href: "/settings/phone", icon: Phone },
             { label: "Computers", href: "/settings/computers", icon: Monitor },
             { label: "Notifications", href: "/settings/notifications", icon: Bell },

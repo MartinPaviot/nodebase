@@ -8,6 +8,21 @@
 import { workflowWorker } from "./workflow-worker";
 import { insightsWorker, optimizationWorker, proposalsWorker } from "./langchain-workers";
 import { initializeLangChainScheduler, removeLangChainScheduler } from "./langchain-scheduler";
+import {
+  scheduleOutreachJobs,
+  removeOutreachSchedules,
+  closeOutreachQueues,
+} from "./outreach-scheduler";
+import {
+  scheduleCalendarTrigger,
+  removeCalendarTrigger,
+  calendarTriggerWorker,
+} from "./calendar-trigger-worker";
+import {
+  scheduleScheduleTrigger,
+  removeScheduleTrigger,
+  scheduleTriggerWorker,
+} from "./schedule-trigger-worker";
 
 let isShuttingDown = false;
 
@@ -18,12 +33,33 @@ let isShuttingDown = false;
 export async function initializeQueues(): Promise<void> {
   console.log("[QueueInit] Starting BullMQ workers...");
 
-  // Workers are already started when imported
-  // Now schedule LangChain repeatable jobs
+  // Workers are already started when imported (including outreach workers)
+  // Now schedule repeatable jobs
   try {
     await initializeLangChainScheduler();
   } catch (error) {
     console.error("[QueueInit] Failed to initialize LangChain scheduler:", error);
+  }
+
+  try {
+    await scheduleOutreachJobs();
+    console.log("[QueueInit] Outreach schedules registered");
+  } catch (error) {
+    console.error("[QueueInit] Failed to schedule outreach jobs:", error);
+  }
+
+  try {
+    await scheduleCalendarTrigger();
+    console.log("[QueueInit] Calendar trigger scheduled");
+  } catch (error) {
+    console.error("[QueueInit] Failed to schedule calendar trigger:", error);
+  }
+
+  try {
+    await scheduleScheduleTrigger();
+    console.log("[QueueInit] Schedule trigger scheduled");
+  } catch (error) {
+    console.error("[QueueInit] Failed to schedule schedule trigger:", error);
   }
 
   // Setup graceful shutdown
@@ -52,6 +88,9 @@ function setupGracefulShutdown(): void {
       try {
         // Remove scheduled jobs
         await removeLangChainScheduler();
+        await removeOutreachSchedules();
+        await removeCalendarTrigger();
+        await removeScheduleTrigger();
 
         // Close all workers gracefully (30s timeout from @nodebase/queue config)
         await Promise.all([
@@ -59,7 +98,12 @@ function setupGracefulShutdown(): void {
           insightsWorker.close(),
           optimizationWorker.close(),
           proposalsWorker.close(),
+          calendarTriggerWorker.close(),
+          scheduleTriggerWorker.close(),
         ]);
+
+        // Close outreach queues (workers will stop receiving jobs)
+        await closeOutreachQueues();
 
         console.log("[QueueInit] All workers closed successfully");
         process.exit(0);

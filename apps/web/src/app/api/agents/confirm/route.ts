@@ -6,6 +6,13 @@ import { ActivityType, Prisma } from "@prisma/client";
 import {
   sendEmail,
   createEvent,
+  appendToSheet,
+  updateSheet,
+  createSpreadsheet,
+  uploadDriveFile,
+  deleteDriveFile,
+  createDoc,
+  appendToDoc,
 } from "@/lib/integrations/google";
 import {
   sendSlackMessage,
@@ -88,6 +95,81 @@ const actionExecutors: Record<string, ActionExecutor> = {
       success: true,
       blocksAdded: result.blocksAdded,
       message: `Appended ${result.blocksAdded} blocks to the page`,
+    };
+  },
+  append_to_sheet: async (userId, args) => {
+    const result = await appendToSheet(
+      userId,
+      args.spreadsheetId as string,
+      args.range as string,
+      args.values as string[][]
+    );
+    return {
+      success: true,
+      updatedRange: result.data.updates?.updatedRange,
+      message: `Appended ${(args.values as string[][]).length} rows`,
+    };
+  },
+  update_sheet: async (userId, args) => {
+    const result = await updateSheet(
+      userId,
+      args.spreadsheetId as string,
+      args.range as string,
+      args.values as string[][]
+    );
+    return {
+      success: true,
+      updatedCells: result.data.updatedCells,
+      message: `Updated ${result.data.updatedCells} cells`,
+    };
+  },
+  create_spreadsheet: async (userId, args) => {
+    const result = await createSpreadsheet(userId, args.title as string);
+    return {
+      success: true,
+      spreadsheetId: result.data.spreadsheetId,
+      url: result.data.spreadsheetUrl,
+      message: `Spreadsheet "${args.title}" created`,
+    };
+  },
+  upload_drive_file: async (userId, args) => {
+    const result = await uploadDriveFile(
+      userId,
+      args.name as string,
+      args.mimeType as string,
+      args.content as string
+    );
+    return {
+      success: true,
+      fileId: result.data.id,
+      webViewLink: result.data.webViewLink,
+      message: `File "${args.name}" uploaded`,
+    };
+  },
+  delete_drive_file: async (userId, args) => {
+    await deleteDriveFile(userId, args.fileId as string);
+    return {
+      success: true,
+      message: `File deleted successfully`,
+    };
+  },
+  create_doc: async (userId, args) => {
+    const result = await createDoc(userId, args.title as string);
+    return {
+      success: true,
+      documentId: result.data.documentId,
+      message: `Document "${args.title}" created`,
+    };
+  },
+  append_to_doc: async (userId, args) => {
+    await appendToDoc(
+      userId,
+      args.documentId as string,
+      args.text as string
+    );
+    return {
+      success: true,
+      message: `Text appended to document`,
     };
   },
 };

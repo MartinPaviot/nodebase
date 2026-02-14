@@ -50,6 +50,59 @@ const ReplyEmailInput = z.object({
   html: z.boolean().optional(),
 });
 
+// Cold Email Outreach Schemas
+
+const SendColdEmailInput = z.object({
+  to: z.string().email(),
+  subject: z.string(),
+  body: z.string(),
+  unsubscribeUrl: z.string().url(),
+  replyToMessageId: z.string().optional(),
+});
+
+const SendColdEmailOutput = z.object({
+  id: z.string(),
+  threadId: z.string(),
+});
+
+const SearchRepliesInput = z.object({
+  threadId: z.string(),
+  afterDate: z.string().optional(),
+});
+
+const ReplyMessage = z.object({
+  messageId: z.string(),
+  from: z.string(),
+  date: z.string(),
+  subject: z.string(),
+  body: z.string(),
+  snippet: z.string(),
+});
+
+const SearchRepliesOutput = z.array(ReplyMessage);
+
+const SearchBouncesInput = z.object({
+  afterDate: z.string(),
+});
+
+const BounceTypeEnum = z.enum([
+  "hard_bounce",
+  "soft_bounce",
+  "mailbox_full",
+  "unknown",
+]);
+
+const BounceMessage = z.object({
+  messageId: z.string(),
+  date: z.string(),
+  bounceType: BounceTypeEnum,
+  originalTo: z.string(),
+  originalSubject: z.string(),
+  snippet: z.string(),
+});
+
+const SearchBouncesOutput = z.array(BounceMessage);
+
 // ============================================
 // Connector Implementation
 // ============================================
@@ -123,6 +176,45 @@ export class GmailConnector extends BaseConnector {
       outputSchema: z.object({ id: z.string(), threadId: z.string() }),
       execute: async (input, context) => {
         return this.replyEmail(input, context);
+      },
+    });
+
+    // Send Cold Email (with RFC 8058 unsubscribe headers)
+    this.registerAction({
+      id: "send-cold-email",
+      name: "Send Cold Email",
+      description:
+        "Send a cold outreach email with RFC 8058 one-click unsubscribe headers. Supports follow-ups in the same thread via replyToMessageId.",
+      inputSchema: SendColdEmailInput,
+      outputSchema: SendColdEmailOutput,
+      execute: async (input, context) => {
+        return this.sendColdEmail(input, context);
+      },
+    });
+
+    // Search Replies (find lead replies in a thread)
+    this.registerAction({
+      id: "search-replies",
+      name: "Search Replies",
+      description:
+        "Search for replies from leads in a specific Gmail thread. Returns only messages NOT sent by the authenticated user.",
+      inputSchema: SearchRepliesInput,
+      outputSchema: SearchRepliesOutput,
+      execute: async (input, context) => {
+        return this.searchReplies(input, context);
+      },
+    });
+
+    // Search Bounces (detect bounced emails)
+    this.registerAction({
+      id: "search-bounces",
+      name: "Search Bounces",
+      description:
+        "Detect bounced emails by searching for mailer-daemon and postmaster messages. Classifies bounces as hard, soft, mailbox full, or unknown.",
+      inputSchema: SearchBouncesInput,
+      outputSchema: SearchBouncesOutput,
+      execute: async (input, context) => {
+        return this.searchBounces(input, context);
       },
     });
   }
@@ -286,6 +378,193 @@ export class GmailConnector extends BaseConnector {
     return response;
   }
 
+  private async sendColdEmail(
+    input: z.infer<typeof SendColdEmailInput>,
+    context: ConnectorContext
+  ): Promise<ActionResult<z.infer<typeof SendColdEmailOutput>>> {
+    // Extract domain from the unsubscribe URL for the mailto fallback
+    const unsubscribeDomain = new URL(input.unsubscribeUrl).hostname;
+
+    const mimeOptions: Parameters<GmailConnector["createMimeMessage"]>[0] = {
+      to: input.to,
+      subject: input.subject,
+      body: input.body,
+      html: true,
+      listUnsubscribe: `<mailto:unsubscribe@${unsubscribeDomain}>, <${input.unsubscribeUrl}>`,
+      listUnsubscribePost: "List-Unsubscribe=One-Click",
+    };
+
+    // If this is a follow-up in an existing thread, add threading headers
+    if (input.replyToMessageId) {
+      mimeOptions.inReplyTo = input.replyToMessageId;
+      mimeOptions.references = input.replyToMessageId;
+    }
+
+    const email = this.createMimeMessage(mimeOptions);
+
+    const response = await this.apiRequest<{ id: string; threadId: string }>(
+      context,
+      "POST",
+      "/gmail/v1/users/me/messages/send",
+      { raw: email }
+    );
+
+    return response;
+  }
+
+  private async searchReplies(
+    input: z.infer<typeof SearchRepliesInput>,
+    context: ConnectorContext
+  ): Promise<ActionResult<z.infer<typeof SearchRepliesOutput>>> {
+    // First, get the authenticated user's email address
+    const profileResponse = await this.apiRequest<{ emailAddress: string }>(
+      context,
+      "GET",
+      "/gmail/v1/users/me/profile"
+    );
+
+    if (!profileResponse.success || !profileResponse.data) {
+      return { success: false, error: "Failed to retrieve user profile" };
+    }
+
+    const userEmail = profileResponse.data.emailAddress.toLowerCase();
+
+    // Get all messages in the thread
+    const threadResponse = await this.apiRequest<{
+      messages: {
+        id: string;
+        internalDate: string;
+        snippet: string;
+        payload: {
+          headers: { name: string; value: string }[];
+          body?: { data?: string };
+          parts?: { body?: { data?: string } }[];
+        };
+      }[];
+    }>(context, "GET", `/gmail/v1/users/me/threads/${input.threadId}?format=full`);
+
+    if (!threadResponse.success || !threadResponse.data?.messages) {
+      return { success: false, error: "Thread not found" };
+    }
+
+    const afterTimestamp = input.afterDate
+      ? new Date(input.afterDate).getTime()
+      : 0;
+
+    const replies: z.infer<typeof ReplyMessage>[] = [];
+
+    for (const msg of threadResponse.data.messages) {
+      const getHeader = (name: string) =>
+        msg.payload.headers.find(
+          (h) => h.name.toLowerCase() === name.toLowerCase()
+        )?.value ?? "";
+
+      const fromHeader = getHeader("From").toLowerCase();
+
+      // Skip messages from the authenticated user
+      if (fromHeader.includes(userEmail)) {
+        continue;
+      }
+
+      // Filter by afterDate if provided
+      const messageTimestamp = parseInt(msg.internalDate, 10);
+      if (messageTimestamp < afterTimestamp) {
+        continue;
+      }
+
+      // Decode body
+      let body = "";
+      if (msg.payload.body?.data) {
+        body = Buffer.from(msg.payload.body.data, "base64").toString("utf-8");
+      } else if (msg.payload.parts) {
+        const textPart = msg.payload.parts.find((p) => p.body?.data);
+        if (textPart?.body?.data) {
+          body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
+        }
+      }
+
+      replies.push({
+        messageId: msg.id,
+        from: getHeader("From"),
+        date: getHeader("Date"),
+        subject: getHeader("Subject"),
+        body,
+        snippet: msg.snippet,
+      });
+    }
+
+    return { success: true, data: replies };
+  }
+
+  private async searchBounces(
+    input: z.infer<typeof SearchBouncesInput>,
+    context: ConnectorContext
+  ): Promise<ActionResult<z.infer<typeof SearchBouncesOutput>>> {
+    const query = `from:mailer-daemon OR from:postmaster after:${input.afterDate}`;
+    const url = `/gmail/v1/users/me/messages?maxResults=50&q=${encodeURIComponent(query)}`;
+
+    const listResponse = await this.apiRequest<{
+      messages?: { id: string; threadId: string }[];
+    }>(context, "GET", url);
+
+    if (!listResponse.success || !listResponse.data?.messages) {
+      return { success: true, data: [] };
+    }
+
+    const bounces: z.infer<typeof BounceMessage>[] = [];
+
+    for (const msg of listResponse.data.messages) {
+      const detail = await this.apiRequest<{
+        id: string;
+        snippet: string;
+        payload: {
+          headers: { name: string; value: string }[];
+          body?: { data?: string };
+          parts?: { body?: { data?: string } }[];
+        };
+      }>(context, "GET", `/gmail/v1/users/me/messages/${msg.id}?format=full`);
+
+      if (!detail.success || !detail.data) {
+        continue;
+      }
+
+      const message = detail.data;
+      const getHeader = (name: string) =>
+        message.payload.headers.find(
+          (h) => h.name.toLowerCase() === name.toLowerCase()
+        )?.value ?? "";
+
+      // Decode body for bounce type detection
+      let body = "";
+      if (message.payload.body?.data) {
+        body = Buffer.from(message.payload.body.data, "base64").toString("utf-8");
+      } else if (message.payload.parts) {
+        const textPart = message.payload.parts.find((p) => p.body?.data);
+        if (textPart?.body?.data) {
+          body = Buffer.from(textPart.body.data, "base64").toString("utf-8");
+        }
+      }
+
+      const subject = getHeader("Subject");
+      const bounceType = this.detectBounceType(subject, body);
+
+      // Try to extract original recipient from the bounce body/headers
+      const originalTo = this.extractOriginalRecipient(body, getHeader("To"));
+      const originalSubject = this.extractOriginalSubject(subject, body);
+
+      bounces.push({
+        messageId: message.id,
+        date: getHeader("Date"),
+        bounceType,
+        originalTo,
+        originalSubject,
+        snippet: message.snippet,
+      });
+    }
+
+    return { success: true, data: bounces };
+  }
+
   // ============================================
   // OAuth Methods
   // ============================================
@@ -393,6 +672,8 @@ export class GmailConnector extends BaseConnector {
     bcc?: string;
     inReplyTo?: string;
     references?: string;
+    listUnsubscribe?: string;
+    listUnsubscribePost?: string;
   }): string {
     const lines = [
       `To: ${options.to}`,
@@ -404,6 +685,8 @@ export class GmailConnector extends BaseConnector {
     if (options.bcc) lines.push(`Bcc: ${options.bcc}`);
     if (options.inReplyTo) lines.push(`In-Reply-To: ${options.inReplyTo}`);
     if (options.references) lines.push(`References: ${options.references}`);
+    if (options.listUnsubscribe) lines.push(`List-Unsubscribe: ${options.listUnsubscribe}`);
+    if (options.listUnsubscribePost) lines.push(`List-Unsubscribe-Post: ${options.listUnsubscribePost}`);
 
     lines.push("", options.body);
 
@@ -413,6 +696,147 @@ export class GmailConnector extends BaseConnector {
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "");
+  }
+
+  private detectBounceType(
+    subject: string,
+    body: string
+  ): z.infer<typeof BounceTypeEnum> {
+    const combined = `${subject} ${body}`.toLowerCase();
+
+    // Hard bounce patterns — permanent delivery failures
+    const hardBouncePatterns = [
+      "user unknown",
+      "no such user",
+      "does not exist",
+      "address rejected",
+      "invalid recipient",
+      "recipient rejected",
+      "unknown user",
+      "account disabled",
+      "account has been disabled",
+      "undeliverable",
+      "550 5.1.1",
+      "550-5.1.1",
+      "delivery status notification (failure)",
+    ];
+
+    // Soft bounce patterns — temporary delivery failures
+    const softBouncePatterns = [
+      "temporarily rejected",
+      "try again later",
+      "temporary failure",
+      "service unavailable",
+      "connection timed out",
+      "too many connections",
+      "rate limit",
+      "450 4.2.1",
+      "421 4.7.0",
+      "delivery status notification (delay)",
+    ];
+
+    // Mailbox full patterns
+    const mailboxFullPatterns = [
+      "mailbox full",
+      "mailbox is full",
+      "over quota",
+      "quota exceeded",
+      "storage limit",
+      "insufficient storage",
+      "552 5.2.2",
+    ];
+
+    for (const pattern of mailboxFullPatterns) {
+      if (combined.includes(pattern)) {
+        return "mailbox_full";
+      }
+    }
+
+    for (const pattern of hardBouncePatterns) {
+      if (combined.includes(pattern)) {
+        return "hard_bounce";
+      }
+    }
+
+    for (const pattern of softBouncePatterns) {
+      if (combined.includes(pattern)) {
+        return "soft_bounce";
+      }
+    }
+
+    return "unknown";
+  }
+
+  private extractOriginalRecipient(body: string, toHeader: string): string {
+    // Try to find the original recipient from common bounce body patterns
+    // Pattern: "Original-Recipient: rfc822;user@example.com"
+    const originalRecipientMatch = body.match(
+      /Original-Recipient:\s*rfc822;\s*([^\s<>\r\n]+)/i
+    );
+    if (originalRecipientMatch) {
+      return originalRecipientMatch[1];
+    }
+
+    // Pattern: "Final-Recipient: rfc822;user@example.com"
+    const finalRecipientMatch = body.match(
+      /Final-Recipient:\s*rfc822;\s*([^\s<>\r\n]+)/i
+    );
+    if (finalRecipientMatch) {
+      return finalRecipientMatch[1];
+    }
+
+    // Pattern: plain email in "was not delivered to" or "could not be delivered to"
+    const deliveredToMatch = body.match(
+      /(?:not delivered to|could not be delivered to|delivery to)\s+([^\s<>\r\n]+@[^\s<>\r\n]+)/i
+    );
+    if (deliveredToMatch) {
+      return deliveredToMatch[1];
+    }
+
+    // Pattern: email in angle brackets "<user@example.com>"
+    const angleBracketMatch = body.match(
+      /(?:address|recipient)[:\s]*<([^>]+@[^>]+)>/i
+    );
+    if (angleBracketMatch) {
+      return angleBracketMatch[1];
+    }
+
+    // Fallback to the To header of the bounce notification
+    return toHeader;
+  }
+
+  private extractOriginalSubject(bounceSubject: string, body: string): string {
+    // Try to extract the original subject from common bounce patterns
+    // Pattern: "Subject: Original Subject Line" inside the bounce body
+    const subjectMatch = body.match(
+      /(?:^|\n)Subject:\s*(.+?)(?:\r?\n(?!\s))/im
+    );
+    if (subjectMatch) {
+      return subjectMatch[1].trim();
+    }
+
+    // Strip common bounce prefixes to recover the original subject
+    const prefixes = [
+      "Delivery Status Notification (Failure)",
+      "Delivery Status Notification (Delay)",
+      "Delivery Status Notification",
+      "Undeliverable:",
+      "Undelivered Mail Returned to Sender",
+      "Mail delivery failed:",
+      "Returned mail:",
+      "Failure Notice:",
+    ];
+
+    for (const prefix of prefixes) {
+      if (bounceSubject.toLowerCase().startsWith(prefix.toLowerCase())) {
+        const remainder = bounceSubject.slice(prefix.length).trim();
+        if (remainder.length > 0) {
+          return remainder;
+        }
+      }
+    }
+
+    return bounceSubject;
   }
 
   private async apiRequest<T>(

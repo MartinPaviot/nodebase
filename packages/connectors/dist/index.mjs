@@ -1,6 +1,6 @@
 import {
   GmailConnector
-} from "./chunk-SELHPWLU.mjs";
+} from "./chunk-ASEUMWZE.mjs";
 import {
   HubSpotConnector
 } from "./chunk-N4MRZOY6.mjs";
@@ -473,7 +473,7 @@ function getConnectorRegistry() {
 }
 function initConnectorRegistry() {
   const registry = getConnectorRegistry();
-  import("./gmail-VQOGIRA6.mjs").then(({ GmailConnector: GmailConnector2 }) => {
+  import("./gmail-CCWZUI4H.mjs").then(({ GmailConnector: GmailConnector2 }) => {
     registry.register(new GmailConnector2());
   });
   import("./hubspot-EGUMKRFW.mjs").then(({ HubSpotConnector: HubSpotConnector2 }) => {

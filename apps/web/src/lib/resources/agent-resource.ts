@@ -20,7 +20,7 @@
 import prisma from "../db";
 import { Authenticator } from "./authenticator";
 import { NotFoundError, ValidationError } from "../errors";
-import type { Agent, AgentTool, AgentMemory, Conversation, AgentModel } from "@prisma/client";
+import type { Agent, AgentTool, AgentMemory, Conversation, AgentModel, Prisma } from "@prisma/client";
 
 export class AgentResource {
   private constructor(
@@ -290,16 +290,22 @@ export class AgentResource {
   async addTool(data: {
     name: string;
     description?: string;
-    type: string;
-    config: Record<string, unknown>;
+    composioAppKey?: string;
+    composioActionName?: string;
+    composioConfig?: Record<string, unknown>;
+    workflowId?: string;
   }): Promise<AgentTool> {
     this.auth.assertCanModify("Agent", this.agent.userId);
 
     return await prisma.agentTool.create({
       data: {
-        ...data,
-        description: data.description ?? "",
         agentId: this.agent.id,
+        name: data.name,
+        description: data.description ?? "",
+        composioAppKey: data.composioAppKey,
+        composioActionName: data.composioActionName,
+        composioConfig: data.composioConfig as Prisma.InputJsonValue ?? undefined,
+        workflowId: data.workflowId,
       },
     });
   }

@@ -6,25 +6,35 @@
 
 import { PermissionError } from "@nodebase/types";
 import { prisma } from "../client";
+import type { AgentModel } from "@prisma/client";
 import {
   BaseResource,
   type ResourceAuth,
   type QueryOptions,
   buildQueryOptions,
-  workspaceScope,
 } from "./base";
 
-// Type for Agent from Prisma (simplified)
+// Type matching Prisma Agent model
 interface AgentData {
   id: string;
-  workspaceId: string;
   name: string;
   description: string | null;
   systemPrompt: string;
-  model: string;
+  context: string | null;
+  model: AgentModel;
   temperature: number;
-  maxStepsPerRun: number;
-  isActive: boolean;
+  safeMode: boolean;
+  llmTier: string | null;
+  maxStepsPerRun: number | null;
+  evalRules: unknown;
+  workspaceId: string | null;
+  avatar: string | null;
+  tags: string[];
+  isEnabled: boolean;
+  isFavorite: boolean;
+  userId: string;
+  templateId: string | null;
+  credentialId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +57,7 @@ export class AgentResource extends BaseResource<AgentData> {
 
     if (!agent) return null;
 
-    if (agent.workspaceId !== auth.workspaceId) {
+    if (agent.workspaceId && agent.workspaceId !== auth.workspaceId) {
       throw new PermissionError(auth.userId, "Agent", "read");
     }
 
@@ -62,7 +72,7 @@ export class AgentResource extends BaseResource<AgentData> {
     options?: QueryOptions
   ): Promise<AgentResource[]> {
     const agents = await prisma.agent.findMany({
-      where: workspaceScope(auth),
+      where: { userId: auth.userId },
       ...buildQueryOptions(options),
     });
 
@@ -78,8 +88,8 @@ export class AgentResource extends BaseResource<AgentData> {
   ): Promise<AgentResource[]> {
     const agents = await prisma.agent.findMany({
       where: {
-        ...workspaceScope(auth),
-        isActive: true,
+        userId: auth.userId,
+        isEnabled: true,
       },
       ...buildQueryOptions(options),
     });
@@ -96,19 +106,21 @@ export class AgentResource extends BaseResource<AgentData> {
       name: string;
       description?: string;
       systemPrompt: string;
-      model?: string;
+      model?: AgentModel;
       temperature?: number;
       maxStepsPerRun?: number;
     }
   ): Promise<AgentResource> {
     const agent = await prisma.agent.create({
       data: {
-        ...data,
-        workspaceId: auth.workspaceId,
-        userId: auth.userId,
+        name: data.name,
+        description: data.description,
+        systemPrompt: data.systemPrompt,
         model: data.model ?? "ANTHROPIC",
         temperature: data.temperature ?? 0.7,
         maxStepsPerRun: data.maxStepsPerRun ?? 10,
+        workspaceId: auth.workspaceId,
+        userId: auth.userId,
       },
     });
 
@@ -120,7 +132,7 @@ export class AgentResource extends BaseResource<AgentData> {
    */
   static async count(auth: ResourceAuth): Promise<number> {
     return prisma.agent.count({
-      where: workspaceScope(auth),
+      where: { userId: auth.userId },
     });
   }
 
@@ -136,10 +148,10 @@ export class AgentResource extends BaseResource<AgentData> {
       name: string;
       description: string;
       systemPrompt: string;
-      model: string;
+      model: AgentModel;
       temperature: number;
       maxStepsPerRun: number;
-      isActive: boolean;
+      isEnabled: boolean;
     }>
   ): Promise<AgentResource> {
     this.assertWrite();
@@ -154,14 +166,14 @@ export class AgentResource extends BaseResource<AgentData> {
   }
 
   /**
-   * Soft delete the agent (set isActive to false).
+   * Soft delete the agent (set isEnabled to false).
    */
   async deactivate(): Promise<AgentResource> {
     this.assertWrite();
 
     const updated = await prisma.agent.update({
       where: { id: this.id },
-      data: { isActive: false },
+      data: { isEnabled: false },
     });
 
     this._data = updated as AgentData;
@@ -218,7 +230,7 @@ export class AgentResource extends BaseResource<AgentData> {
     return this._data.systemPrompt;
   }
 
-  get model(): string {
+  get model(): AgentModel {
     return this._data.model;
   }
 
@@ -226,15 +238,15 @@ export class AgentResource extends BaseResource<AgentData> {
     return this._data.temperature;
   }
 
-  get maxStepsPerRun(): number {
+  get maxStepsPerRun(): number | null {
     return this._data.maxStepsPerRun;
   }
 
-  get isActive(): boolean {
-    return this._data.isActive;
+  get isEnabled(): boolean {
+    return this._data.isEnabled;
   }
 
-  get workspaceId(): string {
+  get workspaceId(): string | null {
     return this._data.workspaceId;
   }
 
@@ -253,7 +265,7 @@ export class AgentResource extends BaseResource<AgentData> {
       model: this.model,
       temperature: this.temperature,
       maxStepsPerRun: this.maxStepsPerRun,
-      isActive: this.isActive,
+      isEnabled: this.isEnabled,
       workspaceId: this.workspaceId,
       createdAt: this._data.createdAt.toISOString(),
       updatedAt: this._data.updatedAt.toISOString(),

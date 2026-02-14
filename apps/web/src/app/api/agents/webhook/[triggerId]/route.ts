@@ -5,6 +5,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { AgentModel } from "@prisma/client";
+import { AgentTracer } from "@nodebase/core";
+import { calculateCost } from "@/lib/config";
 
 export const maxDuration = 60;
 
@@ -12,6 +14,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ triggerId: string }> }
 ) {
+  const startTime = Date.now();
+  let tracer: AgentTracer | null = null;
+
   try {
     const { triggerId } = await params;
     const url = new URL(request.url);
@@ -68,6 +73,7 @@ export async function POST(
 
     // Create model
     const model = createModel(agent.model, apiKey);
+    const modelName = getModelName(agent.model);
 
     // Build prompt from trigger config and payload
     const triggerConfig = trigger.config as Record<string, unknown>;
@@ -84,8 +90,47 @@ export async function POST(
       data: {
         agentId: agent.id,
         title: `Webhook: ${trigger.name} - ${new Date().toISOString()}`,
+        source: "WEBHOOK",
       },
     });
+
+    // Initialize tracer with onSave to persist to DB
+    tracer = new AgentTracer(
+      {
+        agentId: agent.id,
+        conversationId: conversation.id,
+        userId: agent.userId,
+        workspaceId: agent.userId,
+        triggeredBy: "webhook",
+      },
+      async (trace) => {
+        try {
+          await prisma.agentTrace.create({
+            data: {
+              id: trace.id,
+              agentId: trace.agentId,
+              conversationId: trace.conversationId || conversation.id,
+              userId: trace.userId,
+              workspaceId: trace.workspaceId,
+              status: trace.status === "completed" ? "COMPLETED" : "FAILED",
+              steps: JSON.parse(JSON.stringify(trace.steps)),
+              totalSteps: trace.metrics.stepsCount,
+              maxSteps: 1,
+              totalTokensIn: trace.metrics.totalTokensIn,
+              totalTokensOut: trace.metrics.totalTokensOut,
+              totalCost: trace.metrics.totalCost,
+              toolCalls: [],
+              toolSuccesses: 0,
+              toolFailures: 0,
+              latencyMs: trace.durationMs,
+              completedAt: trace.completedAt,
+            },
+          });
+        } catch (saveError) {
+          console.warn("Failed to persist webhook trace:", saveError);
+        }
+      }
+    );
 
     // Save user message
     await prisma.message.create({
@@ -97,11 +142,27 @@ export async function POST(
     });
 
     // Generate response
+    const llmStart = Date.now();
     const result = await generateText({
       model,
       system: agent.systemPrompt,
       prompt,
       temperature: agent.temperature,
+    });
+    const llmLatency = Date.now() - llmStart;
+
+    // Record LLM call in tracer
+    const tokensIn = result.usage?.inputTokens || 0;
+    const tokensOut = result.usage?.outputTokens || 0;
+
+    tracer.logLLMCall({
+      model: modelName,
+      input: prompt,
+      output: result.text,
+      tokensIn,
+      tokensOut,
+      cost: calculateCost(tokensIn, tokensOut, "smart"),
+      durationMs: llmLatency,
     });
 
     // Save assistant response
@@ -119,6 +180,9 @@ export async function POST(
       data: { lastRunAt: new Date() },
     });
 
+    // Complete and persist trace
+    await tracer.complete({ status: "completed" });
+
     return Response.json({
       success: true,
       conversationId: conversation.id,
@@ -126,6 +190,16 @@ export async function POST(
     });
   } catch (error) {
     console.error("Webhook error:", error);
+
+    if (tracer) {
+      try {
+        tracer.logError(error instanceof Error ? error : new Error("Unknown error"));
+        await tracer.complete({ status: "failed" });
+      } catch {
+        // Ignore tracer errors
+      }
+    }
+
     return new Response(
       error instanceof Error ? error.message : "Internal server error",
       { status: 500 }
@@ -157,5 +231,18 @@ function createModel(modelType: AgentModel, apiKey: string) {
     }
     default:
       throw new Error(`Unsupported model type: ${modelType}`);
+  }
+}
+
+function getModelName(modelType: AgentModel): string {
+  switch (modelType) {
+    case AgentModel.ANTHROPIC:
+      return "claude-sonnet-4-5";
+    case AgentModel.OPENAI:
+      return "gpt-4o";
+    case AgentModel.GEMINI:
+      return "gemini-1.5-pro";
+    default:
+      return "unknown";
   }
 }

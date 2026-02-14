@@ -20,6 +20,7 @@ import {
   Play,
   Plug,
   Search,
+  Mail,
 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ const CATEGORY_CONFIG: Record<ScanCategory, { label: string; icon: React.Element
   HR: { label: "HR", icon: Users, color: "text-green-500" },
   FINANCE: { label: "Finance", icon: DollarSign, color: "text-yellow-500" },
   PROJECTS: { label: "Projects", icon: FolderKanban, color: "text-orange-500" },
+  OUTREACH: { label: "Outreach", icon: Mail, color: "text-indigo-500" },
 };
 
 const SEVERITY_CONFIG = {

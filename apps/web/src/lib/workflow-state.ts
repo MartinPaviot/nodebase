@@ -325,6 +325,26 @@ export class WorkflowState {
   }
 
   /**
+   * Mark execution as paused (for async nodes like meeting recording)
+   */
+  async markPaused(resumeNodeId: string): Promise<void> {
+    this.setStatus(WorkflowStatus.PAUSED);
+    await prisma.execution.update({
+      where: { id: this.executionId },
+      data: {
+        status: "PAUSED",
+        output: {
+          checkpoints: this.checkpoints,
+          currentContext: this.context,
+          currentStep: this.currentStep,
+          totalSteps: this.totalSteps,
+          resumeNodeId,
+        },
+      },
+    });
+  }
+
+  /**
    * Mark execution as failed
    */
   async markFailed(error: Error): Promise<void> {

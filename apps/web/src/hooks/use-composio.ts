@@ -179,7 +179,7 @@ export function useComposioDisconnect() {
 }
 
 /**
- * Add a Composio action as an agent tool
+ * Add an action as an agent tool (Composio or Google native)
  */
 export function useAddAgentTool() {
   const queryClient = useQueryClient();
@@ -190,22 +190,30 @@ export function useAddAgentTool() {
       appKey,
       actionName,
       description,
+      provider = "composio",
+      integrationType,
     }: {
       agentId: string;
       appKey: string;
       actionName: string;
       description: string;
+      provider?: "composio" | "google";
+      integrationType?: string;
     }) => {
+      const type = provider === "google" ? "google_action" : "composio_action";
+
       const res = await fetch(`/api/agents/${agentId}/tools`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "composio_action",
+          type,
           name: actionName,
           config: {
             appKey,
             actionName,
             description,
+            provider,
+            ...(integrationType ? { integrationType } : {}),
           },
         }),
       });
@@ -218,7 +226,6 @@ export function useAddAgentTool() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      // Invalidate agent tools cache
       queryClient.invalidateQueries({ queryKey: ["agent", variables.agentId, "tools"] });
       toast.success("Action added successfully");
     },

@@ -12,56 +12,6 @@ import {
   Plus,
   Star,
   CircleNotch,
-  Microphone,
-  Crosshair,
-  Envelope,
-  EnvelopeOpen,
-  Phone,
-  PhoneCall,
-  PhoneOutgoing,
-  ChatCircle,
-  ChatText,
-  ChatDots,
-  Globe,
-  Users,
-  UserPlus,
-  UsersThree,
-  UserCircle,
-  Briefcase,
-  Calendar,
-  CalendarCheck,
-  Clock,
-  PenNib,
-  Megaphone,
-  BookOpen,
-  Books,
-  Robot,
-  Headset,
-  FileText,
-  Files,
-  Tag,
-  Bell,
-  Eye,
-  Binoculars,
-  Target,
-  Palette,
-  Article,
-  Newspaper,
-  Receipt,
-  Kanban,
-  CheckSquare,
-  ListChecks,
-  Question,
-  ShieldCheck,
-  Handshake,
-  ChartBar,
-  Smiley,
-  PaperPlaneTilt,
-  Repeat,
-  Database,
-  Sparkle,
-  Lightning,
-  type Icon,
 } from "@phosphor-icons/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -82,6 +32,13 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Icon as IconifyIcon } from "@iconify/react";
+import {
+  getTemplateConfig,
+  triggerIcons,
+  type TriggerSuggestion,
+} from "@/lib/template-display";
+import { useIntegrationIcons } from "@/hooks/use-integration-icons";
+import { IntegrationIcon } from "@/components/integration-icon";
 
 // Role filters matching Lindy.ai
 const ROLES = [
@@ -156,239 +113,7 @@ function TemplateGridSkeleton() {
   );
 }
 
-// Template config: icon + gradient
-type TemplateConfig = { icon: Icon; gradient: string };
-
-const templateConfigs: Record<string, TemplateConfig> = {
-  // Sales templates
-  "sales meeting recorder": { icon: Microphone, gradient: "from-rose-400 to-red-600" },
-  "sales lead generator": { icon: Target, gradient: "from-amber-400 to-orange-500" },
-  "lead generator": { icon: Target, gradient: "from-amber-400 to-orange-500" },
-  "lead outreacher": { icon: PaperPlaneTilt, gradient: "from-violet-400 to-purple-500" },
-  "outbound phone call agent": { icon: PhoneOutgoing, gradient: "from-cyan-400 to-teal-600" },
-  "deal flow manager": { icon: Handshake, gradient: "from-emerald-400 to-green-600" },
-  "crm updater": { icon: Database, gradient: "from-blue-400 to-indigo-600" },
-  "sales coach": { icon: Sparkle, gradient: "from-amber-400 to-yellow-500" },
-
-  // Support templates
-  "customer support email": { icon: EnvelopeOpen, gradient: "from-emerald-400 to-teal-500" },
-  "website customer support": { icon: Globe, gradient: "from-emerald-400 to-green-500" },
-  "support bot with human": { icon: Handshake, gradient: "from-pink-400 to-rose-500" },
-  "customer support": { icon: Headset, gradient: "from-pink-400 to-rose-500" },
-  "support chatbot": { icon: ChatDots, gradient: "from-pink-400 to-rose-500" },
-  "support agent": { icon: Headset, gradient: "from-pink-400 to-rose-500" },
-  "customer service": { icon: Smiley, gradient: "from-green-400 to-emerald-500" },
-  "ticket handler": { icon: Tag, gradient: "from-purple-400 to-violet-600" },
-  "faq bot": { icon: Question, gradient: "from-sky-400 to-blue-500" },
-  "help desk": { icon: Headset, gradient: "from-indigo-400 to-purple-600" },
-  "complaint handler": { icon: ShieldCheck, gradient: "from-red-400 to-rose-600" },
-  "sms support": { icon: ChatText, gradient: "from-blue-400 to-indigo-500" },
-  "whatsapp support": { icon: ChatCircle, gradient: "from-green-400 to-emerald-500" },
-  "phone support": { icon: PhoneCall, gradient: "from-indigo-400 to-violet-500" },
-  "email responder": { icon: Repeat, gradient: "from-blue-400 to-indigo-500" },
-  "email triager": { icon: Tag, gradient: "from-violet-400 to-purple-500" },
-  "support slackbot": { icon: Robot, gradient: "from-purple-400 to-violet-600" },
-  "ai receptionist": { icon: PhoneCall, gradient: "from-amber-400 to-orange-500" },
-  "knowledge retrieval": { icon: Books, gradient: "from-indigo-400 to-blue-500" },
-  "telegram": { icon: PaperPlaneTilt, gradient: "from-sky-400 to-blue-500" },
-  "query your files": { icon: FileText, gradient: "from-orange-400 to-amber-500" },
-  "daily slack digest": { icon: ListChecks, gradient: "from-purple-400 to-violet-500" },
-  "urgent ticket": { icon: Bell, gradient: "from-red-400 to-rose-600" },
-  "ticket dispatcher": { icon: PaperPlaneTilt, gradient: "from-violet-400 to-purple-500" },
-  "feedback survey": { icon: ChartBar, gradient: "from-emerald-400 to-green-500" },
-  "sentiment tracker": { icon: Smiley, gradient: "from-indigo-400 to-blue-500" },
-  "faq generator": { icon: Question, gradient: "from-amber-400 to-orange-500" },
-
-  // Email templates
-  "email assistant": { icon: EnvelopeOpen, gradient: "from-indigo-400 to-blue-600" },
-  "email writer": { icon: PaperPlaneTilt, gradient: "from-violet-400 to-purple-500" },
-  "inbox manager": { icon: Envelope, gradient: "from-blue-400 to-indigo-500" },
-
-  // Meeting templates
-  "meeting scheduler": { icon: CalendarCheck, gradient: "from-sky-400 to-blue-600" },
-  "meeting notetaker": { icon: BookOpen, gradient: "from-indigo-400 to-violet-600" },
-  "meeting recorder": { icon: Microphone, gradient: "from-rose-400 to-pink-600" },
-  "meeting assistant": { icon: Calendar, gradient: "from-sky-400 to-cyan-500" },
-
-  // Marketing templates
-  "newsletter writer": { icon: Newspaper, gradient: "from-green-400 to-emerald-600" },
-  "content creator": { icon: Palette, gradient: "from-fuchsia-400 to-pink-600" },
-  "marketing assistant": { icon: Megaphone, gradient: "from-amber-400 to-orange-500" },
-  "brand monitor": { icon: Eye, gradient: "from-red-400 to-rose-600" },
-  "seo blog writer": { icon: Article, gradient: "from-emerald-400 to-teal-500" },
-  "social media": { icon: ChatText, gradient: "from-pink-400 to-purple-500" },
-  "ai cmo": { icon: Sparkle, gradient: "from-violet-400 to-purple-600" },
-  "copywriter": { icon: PenNib, gradient: "from-amber-400 to-orange-500" },
-
-  // HR templates
-  "hr assistant": { icon: UsersThree, gradient: "from-slate-400 to-slate-600" },
-  "resume screener": { icon: FileText, gradient: "from-amber-400 to-yellow-600" },
-  "resume screening": { icon: FileText, gradient: "from-amber-400 to-yellow-600" },
-  "recruiting agent": { icon: UserPlus, gradient: "from-indigo-400 to-blue-600" },
-  "company knowledge base": { icon: Books, gradient: "from-violet-400 to-purple-600" },
-  "employee onboarding": { icon: Handshake, gradient: "from-green-400 to-emerald-500" },
-  "interview scheduler": { icon: CalendarCheck, gradient: "from-sky-400 to-blue-500" },
-
-  // Product/Research templates
-  "web researcher": { icon: Globe, gradient: "from-emerald-400 to-teal-600" },
-  "web research": { icon: Globe, gradient: "from-emerald-400 to-teal-600" },
-  "competition tracker": { icon: Binoculars, gradient: "from-orange-400 to-red-500" },
-  "voice of customer": { icon: ChatText, gradient: "from-blue-400 to-indigo-500" },
-  "web monitoring": { icon: Bell, gradient: "from-amber-400 to-orange-500" },
-  "market research": { icon: ChartBar, gradient: "from-purple-400 to-violet-600" },
-  "user feedback": { icon: Smiley, gradient: "from-green-400 to-emerald-500" },
-
-  // Operations templates
-  "productivity assistant": { icon: Lightning, gradient: "from-amber-400 to-yellow-500" },
-  "project manager": { icon: Kanban, gradient: "from-blue-400 to-indigo-500" },
-  "project status": { icon: CheckSquare, gradient: "from-green-400 to-emerald-500" },
-  "task manager": { icon: ListChecks, gradient: "from-violet-400 to-purple-500" },
-  "invoice processor": { icon: Receipt, gradient: "from-emerald-400 to-teal-500" },
-  "document processor": { icon: Files, gradient: "from-slate-400 to-gray-600" },
-  "data entry": { icon: Database, gradient: "from-blue-400 to-indigo-500" },
-
-  // Phone templates
-  "phone assistant": { icon: PhoneCall, gradient: "from-cyan-400 to-teal-600" },
-  "phone agent": { icon: PhoneOutgoing, gradient: "from-teal-400 to-cyan-500" },
-  "inbound call": { icon: PhoneCall, gradient: "from-green-400 to-emerald-500" },
-  "outbound call": { icon: PhoneOutgoing, gradient: "from-blue-400 to-indigo-500" },
-
-  // Slack templates
-  "slack bot": { icon: ChatCircle, gradient: "from-purple-400 to-violet-600" },
-  "slack assistant": { icon: ChatCircle, gradient: "from-purple-400 to-violet-500" },
-};
-
-// Default gradients by keyword
-const keywordGradients: Record<string, string> = {
-  // Sales
-  sales: "from-amber-400 to-orange-500",
-  lead: "from-amber-400 to-orange-500",
-  deal: "from-emerald-400 to-green-600",
-  crm: "from-blue-400 to-indigo-600",
-  // Support
-  support: "from-pink-400 to-rose-500",
-  help: "from-indigo-400 to-purple-600",
-  ticket: "from-purple-400 to-violet-600",
-  chat: "from-pink-400 to-rose-500",
-  bot: "from-pink-400 to-rose-500",
-  // Email
-  email: "from-indigo-400 to-blue-600",
-  inbox: "from-blue-400 to-indigo-500",
-  outreach: "from-violet-400 to-purple-500",
-  // Phone
-  phone: "from-cyan-400 to-teal-600",
-  call: "from-cyan-400 to-teal-600",
-  // Meeting
-  meeting: "from-sky-400 to-blue-600",
-  calendar: "from-sky-400 to-blue-600",
-  schedule: "from-sky-400 to-cyan-500",
-  record: "from-rose-400 to-pink-600",
-  notetaker: "from-indigo-400 to-violet-600",
-  // Marketing
-  newsletter: "from-green-400 to-emerald-600",
-  blog: "from-emerald-400 to-teal-500",
-  content: "from-fuchsia-400 to-pink-600",
-  creative: "from-violet-400 to-purple-600",
-  brand: "from-red-400 to-rose-600",
-  seo: "from-emerald-400 to-teal-500",
-  marketing: "from-amber-400 to-orange-500",
-  write: "from-green-400 to-emerald-600",
-  copy: "from-amber-400 to-orange-500",
-  // HR
-  hr: "from-slate-400 to-slate-600",
-  recruit: "from-indigo-400 to-blue-600",
-  resume: "from-amber-400 to-yellow-600",
-  knowledge: "from-violet-400 to-purple-600",
-  employee: "from-slate-400 to-slate-600",
-  onboard: "from-green-400 to-emerald-500",
-  // Product/Research
-  research: "from-emerald-400 to-teal-600",
-  web: "from-emerald-400 to-teal-600",
-  competition: "from-orange-400 to-red-500",
-  tracker: "from-orange-400 to-red-500",
-  feedback: "from-green-400 to-emerald-500",
-  voice: "from-blue-400 to-indigo-500",
-  analytics: "from-purple-400 to-violet-600",
-  // Operations
-  project: "from-blue-400 to-indigo-500",
-  task: "from-violet-400 to-purple-500",
-  status: "from-green-400 to-emerald-500",
-  invoice: "from-emerald-400 to-teal-500",
-  document: "from-slate-400 to-gray-600",
-  data: "from-blue-400 to-indigo-500",
-  productivity: "from-amber-400 to-yellow-500",
-  automat: "from-violet-400 to-purple-500",
-};
-
-function getTemplateConfig(templateName: string): TemplateConfig {
-  const normalizedName = templateName.toLowerCase();
-
-  // Check exact match first
-  for (const [key, config] of Object.entries(templateConfigs)) {
-    if (normalizedName.includes(key)) {
-      return config;
-    }
-  }
-
-  // Find icon and gradient by keywords
-  let icon: Icon = Robot;
-  let gradient = "from-blue-400 to-blue-600";
-
-  // Sales/Lead
-  if (normalizedName.includes("sales") || normalizedName.includes("lead") || normalizedName.includes("deal")) icon = Target;
-  // Support
-  else if (normalizedName.includes("support") || normalizedName.includes("help") || normalizedName.includes("ticket")) icon = Headset;
-  else if (normalizedName.includes("chat") || normalizedName.includes("bot")) icon = ChatDots;
-  // Email
-  else if (normalizedName.includes("email") || normalizedName.includes("inbox") || normalizedName.includes("outreach")) icon = EnvelopeOpen;
-  // Phone
-  else if (normalizedName.includes("phone") || normalizedName.includes("call")) icon = PhoneCall;
-  // Meeting
-  else if (normalizedName.includes("meeting") || normalizedName.includes("calendar") || normalizedName.includes("schedule")) icon = CalendarCheck;
-  else if (normalizedName.includes("record") || normalizedName.includes("notetaker")) icon = Microphone;
-  // Marketing
-  else if (normalizedName.includes("newsletter") || normalizedName.includes("blog")) icon = Newspaper;
-  else if (normalizedName.includes("content") || normalizedName.includes("creative")) icon = Palette;
-  else if (normalizedName.includes("brand") || normalizedName.includes("monitor")) icon = Eye;
-  else if (normalizedName.includes("seo") || normalizedName.includes("article")) icon = Article;
-  else if (normalizedName.includes("marketing")) icon = Megaphone;
-  else if (normalizedName.includes("write") || normalizedName.includes("copy")) icon = PenNib;
-  // HR
-  else if (normalizedName.includes("recruit") || normalizedName.includes("hiring")) icon = UserPlus;
-  else if (normalizedName.includes("resume") || normalizedName.includes("cv")) icon = FileText;
-  else if (normalizedName.includes("knowledge") || normalizedName.includes("wiki")) icon = Books;
-  else if (normalizedName.includes("hr") || normalizedName.includes("employee")) icon = UsersThree;
-  else if (normalizedName.includes("onboard")) icon = Handshake;
-  // Product/Research
-  else if (normalizedName.includes("research") || normalizedName.includes("web")) icon = Globe;
-  else if (normalizedName.includes("competition") || normalizedName.includes("tracker")) icon = Binoculars;
-  else if (normalizedName.includes("feedback") || normalizedName.includes("voice")) icon = ChatText;
-  else if (normalizedName.includes("analytics") || normalizedName.includes("chart")) icon = ChartBar;
-  // Operations
-  else if (normalizedName.includes("project") || normalizedName.includes("kanban")) icon = Kanban;
-  else if (normalizedName.includes("task") || normalizedName.includes("todo")) icon = ListChecks;
-  else if (normalizedName.includes("status") || normalizedName.includes("update")) icon = CheckSquare;
-  else if (normalizedName.includes("invoice") || normalizedName.includes("receipt")) icon = Receipt;
-  else if (normalizedName.includes("document") || normalizedName.includes("file")) icon = Files;
-  else if (normalizedName.includes("data") || normalizedName.includes("crm")) icon = Database;
-  else if (normalizedName.includes("productivity") || normalizedName.includes("automat")) icon = Lightning;
-
-  // Find gradient by keyword
-  for (const [keyword, grad] of Object.entries(keywordGradients)) {
-    if (normalizedName.includes(keyword)) {
-      gradient = grad;
-      break;
-    }
-  }
-
-  return { icon, gradient };
-}
-
 // Full template type from API
-interface TriggerSuggestion {
-  type: string;
-  label: string;
-}
 
 interface Template {
   id: string;
@@ -428,85 +153,6 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
   );
 }
 
-// Integration icons mapping with full-color brand logos (using Iconify)
-const integrationIcons: Record<string, { icon: string; label: string; color?: string }> = {
-  // Google (with brand colors)
-  gmail: { icon: "logos:google-gmail", label: "Gmail" },
-  "google-sheets": { icon: "simple-icons:googlesheets", label: "Google Sheets", color: "#34A853" },
-  "google-calendar": { icon: "logos:google-calendar", label: "Google Calendar" },
-  "google-drive": { icon: "logos:google-drive", label: "Google Drive" },
-  "google-forms": { icon: "simple-icons:googleforms", label: "Form", color: "#673AB7" },
-  "google-docs": { icon: "simple-icons:googledocs", label: "Google Docs", color: "#4285F4" },
-  google: { icon: "logos:google-icon", label: "Google" },
-  // Communication
-  slack: { icon: "logos:slack-icon", label: "Slack" },
-  email: { icon: "mdi:email", label: "Email", color: "#6366F1" },
-  phone: { icon: "mdi:phone", label: "Phone", color: "#10B981" },
-  // CRM & Sales
-  hubspot: { icon: "simple-icons:hubspot", label: "HubSpot", color: "#FF7A59" },
-  salesforce: { icon: "simple-icons:salesforce", label: "Salesforce", color: "#00A1E0" },
-  linkedin: { icon: "logos:linkedin-icon", label: "LinkedIn" },
-  // Productivity
-  notion: { icon: "simple-icons:notion", label: "Notion", color: "#000000" },
-  airtable: { icon: "simple-icons:airtable", label: "Airtable", color: "#18BFFF" },
-  zapier: { icon: "simple-icons:zapier", label: "Zapier", color: "#FF4A00" },
-  // Social Media
-  twitter: { icon: "simple-icons:x", label: "X", color: "#000000" },
-  facebook: { icon: "logos:facebook", label: "Facebook" },
-  instagram: { icon: "skill-icons:instagram", label: "Instagram" },
-  youtube: { icon: "logos:youtube-icon", label: "YouTube" },
-  // Agent features
-  chat: { icon: "mdi:chat", label: "Chat with this Agent", color: "#6366F1" },
-  webhook: { icon: "mdi:webhook", label: "Webhook", color: "#6B7280" },
-  embed: { icon: "mdi:code-tags", label: "Embed", color: "#6366F1" },
-  // Research & Data
-  "web-browser": { icon: "mdi:web", label: "Web browser", color: "#4285F4" },
-  perplexity: { icon: "simple-icons:perplexity", label: "Perplexity", color: "#20B2AA" },
-  "knowledge-base": { icon: "mdi:book-open-variant", label: "Knowledge base", color: "#6366F1" },
-  // Data providers
-  "enter-loop": { icon: "mdi:sync", label: "Enter loop", color: "#10B981" },
-  "people-data-labs": { icon: "mdi:account-group", label: "People Data Labs", color: "#6366F1" },
-  // Utilities
-  timer: { icon: "mdi:timer", label: "Timer", color: "#F59E0B" },
-  "lindy-utilities": { icon: "mdi:tools", label: "Nodebase utilities", color: "#6366F1" },
-  "lindy-mail": { icon: "mdi:email-outline", label: "Nodebase mail", color: "#F59E0B" },
-  "lindy-meeting-recorder": { icon: "mdi:microphone", label: "Meeting recorder", color: "#F59E0B" },
-  "meeting-recorder": { icon: "mdi:microphone", label: "Meeting recorder", color: "#F59E0B" },
-  ai: { icon: "mdi:robot", label: "AI", color: "#8B5CF6" },
-  "generate-media": { icon: "mdi:image-auto-adjust", label: "Generate media", color: "#EC4899" },
-  "video-utilities": { icon: "mdi:video", label: "Video utilities", color: "#EF4444" },
-  // Dev tools
-  github: { icon: "logos:github-icon", label: "GitHub" },
-  linear: { icon: "logos:linear-icon", label: "Linear" },
-  // Embed
-  "lindy-embed": { icon: "mdi:code-tags", label: "Embed", color: "#6366F1" },
-  // Calendar
-  calendar: { icon: "mdi:calendar", label: "Calendar", color: "#4285F4" },
-  // Phone
-  "lindy-phone": { icon: "mdi:phone", label: "Nodebase phone", color: "#10B981" },
-  twilio: { icon: "logos:twilio-icon", label: "Twilio" },
-  // Agent communication
-  "talk-with-agents": { icon: "mdi:robot-outline", label: "Talk with other agents", color: "#8B5CF6" },
-  // Messaging platforms
-  whatsapp: { icon: "logos:whatsapp-icon", label: "WhatsApp" },
-  telegram: { icon: "logos:telegram", label: "Telegram" },
-};
-
-// Trigger icons mapping
-const triggerIcons: Record<string, { icon: string; color: string }> = {
-  SCHEDULE: { icon: "mdi:clock-outline", color: "#6366F1" },
-  WEBHOOK: { icon: "mdi:webhook", color: "#10B981" },
-  EMAIL: { icon: "mdi:email-receive-outline", color: "#F59E0B" },
-  CHAT: { icon: "mdi:message-text-outline", color: "#3B82F6" },
-  AGENT_MESSAGE: { icon: "mdi:robot-outline", color: "#8B5CF6" },
-  CALENDAR_EVENT: { icon: "mdi:calendar-clock", color: "#4285F4" },
-  NEW_ROW: { icon: "mdi:table-row-plus-after", color: "#34A853" },
-  EMBED: { icon: "mdi:code-tags", color: "#6366F1" },
-  SMS_RECEIVED: { icon: "mdi:message-processing", color: "#10B981" },
-  CALL_RECEIVED: { icon: "mdi:phone-incoming", color: "#10B981" },
-  MESSAGE_RECEIVED: { icon: "mdi:message-text", color: "#3B82F6" },
-};
-
 interface TemplatePreviewDialogProps {
   template: Template | null;
   open: boolean;
@@ -522,6 +168,8 @@ function TemplatePreviewDialog({
   onUse,
   isPending,
 }: TemplatePreviewDialogProps) {
+  const { getIcon } = useIntegrationIcons();
+
   if (!template) return null;
 
   const config = getTemplateConfig(template.name);
@@ -533,7 +181,7 @@ function TemplatePreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-6" showCloseButton={false}>
+      <DialogContent className="sm:max-w-md p-6 max-h-[85vh] overflow-y-auto" showCloseButton={false}>
         {/* Icon */}
         <div className={`size-12 rounded-lg flex items-center justify-center bg-gradient-to-br ${config.gradient}`}>
           <config.icon className="size-6 text-white" weight="fill" />
@@ -580,17 +228,14 @@ function TemplatePreviewDialog({
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Apps used</p>
             <div className="flex flex-wrap gap-2">
               {allIntegrations.map((integration) => {
-                const info = integrationIcons[integration];
-                const iconName = info?.icon || "mdi:cog";
-                const label = info?.label || integration.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                const color = info?.color;
+                const iconData = getIcon(integration);
                 return (
                   <span
                     key={integration}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm"
                   >
-                    <IconifyIcon icon={iconName} className="size-4" style={color ? { color } : undefined} />
-                    {label}
+                    <IntegrationIcon data={iconData} className="size-4" />
+                    {iconData.label}
                   </span>
                 );
               })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
     Check,
     Folder,
@@ -68,7 +68,7 @@ import { useHasActiveSubscription } from "@/features/subscriptions/hooks/use-sub
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTRPC } from "@/trpc/client";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -202,11 +202,15 @@ function getAgentConfig(agentName: string): AgentConfig {
 function RecentAgents() {
     const trpc = useTRPC();
     const pathname = usePathname();
-    const agents = useSuspenseQuery(
+    const agents = useQuery(
         trpc.agents.getMany.queryOptions({ page: 1, pageSize: 5 })
     );
 
-    if (agents.data.items.length === 0) {
+    if (agents.isLoading) {
+        return <RecentAgentsSkeleton />;
+    }
+
+    if (!agents.data || agents.data.items.length === 0) {
         return null;
     }
 
@@ -538,9 +542,7 @@ export const AppSidebar = () => {
                 </SidebarGroup>
 
                 {/* Recent Agents */}
-                <Suspense fallback={<RecentAgentsSkeleton />}>
-                    <RecentAgents />
-                </Suspense>
+                <RecentAgents />
             </SidebarContent>
 
             <SidebarFooter className="p-3 ">

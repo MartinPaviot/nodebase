@@ -5,6 +5,9 @@ import { useReactFlow } from "@xyflow/react";
 import {
     Globe,
     Cursor,
+    CalendarBlank,
+    GitBranch,
+    VideoCamera,
 } from "@phosphor-icons/react";
 import { useCallback } from "react";
 import { toast } from "sonner";
@@ -45,6 +48,12 @@ const triggerNodes: NodeTypeOption[] = [
         description: "Runs the flow when the Stripe Event is captured",
         icon: "/logos/stripe.svg",
     },
+    {
+        type: NodeType.CALENDAR_TRIGGER,
+        label: "Calendar Trigger",
+        description: "Runs when a calendar event is about to start",
+        icon: CalendarBlank,
+    },
 ];
 
 const executionNodes: NodeTypeOption[] = [
@@ -83,6 +92,30 @@ const executionNodes: NodeTypeOption[] = [
         label: "Slack",
         description: "Send a message to Slack",
         icon: "/logos/slack.svg",
+    },
+    {
+        type: NodeType.CONDITION,
+        label: "Condition",
+        description: "Branch workflow based on conditions",
+        icon: GitBranch,
+    },
+    {
+        type: NodeType.MEETING_RECORDER,
+        label: "Meeting Recorder",
+        description: "Record and transcribe a meeting",
+        icon: VideoCamera,
+    },
+    {
+        type: NodeType.GOOGLE_DOCS,
+        label: "Google Docs",
+        description: "Generate notes in Google Docs",
+        icon: "/logos/google.svg",
+    },
+    {
+        type: NodeType.GMAIL,
+        label: "Gmail",
+        description: "Draft and send follow-up emails",
+        icon: "/logos/google.svg",
     },
 ];
 

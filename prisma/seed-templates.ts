@@ -29,6 +29,73 @@ Always confirm meeting details before creating events. Be proactive about identi
     icon: "📅",
     color: "#3B82F6",
     suggestedTools: ["Google Calendar", "Outlook Calendar"],
+    suggestedIntegrations: ["google-calendar", "gmail"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "Hi! I can help schedule meetings. Tell me who needs to meet, when, and I'll handle the rest.",
+            conversationStarters: [
+              { id: "cs1", text: "Schedule a 30min meeting with my team this week", enabled: true },
+              { id: "cs2", text: "Find a time for a call with a client", enabled: true },
+              { id: "cs3", text: "Reschedule tomorrow's meeting", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "parse-request",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Parse Meeting Request",
+            prompt: "Parse the meeting request. Extract participants, preferred times, duration, and topic. Check calendar availability. Output JSON: {\"title\": \"...\", \"participants\": [...], \"duration\": N, \"suggestedTimes\": [...], \"timezone\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "meetingDetails",
+            integrations: ["google-calendar"],
+            skills: [
+              { id: "cal-check", name: "Check availability", service: "Google Calendar", icon: "logos:google-calendar" },
+            ],
+          },
+        },
+        {
+          id: "create-event",
+          type: "googleCalendar",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Create Calendar Event",
+            action: "create_event",
+            title: "{{meetingDetails.title}}",
+            duration: "{{meetingDetails.duration}}",
+            participants: "{{meetingDetails.participants}}",
+            outputVariable: "event",
+          },
+        },
+        {
+          id: "send-invite",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Send Invite Email",
+            integration: "gmail",
+            to: "{{meetingDetails.participants}}",
+            subject: "Meeting: {{meetingDetails.title}}",
+            body: "You're invited to {{meetingDetails.title}}. Details: {{event.link}}",
+            outputVariable: "invite",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "parse-request" },
+        { id: "e2", source: "parse-request", target: "create-event" },
+        { id: "e3", source: "create-event", target: "send-invite" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -50,6 +117,45 @@ When drafting emails, always ask about the recipient relationship and desired to
     category: TemplateCategory.PRODUCTIVITY,
     icon: "📧",
     suggestedTools: ["Gmail", "Outlook"],
+    suggestedIntegrations: ["gmail"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I can help you draft, summarize, or manage emails. What do you need?",
+            conversationStarters: [
+              { id: "cs1", text: "Draft a professional email to a client", enabled: true },
+              { id: "cs2", text: "Summarize my unread emails", enabled: true },
+              { id: "cs3", text: "Reply to this email thread", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "agent",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Process Email Request",
+            prompt: "Handle the user's email request. Draft clear, professional emails. Summarize threads concisely. Adapt tone to context. For drafts, output JSON: {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            integrations: ["gmail"],
+            skills: [
+              { id: "gmail-read", name: "Read emails", service: "Gmail", icon: "logos:google-gmail" },
+              { id: "gmail-send", name: "Send email", service: "Gmail", icon: "logos:google-gmail" },
+            ],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "agent" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
   },
   {
@@ -72,6 +178,283 @@ Use the Eisenhower matrix (urgent/important) to help prioritize tasks. Always co
     suggestedTools: ["Notion", "Todoist", "Asana"],
     isPublic: true,
   },
+  {
+    name: "Meeting Notetaker",
+    subtitle: "Capture every meeting insight, automatically.",
+    description:
+      "Effortlessly capture meeting insights with our AI assistant — it attends, records key points, delivers actionable summaries to Slack, and helps you recall anything from previous meetings whenever you need it.",
+    systemPrompt: `You are a meeting notetaker assistant. Your responsibilities include:
+- Automatically joining virtual meetings (Zoom, Google Meet, Microsoft Teams) when calendar events start
+- Recording and transcribing meeting conversations
+- Extracting action items with owners and deadlines
+- Sending concise meeting recaps via email and Slack
+- Answering follow-up questions about past meetings by searching through meeting history
+
+When sending notes, be very concise — no yapping or additional remarks.
+Always attribute action items to specific people with deadlines when mentioned.
+Include links to the full meeting recording so users can access it easily.`,
+    model: AgentModel.ANTHROPIC,
+    temperature: 0.3,
+    category: TemplateCategory.PRODUCTIVITY,
+    role: TemplateRole.OPERATIONS,
+    useCase: TemplateUseCase.MEETINGS,
+    icon: "🎙️",
+    color: "#3B82F6",
+    suggestedTools: ["Google Calendar", "Chat with this Agent", "Form", "Gmail", "Nodebase utilities", "Enter loop", "Meeting recorder", "Slack"],
+    suggestedIntegrations: ["google-calendar", "gmail", "slack", "meeting-recorder", "enter-loop", "chat"],
+    flowData: {
+      nodes: [
+        // --- BRANCH 1: Calendar event trigger ---
+        {
+          id: "calendar-trigger",
+          type: "calendarEvent",
+          position: { x: 50, y: 50 },
+          data: {
+            label: "Calendar event started",
+            description: "Triggers a new task when a calendar event starts",
+            integration: "google-calendar",
+            minutesOffset: -1,
+            restrictByAttendeeType: "only_with_others",
+          },
+        },
+        {
+          id: "virtual-meeting-check",
+          type: "condition",
+          position: { x: 50, y: 220 },
+          data: {
+            label: "Virtual meeting?",
+            conditions: [
+              { id: "meeting-link", label: "Event with Meeting Link", rule: "Go down this path if the event contains a meeting link" },
+            ],
+          },
+        },
+        // --- BRANCH 2: Chat trigger (ad-hoc link or Q&A) ---
+        {
+          id: "chat-trigger",
+          type: "messageReceived",
+          position: { x: 600, y: 50 },
+          data: {
+            greetingMessage: "Hello! I'm your meeting notetaker assistant. I automatically join your virtual meetings (Zoom, Google Meet, or Microsoft Teams) when they start, record and transcribe them, then send you detailed notes via email and Slack.\n\nTo use me, simply add meeting links to your calendar events - I'll detect them and join automatically. After each meeting, you'll receive a concise summary with action items and a link to the full recording. You can also chat with me directly to ask questions about your past meetings, and I'll search through your meeting history to find the answers you need.",
+          },
+        },
+        {
+          id: "adhoc-or-qa",
+          type: "condition",
+          position: { x: 600, y: 220 },
+          data: {
+            label: "Ad-hoc Link or Q&A?",
+            model: "claude-haiku",
+            conditions: [
+              { id: "adhoc-link", label: "Ad-hoc link", rule: "Go down this path if it includes a meeting link or indicates an ad-hoc meetings path" },
+              { id: "qa-meetings", label: "Q&A on old meetings", rule: "Go down this path if the message is about a previous meeting." },
+            ],
+          },
+        },
+        // --- Record meeting (shared by both branches) ---
+        {
+          id: "record-meeting",
+          type: "meetingRecorder",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Record meeting",
+            description: "Joins, records and transcribes a Google Meet, Zoom, or Microsoft Teams meeting.",
+            action: "record_and_transcribe",
+            askForConfirmation: false,
+            meetingUrl: "auto",
+            botName: "{{user.name}} Nodebase Notetaker",
+            includeLogo: false,
+            calendarEventTitle: "auto",
+            outputVariable: "recording",
+            integrations: ["meeting-recorder"],
+          },
+        },
+        // --- Post-recording: Get task URL then parallel outputs ---
+        {
+          id: "get-task-url",
+          type: "getTaskUrl",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Get task URL",
+            description: "Returns a link to the current agent task.",
+            model: "claude-haiku",
+            getShareableUrl: false,
+            outputVariable: "taskUrl",
+          },
+        },
+        {
+          id: "email-user-notes",
+          type: "sendEmail",
+          position: { x: 80, y: 780 },
+          data: {
+            label: "Email user notes",
+            integration: "gmail",
+            askForConfirmation: false,
+            to: "the user's email address only",
+            subject: "{{user.name}} / {{recording.meetingTitle}} Recap",
+            body: "Send the user a highly explicit break down of the action items extracted from the call.\n\nInclude all pertinent details, dates for deadlines and a 1-2 sentence overview on what the meeting was about and what needs to be completed or acted on after the meeting.\n\nBegin the email with, \"Hey {{user.name}}! Summary and actions items from your call with {{recording.attendees}} below:\"\n\n**Ensure the email is very concise. No yapping or additional remarks**\n\nConclude the email by sending them the conversation URL (hyperlinked - {{taskUrl}}) so they can easily access the meeting recording.",
+            signature: "Sent via [Nodebase](https://nodebase.app)",
+            outputVariable: "emailSent",
+          },
+        },
+        {
+          id: "slack-dm-summary",
+          type: "sendMessage",
+          position: { x: 300, y: 780 },
+          data: {
+            label: "Slack DM meeting summary",
+            integration: "slack",
+            action: "send_direct_message",
+            user: "the user",
+            message: "Send the meeting recap and the action items to the user via Slack message. Use bolded text to highlight important information and emojis for designated action items.\n\n**Ensure the message is very concise. No yapping or additional remarks**\n\nInclude the meeting recording URL {{taskUrl}} (hyperlink it) so the user can easily access the recording.",
+            outputVariable: "slackSent",
+          },
+        },
+        {
+          id: "chat-helpful",
+          type: "chatAgent",
+          position: { x: 520, y: 780 },
+          data: {
+            label: "Be helpful via chat",
+            variant: "send",
+            message: "Let the user know they can ask you questions about their meeting here!",
+            model: "claude-haiku",
+          },
+        },
+        {
+          id: "answer-followup",
+          type: "agentStep",
+          position: { x: 520, y: 960 },
+          data: {
+            label: "Answer follow-up q's",
+            prompt: "Answer any questions the user may have about their meetings.",
+            model: "claude-haiku",
+            askForConfirmation: "never",
+            skills: [
+              { id: "gmail-reply", name: "Send reply", service: "Gmail", icon: "logos:google-gmail" },
+              { id: "slack-reply", name: "Send reply", service: "Slack", icon: "logos:slack-icon" },
+            ],
+          },
+        },
+        // --- Q&A branch: search past meetings ---
+        {
+          id: "get-tasks-list",
+          type: "getTasksList",
+          position: { x: 900, y: 420 },
+          data: {
+            label: "Get tasks list",
+            description: "Get a list of the latest tasks and sub tasks for an agent",
+            model: "claude-haiku",
+            agent: "This meeting notetaker agent",
+            maxNumberOfTasks: "auto",
+            taskTypeFilter: "auto",
+            outputVariable: "tasksList",
+          },
+        },
+        {
+          id: "found-meetings-check",
+          type: "condition",
+          position: { x: 900, y: 600 },
+          data: {
+            label: "Condition",
+            model: "claude-haiku",
+            conditions: [
+              { id: "found", label: "Condition 1", rule: "Go down this path if you found one or multiple meetings that seem to contain the answer to the question the user just asked you." },
+              { id: "not-found", label: "Condition 2", rule: "Go down this path if you did not find any meetings that seem to contain the answer to the question the user asked you." },
+            ],
+          },
+        },
+        {
+          id: "no-meetings-message",
+          type: "chatAgent",
+          position: { x: 1100, y: 780 },
+          data: {
+            label: "Send message",
+            variant: "send",
+            message: "Tell the user you did not find any meetings that seem to contain the answer to the question the user just asked you.",
+            model: "claude-haiku",
+          },
+        },
+        {
+          id: "meetings-loop",
+          type: "enterLoop",
+          position: { x: 750, y: 780 },
+          data: {
+            label: "Enter loop",
+            description: "Loop over a list of items, processing each item in a parallel branch.",
+            model: "claude-haiku",
+            items: "The meetings that have the answer to the question that the user just asked",
+            maxCycles: 500,
+            output: "The answer to the question the user just asked, if any. If the meeting did not contain the answer to the question that the user just asked, just say it doesn't contain it. Also include any other potentially relevant details, but don't make things up.",
+          },
+        },
+        {
+          id: "get-task-details",
+          type: "getTaskDetails",
+          position: { x: 750, y: 960 },
+          data: {
+            label: "Get task details",
+            description: "Get the details of a task including its history",
+            model: "claude-haiku",
+            agent: "This meeting notetaker agent",
+            subTask: "auto",
+            summarizeBlocks: false,
+            outputVariable: "taskDetails",
+          },
+        },
+        {
+          id: "exit-meetings-loop",
+          type: "exitLoop",
+          position: { x: 750, y: 1140 },
+          data: {
+            label: "Exit loop",
+            loopNumber: 1,
+          },
+        },
+        {
+          id: "answer-meeting-question",
+          type: "agentStep",
+          position: { x: 750, y: 1320 },
+          data: {
+            label: "Agent Step",
+            prompt: "Help the user answer their meeting question",
+            model: "claude-haiku",
+            askForConfirmation: "never",
+          },
+        },
+      ],
+      edges: [
+        // Branch 1: Calendar → condition → record
+        { id: "e1", source: "calendar-trigger", target: "virtual-meeting-check" },
+        { id: "e2", source: "virtual-meeting-check", target: "record-meeting", sourceHandle: "meeting-link" },
+        // Branch 2: Chat → condition → ad-hoc or Q&A
+        { id: "e3", source: "chat-trigger", target: "adhoc-or-qa" },
+        { id: "e4", source: "adhoc-or-qa", target: "record-meeting", sourceHandle: "adhoc-link" },
+        { id: "e5", source: "adhoc-or-qa", target: "get-tasks-list", sourceHandle: "qa-meetings" },
+        // Post-recording: parallel outputs
+        { id: "e6", source: "record-meeting", target: "get-task-url" },
+        { id: "e7", source: "get-task-url", target: "email-user-notes" },
+        { id: "e8", source: "get-task-url", target: "slack-dm-summary" },
+        { id: "e9", source: "get-task-url", target: "chat-helpful" },
+        { id: "e10", source: "chat-helpful", target: "answer-followup" },
+        // Q&A branch: search past meetings
+        { id: "e11", source: "get-tasks-list", target: "found-meetings-check" },
+        { id: "e12", source: "found-meetings-check", target: "meetings-loop", sourceHandle: "found" },
+        { id: "e13", source: "found-meetings-check", target: "no-meetings-message", sourceHandle: "not-found" },
+        { id: "e14", source: "meetings-loop", target: "get-task-details" },
+        { id: "e15", source: "get-task-details", target: "exit-meetings-loop" },
+        { id: "e16", source: "exit-meetings-loop", target: "answer-meeting-question" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CALENDAR_EVENT", name: "Calendar event started", config: {}, enabled: true },
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
+    suggestedTriggers: [
+      { type: "CALENDAR_EVENT", label: "Calendar event started" },
+    ],
+    isPublic: true,
+    isFeatured: true,
+  },
 
   // SALES
   {
@@ -93,6 +476,79 @@ Be friendly but focused. Gather information naturally without making it feel lik
     icon: "🎯",
     color: "#F59E0B",
     suggestedTools: ["CRM Integration", "Slack"],
+    suggestedIntegrations: ["google-sheets", "slack", "people-data-labs"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "Hi! I'd love to learn more about your needs. Let me ask a few questions to see how we can help.",
+            conversationStarters: [
+              { id: "cs1", text: "I'm interested in your product", enabled: true },
+              { id: "cs2", text: "Can you tell me about pricing?", enabled: true },
+              { id: "cs3", text: "We need a solution for our team", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "qualify",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Qualify Lead (BANT)",
+            prompt: "Engage the prospect in conversation. Ask about Budget, Authority, Need, and Timeline. Score the lead 1-10. Output JSON: {\"score\": N, \"budget\": \"...\", \"authority\": \"...\", \"need\": \"...\", \"timeline\": \"...\", \"summary\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "qualification",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Qualified?",
+            description: "Check if lead score meets threshold",
+            conditions: [
+              { id: "qualified", label: "Score >= 7", rule: "qualification.score >= 7" },
+              { id: "nurture", label: "Score < 7", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "log-qualified",
+          type: "googleSheets",
+          position: { x: 120, y: 620 },
+          data: {
+            label: "Log Qualified Lead",
+            action: "append_row",
+            sheetName: "Qualified Leads",
+            values: ["{{qualification.summary}}", "{{qualification.score}}", "{{qualification.budget}}", "{{qualification.timeline}}", "{{now}}"],
+          },
+        },
+        {
+          id: "log-nurture",
+          type: "googleSheets",
+          position: { x: 480, y: 620 },
+          data: {
+            label: "Add to Nurture List",
+            action: "append_row",
+            sheetName: "Nurture List",
+            values: ["{{qualification.summary}}", "{{qualification.score}}", "{{qualification.need}}", "{{now}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "qualify" },
+        { id: "e2", source: "qualify", target: "condition" },
+        { id: "e3", source: "condition", target: "log-qualified", sourceHandle: "qualified" },
+        { id: "e4", source: "condition", target: "log-nurture", sourceHandle: "nurture" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -114,6 +570,80 @@ Always personalize messages based on previous interactions. Be persistent but no
     category: TemplateCategory.SALES,
     icon: "📞",
     suggestedTools: ["Email", "CRM", "Calendar"],
+    suggestedIntegrations: ["gmail", "google-sheets", "google-calendar"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "Ready to follow up with prospects! Tell me who needs a follow-up or I'll check your pipeline.",
+            conversationStarters: [
+              { id: "cs1", text: "Check my pipeline for overdue follow-ups", enabled: true },
+              { id: "cs2", text: "Draft a follow-up for a prospect", enabled: true },
+              { id: "cs3", text: "Schedule follow-up reminders for this week", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "check-context",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Review Prospect Context",
+            prompt: "Review the prospect's previous interactions, deal stage, and engagement history. Identify the best follow-up approach and timing. Output JSON: {\"prospect\": \"...\", \"lastContact\": \"...\", \"dealStage\": \"...\", \"approach\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "context",
+          },
+        },
+        {
+          id: "draft-followup",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Draft Follow-up Email",
+            prompt: "Based on the prospect context, write a personalized follow-up email. Reference previous conversations. Include a clear next step. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "emailDraft",
+          },
+        },
+        {
+          id: "send-email",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Send Follow-up",
+            integration: "gmail",
+            to: "{{context.prospect}}",
+            subject: "{{emailDraft.subject}}",
+            body: "{{emailDraft.body}}",
+            outputVariable: "sentEmail",
+          },
+        },
+        {
+          id: "log",
+          type: "googleSheets",
+          position: { x: 300, y: 770 },
+          data: {
+            label: "Log Follow-up",
+            action: "append_row",
+            sheetName: "Follow-up Log",
+            values: ["{{context.prospect}}", "{{context.dealStage}}", "{{emailDraft.subject}}", "{{now}}", "sent"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "check-context" },
+        { id: "e2", source: "check-context", target: "draft-followup" },
+        { id: "e3", source: "draft-followup", target: "send-email" },
+        { id: "e4", source: "send-email", target: "log" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily follow-up check", config: { cron: "0 9 * * 1-5" }, enabled: false },
+    ],
     isPublic: true,
   },
 
@@ -145,6 +675,91 @@ Always provide context around brand mentions and suggest actionable responses wh
       { type: "SCHEDULE", label: "On recurring schedule" },
       { type: "CHAT", label: "Message received" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I monitor your brand across the web. Ask me for a report or I'll alert you on important mentions.",
+            conversationStarters: [
+              { id: "cs1", text: "Show me today's brand mentions", enabled: true },
+              { id: "cs2", text: "Monitor competitor activity this week", enabled: true },
+              { id: "cs3", text: "Alert me on negative sentiment", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "search",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Search Brand Mentions",
+            prompt: "Search for brand mentions across web, social media, and news. Categorize by source, sentiment, and reach. Output JSON: {\"mentions\": [{\"source\": \"...\", \"text\": \"...\", \"sentiment\": \"positive|neutral|negative\", \"reach\": N}], \"totalMentions\": N}",
+            model: "claude-sonnet",
+            outputVariable: "searchResults",
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Analyze Sentiment & Trends",
+            prompt: "Analyze the brand mentions. Calculate overall sentiment, identify key trends, and flag any PR risks or opportunities. Output JSON: {\"overallSentiment\": \"...\", \"sentimentScore\": N, \"trends\": [...], \"alerts\": [...], \"summary\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "analysis",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Negative Alert?",
+            description: "Check if negative mentions need immediate attention",
+            conditions: [
+              { id: "alert", label: "Negative detected", rule: "analysis.alerts.length > 0" },
+              { id: "normal", label: "All clear", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "send-alert",
+          type: "sendEmail",
+          position: { x: 120, y: 780 },
+          data: {
+            label: "Send Alert Email",
+            integration: "gmail",
+            subject: "⚠️ Brand Alert: {{analysis.alerts[0]}}",
+            body: "{{analysis.summary}}\n\nAlerts:\n{{analysis.alerts}}",
+          },
+        },
+        {
+          id: "log-report",
+          type: "googleSheets",
+          position: { x: 480, y: 780 },
+          data: {
+            label: "Log Report",
+            action: "append_row",
+            sheetName: "Brand Monitor",
+            values: ["{{now}}", "{{searchResults.totalMentions}}", "{{analysis.overallSentiment}}", "{{analysis.sentimentScore}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "search" },
+        { id: "e2", source: "search", target: "analyze" },
+        { id: "e3", source: "analyze", target: "condition" },
+        { id: "e4", source: "condition", target: "send-alert", sourceHandle: "alert" },
+        { id: "e5", source: "condition", target: "log-report", sourceHandle: "normal" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily brand check", config: { cron: "0 8 * * 1-5" }, enabled: false },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -174,6 +789,65 @@ Always ask about target audience, newsletter goals, and key messages before draf
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "EMAIL", label: "Email received" },
+    ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "Let's create a newsletter! Tell me about your audience, topic, and key messages.",
+            conversationStarters: [
+              { id: "cs1", text: "Write a weekly product update newsletter", enabled: true },
+              { id: "cs2", text: "Create a monthly industry roundup", enabled: true },
+              { id: "cs3", text: "Draft a company news newsletter", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "research",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Research Topics",
+            prompt: "Research the newsletter topic. Find relevant news, trends, and data points. Output JSON: {\"topics\": [{\"title\": \"...\", \"summary\": \"...\", \"source\": \"...\"}], \"keyStats\": [...]}",
+            model: "claude-sonnet",
+            outputVariable: "research",
+          },
+        },
+        {
+          id: "draft",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Draft Newsletter",
+            prompt: "Write a compelling newsletter based on the research. Include engaging subject line, sections with headers, CTAs, and key takeaways. Output JSON: {\"subject\": \"...\", \"preheader\": \"...\", \"sections\": [{\"title\": \"...\", \"content\": \"...\"}], \"cta\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "newsletter",
+          },
+        },
+        {
+          id: "export-doc",
+          type: "googleDocs",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Export to Google Docs",
+            action: "create_document",
+            title: "Newsletter: {{newsletter.subject}}",
+            content: "{{newsletter.sections}}",
+            outputVariable: "doc",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "research" },
+        { id: "e2", source: "research", target: "draft" },
+        { id: "e3", source: "draft", target: "export-doc" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
     ],
     isPublic: true,
     isFeatured: true,
@@ -706,6 +1380,68 @@ Always acknowledge the customer's concern and provide clear next steps.`,
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I handle customer support emails. Forward me an email or paste the content and I'll draft a response.",
+            conversationStarters: [
+              { id: "cs1", text: "Draft a response to a customer complaint", enabled: true },
+              { id: "cs2", text: "Answer a product question from a customer", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Analyze Email & Search KB",
+            prompt: "Analyze the customer email. Identify the issue, sentiment, and urgency. Search the knowledge base for relevant answers. Output JSON: {\"issue\": \"...\", \"sentiment\": \"...\", \"urgency\": \"low|medium|high\", \"kbAnswer\": \"...\", \"needsEscalation\": false}",
+            model: "claude-sonnet",
+            outputVariable: "analysis",
+            integrations: ["knowledge-base"],
+            skills: [
+              { id: "kb-search", name: "Search Knowledge Base", service: "Knowledge Base", icon: "noto:books" },
+            ],
+          },
+        },
+        {
+          id: "draft-reply",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Draft Reply",
+            prompt: "Draft a professional, empathetic reply to the customer email based on the KB answer. Address their concern directly. Output JSON: {\"subject\": \"Re: ...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "reply",
+          },
+        },
+        {
+          id: "send-reply",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Send Reply",
+            integration: "gmail",
+            subject: "{{reply.subject}}",
+            body: "{{reply.body}}",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "analyze" },
+        { id: "e2", source: "analyze", target: "draft-reply" },
+        { id: "e3", source: "draft-reply", target: "send-reply" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "EMAIL", name: "Email received", config: {}, enabled: false },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -786,6 +1522,76 @@ Ensure no email falls through the cracks with smart categorization.`,
     suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "lindy-utilities"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
+    ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I triage emails automatically. Forward me emails or connect your inbox to get started.",
+            conversationStarters: [
+              { id: "cs1", text: "Triage my inbox and label emails", enabled: true },
+              { id: "cs2", text: "Show me urgent emails from today", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Analyze & Categorize Email",
+            prompt: "Analyze the email content. Categorize by type (bug, feature request, billing, general), urgency (low/medium/high/critical), and sentiment. Identify VIP customers. Output JSON: {\"category\": \"...\", \"urgency\": \"...\", \"sentiment\": \"...\", \"isVIP\": false, \"labels\": [...], \"suggestedTeam\": \"...\"}",
+            model: "claude-haiku",
+            outputVariable: "triage",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Urgent?",
+            conditions: [
+              { id: "urgent", label: "High/Critical", rule: "triage.urgency in ['high', 'critical']" },
+              { id: "normal", label: "Normal", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "label-email",
+          type: "gmail",
+          position: { x: 480, y: 600 },
+          data: {
+            label: "Apply Labels",
+            action: "add_labels",
+            labels: "{{triage.labels}}",
+          },
+        },
+        {
+          id: "alert-urgent",
+          type: "sendEmail",
+          position: { x: 120, y: 600 },
+          data: {
+            label: "Alert Team",
+            integration: "gmail",
+            subject: "🚨 Urgent: {{triage.category}} - {{triage.suggestedTeam}}",
+            body: "Urgent email detected.\nCategory: {{triage.category}}\nUrgency: {{triage.urgency}}\nSuggested team: {{triage.suggestedTeam}}",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "analyze" },
+        { id: "e2", source: "analyze", target: "condition" },
+        { id: "e3", source: "condition", target: "alert-urgent", sourceHandle: "urgent" },
+        { id: "e4", source: "condition", target: "label-email", sourceHandle: "normal" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "EMAIL", name: "Email received", config: {}, enabled: false },
     ],
     isPublic: true,
   },
@@ -1073,6 +1879,64 @@ Help teams stay informed about support performance.`,
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I generate daily support reports. Ask for today's report or I'll send one automatically every morning.",
+            conversationStarters: [
+              { id: "cs1", text: "Generate today's support report", enabled: true },
+              { id: "cs2", text: "Show me this week's support metrics", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "aggregate",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Aggregate Support Data",
+            prompt: "Compile today's support metrics: total tickets, resolution rate, average response time, tickets by category, SLA compliance. Output JSON: {\"totalTickets\": N, \"resolved\": N, \"avgResponseTime\": \"...\", \"byCategory\": {...}, \"slaCompliance\": N, \"topIssues\": [...]}",
+            model: "claude-sonnet",
+            outputVariable: "metrics",
+          },
+        },
+        {
+          id: "generate-report",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Generate Report",
+            prompt: "Write a concise daily support email report. Include key metrics, trends vs yesterday, top issues, and action items. Keep it scannable with headers and bullet points. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "report",
+          },
+        },
+        {
+          id: "send-report",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Email Report",
+            integration: "gmail",
+            subject: "{{report.subject}}",
+            body: "{{report.body}}",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "aggregate" },
+        { id: "e2", source: "aggregate", target: "generate-report" },
+        { id: "e3", source: "generate-report", target: "send-report" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily 8 AM report", config: { cron: "0 8 * * 1-5" }, enabled: false },
+    ],
     isPublic: true,
   },
   {
@@ -1125,6 +1989,77 @@ Ensure critical issues get immediate attention.`,
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I monitor support tickets for urgent issues. I'll alert your team when critical tickets come in.",
+            conversationStarters: [
+              { id: "cs1", text: "Check for urgent tickets right now", enabled: true },
+              { id: "cs2", text: "Show me SLA-breaching tickets", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "scan-tickets",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Scan for Urgent Tickets",
+            prompt: "Analyze the incoming ticket/email. Detect urgency indicators: keywords (down, broken, outage, ASAP, urgent), SLA proximity, VIP customer flag, repeated contact. Output JSON: {\"isUrgent\": true|false, \"urgencyScore\": 1-10, \"indicators\": [...], \"summary\": \"...\", \"suggestedAction\": \"...\"}",
+            model: "claude-haiku",
+            outputVariable: "scan",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Is Urgent?",
+            conditions: [
+              { id: "urgent", label: "Urgent (score >= 7)", rule: "scan.urgencyScore >= 7" },
+              { id: "normal", label: "Not urgent", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "send-alert",
+          type: "sendEmail",
+          position: { x: 120, y: 600 },
+          data: {
+            label: "Send Urgent Alert",
+            integration: "gmail",
+            subject: "🚨 URGENT Ticket: {{scan.summary}}",
+            body: "Urgency score: {{scan.urgencyScore}}/10\nIndicators: {{scan.indicators}}\nSuggested action: {{scan.suggestedAction}}",
+          },
+        },
+        {
+          id: "log",
+          type: "googleSheets",
+          position: { x: 480, y: 600 },
+          data: {
+            label: "Log Ticket",
+            action: "append_row",
+            sheetName: "Ticket Monitor",
+            values: ["{{now}}", "{{scan.summary}}", "{{scan.urgencyScore}}", "{{scan.isUrgent}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "scan-tickets" },
+        { id: "e2", source: "scan-tickets", target: "condition" },
+        { id: "e3", source: "condition", target: "send-alert", sourceHandle: "urgent" },
+        { id: "e4", source: "condition", target: "log", sourceHandle: "normal" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "EMAIL", name: "Email received", config: {}, enabled: false },
+    ],
     isPublic: true,
   },
   {
@@ -1150,6 +2085,64 @@ Ensure tickets reach the right people quickly.`,
     suggestedIntegrations: ["google-forms", "gmail", "lindy-utilities", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
+    ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I route support tickets to the right team channels on Slack. Forward tickets or connect your inbox.",
+            conversationStarters: [
+              { id: "cs1", text: "Route this ticket to the right team", enabled: true },
+              { id: "cs2", text: "Show me today's ticket distribution", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Analyze & Classify Ticket",
+            prompt: "Analyze the support ticket. Classify by department (engineering, billing, product, general), priority (P1-P4), and type (bug, question, feature, complaint). Output JSON: {\"department\": \"...\", \"priority\": \"P1|P2|P3|P4\", \"type\": \"...\", \"summary\": \"...\", \"slackChannel\": \"#support-...\"}",
+            model: "claude-haiku",
+            outputVariable: "ticket",
+          },
+        },
+        {
+          id: "dispatch",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Send to Slack Channel",
+            prompt: "Create a concise Slack message for the team: ticket summary, priority, and suggested first response. Format for readability.",
+            model: "claude-haiku",
+            outputVariable: "slackMessage",
+          },
+        },
+        {
+          id: "log",
+          type: "googleSheets",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Log Dispatch",
+            action: "append_row",
+            sheetName: "Ticket Dispatch Log",
+            values: ["{{now}}", "{{ticket.department}}", "{{ticket.priority}}", "{{ticket.type}}", "{{ticket.summary}}", "{{ticket.slackChannel}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "analyze" },
+        { id: "e2", source: "analyze", target: "dispatch" },
+        { id: "e3", source: "dispatch", target: "log" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "EMAIL", name: "Email received", config: {}, enabled: false },
     ],
     isPublic: true,
   },
@@ -1901,6 +2894,64 @@ Create concise, actionable daily briefings. Help teams start their day informed.
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I compile daily ops digests. Ask me for today's summary or I'll send one every morning automatically.",
+            conversationStarters: [
+              { id: "cs1", text: "Generate today's operations digest", enabled: true },
+              { id: "cs2", text: "Show me this week's key metrics", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "gather",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Gather Operations Data",
+            prompt: "Compile key operational data: team updates from Slack, task statuses from project tools, upcoming deadlines, system health. Output JSON: {\"updates\": [...], \"deadlines\": [...], \"blockers\": [...], \"metrics\": {...}}",
+            model: "claude-sonnet",
+            outputVariable: "opsData",
+          },
+        },
+        {
+          id: "generate",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Generate Digest",
+            prompt: "Write a concise daily ops digest. Include: key metrics, important updates, upcoming deadlines, blockers, and action items. Format for quick scanning. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "digest",
+          },
+        },
+        {
+          id: "send",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Send Digest",
+            integration: "gmail",
+            subject: "{{digest.subject}}",
+            body: "{{digest.body}}",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "gather" },
+        { id: "e2", source: "gather", target: "generate" },
+        { id: "e3", source: "generate", target: "send" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily 8 AM", config: { cron: "0 8 * * 1-5" }, enabled: false },
+    ],
     isPublic: true,
   },
   {
@@ -1983,6 +3034,77 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I track overdue tasks and send nudges to team members. I'll check automatically or you can ask me for a status.",
+            conversationStarters: [
+              { id: "cs1", text: "Show me all overdue tasks", enabled: true },
+              { id: "cs2", text: "Send reminders for tasks due this week", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "check-tasks",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Check Overdue Tasks",
+            prompt: "Check project management tools for overdue tasks. List them with assignee, due date, days overdue, and priority. Output JSON: {\"overdueTasks\": [{\"title\": \"...\", \"assignee\": \"...\", \"dueDate\": \"...\", \"daysOverdue\": N, \"priority\": \"...\"}], \"totalOverdue\": N}",
+            model: "claude-haiku",
+            outputVariable: "tasks",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Any Overdue?",
+            conditions: [
+              { id: "yes", label: "Has overdue tasks", rule: "tasks.totalOverdue > 0" },
+              { id: "no", label: "All on track", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "send-nudges",
+          type: "agentStep",
+          position: { x: 120, y: 600 },
+          data: {
+            label: "Draft & Send Nudges",
+            prompt: "Write friendly but clear reminder messages for each overdue task owner. Be empathetic but drive accountability. For critically overdue (>3 days), escalate to manager. Group nudges by person.",
+            model: "claude-sonnet",
+            outputVariable: "nudges",
+          },
+        },
+        {
+          id: "log",
+          type: "googleSheets",
+          position: { x: 480, y: 600 },
+          data: {
+            label: "Log Check",
+            action: "append_row",
+            sheetName: "Task Monitor",
+            values: ["{{now}}", "{{tasks.totalOverdue}}", "all on track"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "check-tasks" },
+        { id: "e2", source: "check-tasks", target: "condition" },
+        { id: "e3", source: "condition", target: "send-nudges", sourceHandle: "yes" },
+        { id: "e4", source: "condition", target: "log", sourceHandle: "no" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily check 9 AM", config: { cron: "0 9 * * 1-5" }, enabled: false },
+    ],
     isPublic: true,
   },
 
@@ -1993,16 +3115,16 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
   {
     name: "Sales Meeting Recorder",
     subtitle: "Take notes during sales calls and automatically update your CRM.",
-    description: "Focus on the conversation, not note-taking to close more deals!",
+    description: "Focus on the conversation, not note-taking to close more deals! This agent auto-records external meetings, generates MEDDPICC sales notes in Google Docs, sends them via Slack, and drafts personalized follow-up emails for your approval.",
     systemPrompt: `You are a sales meeting documentation specialist. Your responsibilities include:
-- Recording and transcribing sales calls
-- Extracting key points, objections, and next steps
-- Updating CRM records with meeting notes
-- Identifying buying signals and concerns
-- Creating follow-up task recommendations
-- Tracking deal progress and stage updates
+- Recording and transcribing sales calls via Recall.ai
+- Extracting key points using the MEDDPICC framework (Metrics, Economic Buyer, Decision Criteria, Decision Process, Paper Process, Identified Pain, Champion, Competition)
+- Generating structured sales notes in Google Docs
+- Drafting personalized follow-up emails to prospects
+- Identifying buying signals, objections, and concerns
+- Creating actionable next steps and follow-up tasks
 
-Capture everything important. Enable data-driven sales coaching.`,
+You auto-record external meetings, skip internal ones, and produce sales-grade documentation. Follow-up emails require user approval before sending.`,
     model: AgentModel.ANTHROPIC,
     temperature: 0.3,
     category: TemplateCategory.SALES,
@@ -2010,13 +3132,123 @@ Capture everything important. Enable data-driven sales coaching.`,
     useCase: TemplateUseCase.MEETINGS,
     icon: "🎙️",
     color: "#F97316",
-    suggestedTools: ["CRM", "Transcription", "Calendar"],
-    suggestedIntegrations: ["google-calendar", "google-forms", "gmail", "google-docs", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedTools: ["Meeting Recorder", "Google Docs", "Gmail", "Slack"],
+    suggestedIntegrations: ["google-calendar", "gmail", "google-docs", "google-drive", "slack", "meeting-recorder"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
     ],
     isPublic: true,
     isFeatured: true,
+    flowData: {
+      nodes: [
+        {
+          id: "trigger-calendar",
+          type: "CALENDAR_TRIGGER",
+          name: "Calendar event started",
+          position: { x: 0, y: 200 },
+          data: {
+            minutesOffset: -1,
+            restrictByAttendee: "all",
+          },
+        },
+        {
+          id: "condition-external",
+          type: "CONDITION",
+          name: "External meeting?",
+          position: { x: 300, y: 200 },
+          data: {
+            conditions: [
+              {
+                id: "external",
+                label: "External / sales meeting",
+                prompt: "Go down this path if one of the attendees is an external attendee (does not contain the user's domain in the email address)",
+                evaluator: "domain_check",
+              },
+              {
+                id: "internal",
+                label: "Internal meeting",
+                prompt: "Go down this path if it is an internal meeting",
+                evaluator: "domain_check_inverse",
+              },
+            ],
+          },
+        },
+        {
+          id: "recorder",
+          type: "MEETING_RECORDER",
+          name: "Record meeting",
+          position: { x: 600, y: 100 },
+          data: {
+            botName: "Nodebase Notetaker",
+            meetingUrlSource: "calendarEvent",
+            joinMessage: "Nodebase is recording this meeting for notes and follow-up.",
+          },
+        },
+        {
+          id: "condition-sales",
+          type: "CONDITION",
+          name: "Filter: sales meeting?",
+          position: { x: 900, y: 100 },
+          data: {
+            conditions: [
+              {
+                id: "sales",
+                label: "Sales meeting",
+                prompt: "This is a sales-related meeting (prospect call, demo, negotiation, closing)",
+                evaluator: "llm_classify",
+              },
+              {
+                id: "other",
+                label: "Other meeting",
+                prompt: "This is not a sales meeting",
+                evaluator: "llm_classify_inverse",
+              },
+            ],
+          },
+        },
+        {
+          id: "export-notes",
+          type: "GOOGLE_DOCS",
+          name: "Export sales notes",
+          position: { x: 1200, y: 0 },
+          data: {
+            template: "meddpicc",
+            sharingPreference: "private",
+          },
+        },
+        {
+          id: "slack-dm",
+          type: "SLACK",
+          name: "Send doc via Slack",
+          position: { x: 1500, y: 0 },
+          data: {
+            target: "user_dm",
+            messageTemplate: "auto",
+          },
+        },
+        {
+          id: "draft-email",
+          type: "GMAIL",
+          name: "Draft prospect follow up email",
+          position: { x: 1800, y: 0 },
+          data: {
+            requireConfirmation: true,
+            toSource: "external_attendee",
+            bccSource: "user_email",
+            subjectTemplate: "{summary} - Follow Up",
+            bodyPrompt: "Your task is to draft a concise follow-up email to your prospect, based on the context of their call. The email should be succinct and highly relevant to the prospect. Next steps should always be mentioned in the email. Personalize the email where you see fit.",
+          },
+        },
+      ],
+      connections: [
+        { from: "trigger-calendar", to: "condition-external", fromOutput: "main", toInput: "main" },
+        { from: "condition-external", to: "recorder", fromOutput: "external", toInput: "main" },
+        { from: "recorder", to: "condition-sales", fromOutput: "main", toInput: "main" },
+        { from: "condition-sales", to: "export-notes", fromOutput: "sales", toInput: "main" },
+        { from: "export-notes", to: "slack-dm", fromOutput: "main", toInput: "main" },
+        { from: "slack-dm", to: "draft-email", fromOutput: "main", toInput: "main" },
+      ],
+    },
   },
   {
     name: "Lead Generator",
@@ -2041,6 +3273,68 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
     suggestedTools: ["LinkedIn", "Web Search", "CRM", "Contact Database"],
     suggestedIntegrations: ["chat", "google-forms", "google-sheets", "lindy-utilities", "people-data-labs"],
     suggestedTriggers: [],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I find and organize leads for you. Tell me your target criteria and I'll build a prospect list.",
+            conversationStarters: [
+              { id: "cs1", text: "Find 20 SaaS CTOs in the Bay Area", enabled: true },
+              { id: "cs2", text: "Build a list of marketing directors in e-commerce", enabled: true },
+              { id: "cs3", text: "Search for startup founders who recently raised Series A", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "search",
+          type: "peopleDataLabs",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Search for Leads",
+            action: "search_people",
+            outputVariable: "leads",
+          },
+        },
+        {
+          id: "organize",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Qualify & Organize",
+            prompt: "Review the leads found. Score each on ICP fit (1-10). Organize by quality. Prepare data for spreadsheet export. Present results in a markdown table.",
+            model: "claude-sonnet",
+            outputVariable: "organizedLeads",
+            integrations: ["google-sheets"],
+            skills: [
+              { id: "sheets-create", name: "Create spreadsheet", service: "Google Sheets", icon: "logos:google-sheets" },
+              { id: "sheets-append", name: "Append rows", service: "Google Sheets", icon: "logos:google-sheets" },
+            ],
+          },
+        },
+        {
+          id: "export",
+          type: "googleSheets",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Export to Google Sheets",
+            action: "create_spreadsheet",
+            sheetName: "Lead List",
+            headers: ["Name", "Title", "Company", "Email", "LinkedIn", "ICP Score"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "search" },
+        { id: "e2", source: "search", target: "organize" },
+        { id: "e3", source: "organize", target: "export" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -2068,6 +3362,78 @@ Be personal and relevant. Stand out from generic outreach.`,
     suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
+    ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I craft and send personalized outreach messages. Give me a lead or connect your spreadsheet to start.",
+            conversationStarters: [
+              { id: "cs1", text: "Write an outreach email for a VP of Sales", enabled: true },
+              { id: "cs2", text: "Create a 3-step outreach sequence", enabled: true },
+              { id: "cs3", text: "Start outreach from my leads spreadsheet", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "enrich",
+          type: "peopleDataLabs",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Enrich Lead Data",
+            action: "enrich_person",
+            outputVariable: "enrichedLead",
+          },
+        },
+        {
+          id: "craft-message",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Craft Personalized Outreach",
+            prompt: "Write a personalized outreach email for {{enrichedLead.firstName}} at {{enrichedLead.company}}. Reference their role as {{enrichedLead.title}} and industry. Be concise, relevant, and include a clear CTA. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "outreach",
+          },
+        },
+        {
+          id: "send",
+          type: "sendEmail",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Send Outreach Email",
+            integration: "gmail",
+            to: "{{enrichedLead.email}}",
+            subject: "{{outreach.subject}}",
+            body: "{{outreach.body}}",
+            outputVariable: "sentEmail",
+          },
+        },
+        {
+          id: "log",
+          type: "googleSheets",
+          position: { x: 300, y: 770 },
+          data: {
+            label: "Log Outreach",
+            action: "append_row",
+            sheetName: "Outreach Log",
+            values: ["{{enrichedLead.email}}", "{{enrichedLead.company}}", "{{outreach.subject}}", "{{now}}", "sent"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "enrich" },
+        { id: "e2", source: "enrich", target: "craft-message" },
+        { id: "e3", source: "craft-message", target: "send" },
+        { id: "e4", source: "send", target: "log" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "NEW_ROW", name: "New lead added", config: {}, enabled: false },
     ],
     isPublic: true,
     isFeatured: true,
@@ -2148,6 +3514,63 @@ Provide sales-relevant insights. Enable personalized outreach.`,
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
     ],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I enrich leads with company data, contact info, and insights. Share a lead or connect your spreadsheet.",
+            conversationStarters: [
+              { id: "cs1", text: "Enrich leads from my Google Sheet", enabled: true },
+              { id: "cs2", text: "Research this company and find decision makers", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "enrich",
+          type: "peopleDataLabs",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Enrich with People Data Labs",
+            action: "enrich_person",
+            outputVariable: "enrichedData",
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Analyze & Score Lead",
+            prompt: "Analyze enriched lead data. Calculate ICP fit score (1-10). Identify buying triggers, tech stack, and personalization angles. Output JSON: {\"score\": N, \"triggers\": [...], \"techStack\": [...], \"personalizationAngles\": [...], \"summary\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "analysis",
+          },
+        },
+        {
+          id: "update-sheet",
+          type: "googleSheets",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Update Spreadsheet",
+            action: "append_row",
+            sheetName: "Enriched Leads",
+            values: ["{{enrichedData.firstName}}", "{{enrichedData.lastName}}", "{{enrichedData.email}}", "{{enrichedData.company}}", "{{enrichedData.title}}", "{{analysis.score}}", "{{analysis.summary}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "enrich" },
+        { id: "e2", source: "enrich", target: "analyze" },
+        { id: "e3", source: "analyze", target: "update-sheet" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "NEW_ROW", name: "New lead in spreadsheet", config: {}, enabled: false },
+    ],
     isPublic: true,
   },
   {
@@ -2204,17 +3627,13 @@ Be professional and helpful. Represent the company excellently.`,
     name: "AI Sales Development Representative",
     subtitle: "Automate and scale your sales outreach.",
     description: "Automate your outreach and prospecting with an intelligent virtual sales assistant that nurtures leads and books meetings effortlessly.",
-    systemPrompt: `You are an AI sales development representative. Your responsibilities include:
-- Qualifying inbound leads through conversation
-- Creating personalized outreach sequences
-- Responding to initial prospect inquiries
-- Scheduling meetings with account executives
-- Nurturing leads not ready to buy
-- Tracking SDR metrics and conversion rates
+    systemPrompt: `You are an AI Sales Development Representative. Simply provide me with the names of 2-3 companies you'd like to target, and I'll handle the complete research and outreach workflow for you.
 
-Be persistent but professional. Build pipeline efficiently.`,
+Here's how I work: I thoroughly research each company, identify key decision-makers (prioritizing heads of marketing, then CEOs), gather their contact information and LinkedIn profiles, and even analyze their podcast appearances or interviews for deeper personalization. Finally, I craft tailored outreach emails and save them as Gmail drafts ready for you to review and send.
+
+To get started, just share the company names you want to target - you can optionally mention the industry for better targeting. I'll take care of the rest and deliver personalized email drafts with all the research context you need.`,
     model: AgentModel.ANTHROPIC,
-    temperature: 0.6,
+    temperature: 0.3,
     category: TemplateCategory.SALES,
     role: TemplateRole.SALES,
     useCase: TemplateUseCase.CHATBOT,
@@ -2223,6 +3642,390 @@ Be persistent but professional. Build pipeline efficiently.`,
     suggestedTools: ["Email", "CRM", "Calendar", "Slack"],
     suggestedIntegrations: ["ai", "chat", "google-forms", "gmail", "google", "lindy-utilities", "enter-loop", "linkedin", "people-data-labs", "perplexity", "youtube"],
     suggestedTriggers: [],
+    flowData: {
+      nodes: [
+        // 1. Trigger: Message Received
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 400, y: 50 },
+          data: {
+            label: "Message Received",
+            greetingMessage: "Hello! I'm your AI Sales Development Representative. Simply provide me with the names of 2-3 companies you'd like to target, and I'll handle the complete research and outreach workflow for you.\n\nHere's how I work: I thoroughly research each company, identify key decision-makers (prioritizing heads of marketing, then CEOs), gather their contact information and LinkedIn profiles, and even analyze their podcast appearances or interviews for deeper personalization. Finally, I craft tailored outreach emails and save them as Gmail drafts ready for you to review and send.\n\nTo get started, just share the company names you want to target - you can optionally mention the industry for better targeting. I'll take care of the rest and deliver personalized email drafts with all the research context you need.",
+            conversationStarters: [
+              { id: "cs1", text: "Research leads at Stripe, Notion, and Figma", enabled: true },
+              { id: "cs2", text: "Find decision-makers at companies in the fintech space", enabled: true },
+              { id: "cs3", text: "Prospect 5 SaaS companies in the HR tech industry", enabled: true },
+            ],
+          },
+        },
+        // 2. Enter Loop 1: Company To Lead Converter
+        {
+          id: "enter-loop-company",
+          type: "enterLoop",
+          position: { x: 400, y: 180 },
+          data: {
+            label: "Company To Lead Converter",
+            subtitle: "Enter loop \u2192 Enter loop",
+            loopNumber: 1,
+            description: "Loop over companies provided by the user in chat",
+            model: "claude-haiku",
+            items: "User will provide a list of tools in the chat, that list contains the items we have to loop through",
+            maxCycles: 3,
+            maxCyclesPrompt: "Default is 3 but if user asks for some specific number of companies then go for it.",
+            output: "We should be having the email draft links in the output together with other details if the draft is created",
+          },
+        },
+        // 3. Company Research (Perplexity Sonar Pro)
+        {
+          id: "company-research",
+          type: "action",
+          position: { x: 400, y: 340 },
+          data: {
+            label: "Company Research",
+            subtitle: "Perplexity \u2192 Search with Perplexity",
+            description: "Search with Perplexity (Sonar Pro) to gather detailed company information",
+            icon: "perplexity",
+            perplexityModel: "sonar-pro",
+            temperature: 0.2,
+            credits: 0.5,
+            returnRelatedQuestions: false,
+            prompt: "Search and gather as much details as possible about the company of the given tool",
+            model: "claude-haiku",
+            outputVariable: "companyResearch",
+          },
+        },
+        // 4. Lead Finder (Perplexity Sonar Deep Research)
+        {
+          id: "lead-finder",
+          type: "action",
+          position: { x: 400, y: 500 },
+          data: {
+            label: "Lead Finder",
+            subtitle: "Perplexity \u2192 Search with Perplexity",
+            description: "Deep research with Perplexity (Sonar Deep Research) to identify 2 key decision-makers",
+            icon: "perplexity",
+            perplexityModel: "sonar-deep-research",
+            temperature: 0.2,
+            credits: 0.5,
+            returnRelatedQuestions: false,
+            prompt: `Conduct exhaustive and detailed research to precisely identify 2 key decision-makers at the company provided via Previous step. Your research must be extremely thorough, leveraging multiple sources deeply and extensively to ensure maximum depth and accuracy.
+
+Prioritize finding leads strictly in this order:
+1. Head of Marketing or similar position
+2. If head of marketing or any similar positions doesn't exist, then lookup for CEO as the lead to reach out to.
+
+For each individual, gather highly detailed and verified information, including:
+1. Full Name
+2. Current Title & Role
+3. Location
+4. Locality
+5. Region
+6. LinkedIn Profile
+7. Direct Email and Phone Number (Strive for finding this rigorously)
+8. Social Profiles: Twitter, Facebook, Instagram, Reddit
+9. Concise yet detailed Bio highlighting significant achievements, current responsibilities, key contributions, major projects, and notable public mentions.
+10. Biographies, major projects, leadership roles, and notable achievements. Company affiliations, speaking engagements, and press mentions
+
+Ensure accuracy and completeness by rigorously cross-referencing multiple authoritative and reliable sources, including official company websites, professional networking platforms, press releases, credible social media profiles, industry publications, and reputable news outlets.
+
+Your final output must reflect meticulous attention to detail, leaving absolutely no relevant information overlooked or unexplored. Take as much time you want, but the results must be good and exhaustive as asked. Do as many searches you'd need.
+
+Retrieve their LinkedIn, Twitter, Facebook, Instagram, Reddit, email, phone number, and any other available social/contact details.
+
+Response from the previous step: {{companyResearch}}`,
+            model: "claude-haiku",
+            outputVariable: "foundLeads",
+          },
+        },
+        // 5. Enter Loop 2: Lead Researcher Loop
+        {
+          id: "enter-loop-lead",
+          type: "enterLoop",
+          position: { x: 400, y: 660 },
+          data: {
+            label: "Lead Researcher Loop",
+            subtitle: "Enter loop \u2192 Enter loop",
+            loopNumber: 2,
+            description: "Loop over each valuable lead found by the Lead Finder",
+            model: "claude-haiku",
+            items: "List of the valuable leads that perplexity found out in the previous step",
+            maxCycles: 3,
+            output: "We should be having the email draft links in the output together with other details if the draft is created",
+          },
+        },
+        // 6. LinkedIn Profile Finder (Google Search)
+        {
+          id: "linkedin-finder",
+          type: "action",
+          position: { x: 400, y: 820 },
+          data: {
+            label: "LinkedIn Profile Finder",
+            subtitle: "Google \u2192 Google Search",
+            description: "Google Search to find the lead's LinkedIn profile URL",
+            icon: "google",
+            maxResults: 20,
+            credits: 1,
+            prompt: "Based on the available data create a google search query that will find lead's linkedin profile url, Here lead means the decision making persons in the company that perplexity found out in the previous steps",
+            model: "claude-haiku",
+            outputVariable: "googleResults",
+          },
+        },
+        // 7. LinkedIn Profile URL Analyzer (Think Step)
+        {
+          id: "linkedin-analyzer",
+          type: "action",
+          position: { x: 400, y: 960 },
+          data: {
+            label: "LinkedIn Profile URL Analyzer",
+            subtitle: "Lindy utilities \u2192 Think",
+            description: "Analyze Google search results to determine the correct LinkedIn profile URL",
+            icon: "ai",
+            prompt: "Analyses the google search results(for linkedin profile url) with the available context about the person then decide the most appropriate linkedin url profile url for the given person(valuable lead)",
+            model: "claude-haiku",
+            outputVariable: "linkedinUrl",
+          },
+        },
+        // 8. LinkedIn Details Finder (LinkedIn API)
+        {
+          id: "linkedin-details",
+          type: "composioAction",
+          position: { x: 400, y: 1100 },
+          data: {
+            label: "LinkedIn Details Finder",
+            subtitle: "LinkedIn \u2192 LinkedIn profiles by URL",
+            description: "Collect LinkedIn profile details by URL",
+            composioAppKey: "linkedin",
+            composioActionName: "linkedin_profiles_by_url",
+            icon: "linkedin",
+            credits: 0.1,
+          },
+        },
+        // 9. Find Person by Full Name (People Data Labs)
+        {
+          id: "pdl-find",
+          type: "peopleDataLabs",
+          position: { x: 400, y: 1240 },
+          data: {
+            label: "Find Person by Full Name",
+            subtitle: "People Data Labs",
+            description: "Enrich lead data via People Data Labs (name, company, location, school)",
+            actionType: "pdl-find-by-full-name",
+            limit: 4,
+            credits: 15,
+            askForConfirmation: false,
+            outputVariable: "pdlData",
+          },
+        },
+        // 10. Lead Research (Perplexity Sonar Reasoning Pro)
+        {
+          id: "lead-research",
+          type: "action",
+          position: { x: 400, y: 1380 },
+          data: {
+            label: "Lead Research",
+            subtitle: "Perplexity \u2192 Search with Perplexity",
+            description: "In-depth research with Perplexity (Sonar Reasoning Pro) — profile, achievements, podcasts",
+            icon: "perplexity",
+            perplexityModel: "sonar-reasoning-pro",
+            temperature: 0.2,
+            credits: 0.5,
+            returnRelatedQuestions: false,
+            prompt: "Research person using all available internet sources to create a concise profile summary. Include background, role, key topics they talk about, and any notable achievements. Also, search for any YouTube interviews or podcast appearances featuring them, using variations of their name, company, or role if needed.",
+            model: "claude-haiku",
+            outputVariable: "leadResearch",
+          },
+        },
+        // 11. Condition: Contact email available?
+        {
+          id: "condition-email",
+          type: "condition",
+          position: { x: 400, y: 1540 },
+          data: {
+            label: "Contact email available?",
+            model: "claude-haiku",
+            conditions: [
+              { id: "branch-0", text: "Go down this path if a contact email for the person was found in the previous steps", label: "Yes" },
+              { id: "branch-1", text: "Go down this path if no contact email for the person was found in the previous steps", label: "No" },
+            ],
+          },
+        },
+        // 12. Condition: Podcast/interview available?
+        {
+          id: "condition-podcast",
+          type: "condition",
+          position: { x: 350, y: 1720 },
+          data: {
+            label: "Podcast/interview available?",
+            model: "claude-haiku",
+            conditions: [
+              { id: "branch-0", text: "Go down this path if no YouTube podcast or YouTube interview links were found in the previous research", label: "No" },
+              { id: "branch-1", text: "Go down this path if YouTube podcast or YouTube interview links were found in the previous research", label: "Yes" },
+            ],
+          },
+        },
+        // 13. Enter Loop 3: Podcast Transcription
+        {
+          id: "enter-loop-podcast",
+          type: "enterLoop",
+          position: { x: 550, y: 1900 },
+          data: {
+            label: "Podcast Transcription",
+            subtitle: "Enter loop",
+            loopNumber: 3,
+            description: "Loop over YouTube links of podcasts/interviews for transcription",
+            model: "claude-haiku",
+            items: "All YouTube links of podcasts and interviews will be treated as a list of items carried forward from the previous steps.",
+            maxCycles: 500,
+            output: "From all the videos, create a profile and summary of the person to help draft a personalized outreach email. This information will serve as contextual personalization for the email.",
+          },
+        },
+        // 14. Transcribe Video (YouTube)
+        {
+          id: "transcribe-video",
+          type: "action",
+          position: { x: 550, y: 2040 },
+          data: {
+            label: "Transcribe Video (deprecated)",
+            subtitle: "YouTube",
+            description: "Transcribe YouTube video content for personalization context",
+            icon: "youtube",
+            prompt: "Transcribe the YouTube video and extract key talking points, opinions, and notable quotes from the person.",
+            model: "claude-haiku",
+            outputVariable: "transcription",
+          },
+        },
+        // 15. Exit Loop 3 (Podcast)
+        {
+          id: "exit-loop-podcast",
+          type: "exitLoop",
+          position: { x: 550, y: 2180 },
+          data: {
+            label: "Exit loop",
+            loopNumber: 3,
+          },
+        },
+        // 16. Email Drafter
+        {
+          id: "email-drafter",
+          type: "action",
+          position: { x: 350, y: 2350 },
+          data: {
+            label: "Email Drafter",
+            subtitle: "AI \u2192 Write",
+            hasWarning: true,
+            warningText: "Update the email drafting prompt in this step and include a few example email templates for reference",
+            description: "Generate hyper-personalized outreach email body using all research context",
+            icon: "ai",
+            prompt: "Generate only the email body for individually reaching out to each contact. Do not include an email subject under any circumstances—focus solely on the body content.\n\nYour company background and offerings (reason for reaching out): [Reaching_out_reason_here]\n\nUse the following template as a reference to draft the email:\n[Template_here]\n\nUse all available data from previous steps to personalize the email draft for the lead. Keep the personalization relevant and non-intrusive, and stay focused on the core reason for reaching out.",
+            model: "gemini-2.5-pro",
+            outputVariable: "emailDraft",
+          },
+        },
+        // 17. Draft Email (Gmail - saves as draft, NOT send)
+        {
+          id: "draft-email",
+          type: "gmail",
+          position: { x: 350, y: 2500 },
+          data: {
+            label: "Draft email",
+            subtitle: "Gmail",
+            description: "Save personalized email as Gmail draft (not send)",
+            actionId: "draft_email",
+            integration: "gmail",
+            to: "{{lead.email}}",
+            subject: "Generate a subject accordingly.",
+            body: "{{emailDraft}}",
+          },
+        },
+        // 18. Exit Loop 2 (Lead Researcher)
+        {
+          id: "exit-loop-lead",
+          type: "exitLoop",
+          position: { x: 400, y: 2680 },
+          data: {
+            label: "Exit loop",
+            loopNumber: 2,
+          },
+        },
+        // 19. Exit Loop 1 (Company)
+        {
+          id: "exit-loop-company",
+          type: "exitLoop",
+          position: { x: 400, y: 2820 },
+          data: {
+            label: "Exit loop",
+            loopNumber: 1,
+          },
+        },
+        // 20. Send Message
+        {
+          id: "send-message",
+          type: "chatAgent",
+          position: { x: 400, y: 2960 },
+          data: {
+            label: "Send message",
+            subtitle: "Chat with this Agent",
+            variant: "send",
+            message: "Inform the user about the final leads for each company where a contact email has been found and a reach-out email has already been drafted. Provide the links to the drafted emails as well.",
+            model: "claude-haiku",
+            hasOutgoingEdge: true,
+          },
+        },
+        // 21. After message sent (Chat Outcome)
+        {
+          id: "after-sent",
+          type: "chatOutcome",
+          position: { x: 320, y: 3120 },
+          data: {
+            label: "After message sent",
+          },
+        },
+        // 22. After reply received (Chat Outcome)
+        {
+          id: "after-reply",
+          type: "chatOutcome",
+          position: { x: 480, y: 3120 },
+          data: {
+            label: "After reply received",
+          },
+        },
+      ],
+      edges: [
+        // Main linear chain
+        { id: "e1", source: "trigger", target: "enter-loop-company" },
+        { id: "e2", source: "enter-loop-company", target: "company-research" },
+        { id: "e3", source: "company-research", target: "lead-finder" },
+        { id: "e4", source: "lead-finder", target: "enter-loop-lead" },
+        { id: "e5", source: "enter-loop-lead", target: "linkedin-finder" },
+        { id: "e6", source: "linkedin-finder", target: "linkedin-analyzer" },
+        { id: "e7", source: "linkedin-analyzer", target: "linkedin-details" },
+        { id: "e8", source: "linkedin-details", target: "pdl-find" },
+        { id: "e9", source: "pdl-find", target: "lead-research" },
+        { id: "e10", source: "lead-research", target: "condition-email" },
+        // Condition 1: Contact email available?
+        { id: "e11", source: "condition-email", target: "condition-podcast", sourceHandle: "branch-0" },  // Yes → podcast check
+        { id: "e12", source: "condition-email", target: "exit-loop-lead", sourceHandle: "branch-1" },     // No → skip to exit loop
+        // Condition 2: Podcast/interview available?
+        { id: "e13", source: "condition-podcast", target: "email-drafter", sourceHandle: "branch-0" },       // No → draft email directly
+        { id: "e14", source: "condition-podcast", target: "enter-loop-podcast", sourceHandle: "branch-1" },  // Yes → transcribe
+        // Podcast loop chain
+        { id: "e15", source: "enter-loop-podcast", target: "transcribe-video" },
+        { id: "e16", source: "transcribe-video", target: "exit-loop-podcast" },
+        { id: "e17", source: "exit-loop-podcast", target: "email-drafter" },
+        // Email → Gmail → Exit loops → Send
+        { id: "e18", source: "email-drafter", target: "draft-email" },
+        { id: "e19", source: "draft-email", target: "exit-loop-lead" },
+        { id: "e20", source: "exit-loop-lead", target: "exit-loop-company" },
+        { id: "e21", source: "exit-loop-company", target: "send-message" },
+        // Chat outcomes from Send message
+        { id: "e22", source: "send-message", target: "after-sent", sourceHandle: "sent" },
+        { id: "e23", source: "send-message", target: "after-reply", sourceHandle: "reply" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -2687,6 +4490,76 @@ Be objective and thorough in evaluations. Focus on relevant skills and experienc
     color: "#8B5CF6",
     suggestedTools: ["Gmail", "Google Docs"],
     suggestedIntegrations: ["gmail", "google-forms", "google-docs"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "I screen resumes against job requirements. Share the job description and resumes to get started.",
+            conversationStarters: [
+              { id: "cs1", text: "Screen resumes for a software engineer role", enabled: true },
+              { id: "cs2", text: "Rank these candidates against the job requirements", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "analyze",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Analyze Resume vs Job Req",
+            prompt: "Analyze the resume against the job requirements. Score skills match (1-10), experience relevance (1-10), and overall fit (1-10). Identify red flags and highlights. Output JSON: {\"candidate\": \"...\", \"skillsScore\": N, \"experienceScore\": N, \"overallFit\": N, \"highlights\": [...], \"redFlags\": [...], \"recommendation\": \"proceed|maybe|pass\"}",
+            model: "claude-sonnet",
+            outputVariable: "screening",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Proceed?",
+            conditions: [
+              { id: "proceed", label: "Proceed (fit >= 7)", rule: "screening.overallFit >= 7" },
+              { id: "review", label: "Maybe / Pass", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "shortlist",
+          type: "googleSheets",
+          position: { x: 120, y: 600 },
+          data: {
+            label: "Add to Shortlist",
+            action: "append_row",
+            sheetName: "Shortlist",
+            values: ["{{screening.candidate}}", "{{screening.overallFit}}", "{{screening.highlights}}", "{{screening.recommendation}}"],
+          },
+        },
+        {
+          id: "archive",
+          type: "googleSheets",
+          position: { x: 480, y: 600 },
+          data: {
+            label: "Archive for Review",
+            action: "append_row",
+            sheetName: "All Candidates",
+            values: ["{{screening.candidate}}", "{{screening.overallFit}}", "{{screening.recommendation}}", "{{screening.redFlags}}"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "analyze" },
+        { id: "e2", source: "analyze", target: "condition" },
+        { id: "e3", source: "condition", target: "shortlist", sourceHandle: "proceed" },
+        { id: "e4", source: "condition", target: "archive", sourceHandle: "review" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
     isFeatured: true,
   },
@@ -2780,6 +4653,63 @@ Be warm, helpful, and proactive. Ensure new hires feel supported.`,
     color: "#10B981",
     suggestedTools: ["Gmail", "Slack", "Knowledge Base"],
     suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "slack"],
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 300, y: 50 },
+          data: {
+            greetingMessage: "Welcome! I help onboard new team members. Tell me about the new hire and I'll get started.",
+            conversationStarters: [
+              { id: "cs1", text: "Onboard a new software engineer starting Monday", enabled: true },
+              { id: "cs2", text: "Send welcome kit to a new marketing hire", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "prepare",
+          type: "agentStep",
+          position: { x: 300, y: 220 },
+          data: {
+            label: "Prepare Onboarding Plan",
+            prompt: "Create a personalized onboarding plan for the new hire. Include: welcome email content, first-week schedule, required documents, tool access checklist, key contacts. Output JSON: {\"employeeName\": \"...\", \"role\": \"...\", \"welcomeEmail\": {\"subject\": \"...\", \"body\": \"...\"}, \"firstWeekTasks\": [...], \"toolAccess\": [...], \"keyContacts\": [...]}",
+            model: "claude-sonnet",
+            outputVariable: "plan",
+          },
+        },
+        {
+          id: "send-welcome",
+          type: "sendEmail",
+          position: { x: 300, y: 420 },
+          data: {
+            label: "Send Welcome Email",
+            integration: "gmail",
+            subject: "{{plan.welcomeEmail.subject}}",
+            body: "{{plan.welcomeEmail.body}}",
+          },
+        },
+        {
+          id: "create-checklist",
+          type: "googleSheets",
+          position: { x: 300, y: 600 },
+          data: {
+            label: "Create Onboarding Checklist",
+            action: "create_spreadsheet",
+            sheetName: "Onboarding - {{plan.employeeName}}",
+            headers: ["Task", "Status", "Due Date", "Assigned To"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "prepare" },
+        { id: "e2", source: "prepare", target: "send-welcome" },
+        { id: "e3", source: "send-welcome", target: "create-checklist" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+    ],
     isPublic: true,
   },
   {
@@ -3011,6 +4941,156 @@ Be data-driven and fair. Balance candidate expectations with budget constraints.
     suggestedTools: ["Google Sheets", "Slack", "Perplexity"],
     suggestedIntegrations: ["google-forms", "google-sheets", "perplexity", "slack"],
     isPublic: true,
+  },
+
+  // COLD EMAIL CAMPAIGN — Agent-native outreach
+  {
+    name: "Cold Email Campaign",
+    subtitle: "Scale personalized cold outreach with AI",
+    description:
+      "Agent-native cold email campaigns at scale. Each email is generated by AI with full lead context — not templates. Imports leads, builds multi-step sequences with directives, auto-sends via Gmail, detects replies, and learns your writing style from corrections.",
+    systemPrompt: `You are an expert cold email copywriter and sales development representative. Your responsibilities include:
+
+WRITING STYLE:
+- Write short, punchy emails (under 150 words)
+- Use a direct, professional but conversational tone
+- Never sound like a template or mass email
+- Personalize based on the lead's company, role, industry, and any available context
+- Reference specific details about the prospect (recent news, LinkedIn activity, company growth)
+
+SEQUENCE STRATEGY:
+- Step 1 (Intro): Hook with relevance, establish credibility, clear CTA (15min call)
+- Step 2 (Value-add): Share a relevant insight, case study, or stat. No "just following up"
+- Step 3 (Social proof): Reference similar companies/results. Build urgency
+- Step 4 (Break-up): Short, direct. Last chance. Create FOMO
+
+RULES:
+- Never use spam trigger words (free, guarantee, act now, limited time)
+- Never use generic openers ("I hope this finds you well", "My name is...")
+- Always use the prospect's first name naturally (not forced)
+- Keep subject lines under 6 words, lowercase, curiosity-driven
+- Write in the same language as the campaign directives
+- One clear call-to-action per email
+- No signatures — they are added automatically
+
+OUTPUT FORMAT:
+Always respond with a JSON object: {"subject": "...", "body": "..."}
+The body should be plain text with line breaks, not HTML.`,
+    model: AgentModel.ANTHROPIC,
+    temperature: 0.4,
+    category: TemplateCategory.SALES,
+    role: TemplateRole.SALES,
+    useCase: TemplateUseCase.OUTREACH,
+    icon: "📨",
+    color: "#3B82F6",
+    suggestedTools: ["Gmail", "CSV Import", "Lead Enrichment"],
+    suggestedIntegrations: ["gmail", "google-sheets", "people-data-labs"],
+    suggestedTriggers: [
+      { type: "SCHEDULE", label: "Daily sending 9h-18h" },
+    ],
+    // Flow configuration - Cold Email Campaign workflow
+    flowData: {
+      nodes: [
+        {
+          id: "trigger",
+          type: "messageReceived",
+          position: { x: 400, y: 50 },
+          data: {
+            greetingMessage: "Ready to launch a cold email campaign! Upload your leads or tell me who you want to reach.",
+            conversationStarters: [
+              { id: "cs1", text: "Import leads from CSV and start outreach", enabled: true },
+              { id: "cs2", text: "Write a cold email for SaaS founders", enabled: true },
+              { id: "cs3", text: "Show me my campaign stats", enabled: true },
+            ],
+          },
+        },
+        {
+          id: "enrich",
+          type: "peopleDataLabs",
+          position: { x: 400, y: 200 },
+          data: {
+            label: "Enrich Lead",
+            description: "Enrich lead with company data, title, LinkedIn",
+            action: "enrich_person",
+            outputVariable: "enrichedLead",
+          },
+        },
+        {
+          id: "condition",
+          type: "condition",
+          position: { x: 400, y: 370 },
+          data: {
+            label: "Has Enough Data?",
+            description: "Check if enough data for personalization",
+            conditions: [
+              { id: "yes", label: "Yes - Personalize", rule: "enrichedLead.company exists" },
+              { id: "no", label: "No - Generic", rule: "else" },
+            ],
+          },
+        },
+        {
+          id: "generate-personalized",
+          type: "agentStep",
+          position: { x: 220, y: 550 },
+          data: {
+            label: "Generate Personalized Email",
+            prompt: "Write a cold email for {{enrichedLead.firstName}} at {{enrichedLead.company}}. Role: {{enrichedLead.title}}. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "emailDraft",
+          },
+        },
+        {
+          id: "generate-generic",
+          type: "agentStep",
+          position: { x: 580, y: 550 },
+          data: {
+            label: "Generate Generic Email",
+            prompt: "Write a short cold email for {{lead.firstName}}. Keep it curiosity-driven. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
+            model: "claude-sonnet",
+            outputVariable: "emailDraft",
+          },
+        },
+        {
+          id: "send-email",
+          type: "sendEmail",
+          position: { x: 400, y: 730 },
+          data: {
+            label: "Send via Gmail",
+            integration: "gmail",
+            to: "{{lead.email}}",
+            subject: "{{emailDraft.subject}}",
+            body: "{{emailDraft.body}}",
+            outputVariable: "sentEmail",
+          },
+        },
+        {
+          id: "log-sheets",
+          type: "googleSheets",
+          position: { x: 400, y: 900 },
+          data: {
+            label: "Log to Spreadsheet",
+            action: "append_row",
+            sheetName: "Campaign Log",
+            values: ["{{lead.email}}", "{{lead.firstName}}", "{{emailDraft.subject}}", "{{sentEmail.messageId}}", "sent"],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "enrich" },
+        { id: "e2", source: "enrich", target: "condition" },
+        { id: "e3", source: "condition", target: "generate-personalized", sourceHandle: "yes" },
+        { id: "e4", source: "condition", target: "generate-generic", sourceHandle: "no" },
+        { id: "e5", source: "generate-personalized", target: "send-email" },
+        { id: "e6", source: "generate-generic", target: "send-email" },
+        { id: "e7", source: "send-email", target: "log-sheets" },
+      ],
+    },
+    defaultTriggers: [
+      { type: "CHAT", name: "Message received", config: {}, enabled: true },
+      { type: "SCHEDULE", name: "Daily 9h-18h", config: { cron: "0 9-18 * * 1-5" }, enabled: false },
+    ],
+    isPublic: true,
+    isFeatured: true,
   },
 ];
 

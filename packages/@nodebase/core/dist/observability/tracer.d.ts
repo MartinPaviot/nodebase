@@ -62,22 +62,169 @@ export declare class TraceQuery {
     /**
      * Get a trace by ID
      */
-    static getTrace(traceId: string): Promise<any>;
+    static getTrace(traceId: string): Promise<{
+        agent: {
+            id: string;
+            model: import("@prisma/client").$Enums.AgentModel;
+            name: string;
+        };
+        conversation: {
+            id: string;
+            title: string;
+        };
+        aiEvents: {
+            id: string;
+            agentId: string | null;
+            conversationId: string | null;
+            userId: string;
+            workspaceId: string | null;
+            model: string;
+            tier: string;
+            tokensIn: number;
+            tokensOut: number;
+            cost: number;
+            latencyMs: number;
+            stepNumber: number;
+            action: string;
+            toolName: string | null;
+            toolInput: import("@prisma/client/runtime/library").JsonValue | null;
+            toolOutput: import("@prisma/client/runtime/library").JsonValue | null;
+            stepsUsed: number;
+            evalResult: string;
+            timestamp: Date;
+            traceId: string | null;
+        }[];
+    } & {
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        workspaceId: string;
+        latencyMs: number | null;
+        startedAt: Date;
+        completedAt: Date | null;
+        status: import("@prisma/client").$Enums.TraceStatus;
+        steps: import("@prisma/client/runtime/library").JsonValue;
+        totalSteps: number;
+        maxSteps: number;
+        totalTokensIn: number;
+        totalTokensOut: number;
+        totalCost: number;
+        toolCalls: import("@prisma/client/runtime/library").JsonValue;
+        toolSuccesses: number;
+        toolFailures: number;
+        l1Passed: boolean | null;
+        l1Failures: import("@prisma/client/runtime/library").JsonValue | null;
+        l2Score: number | null;
+        l2Breakdown: import("@prisma/client/runtime/library").JsonValue | null;
+        l3Triggered: boolean;
+        l3Blocked: boolean | null;
+        feedbackScore: number | null;
+        feedbackComment: string | null;
+        userEdited: boolean;
+        editDiff: string | null;
+    }>;
     /**
      * Get traces for an agent
      */
-    static getAgentTraces(agentId: string, limit?: number): Promise<any>;
+    static getAgentTraces(agentId: string, limit?: number): Promise<({
+        conversation: {
+            id: string;
+            title: string;
+        };
+    } & {
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        workspaceId: string;
+        latencyMs: number | null;
+        startedAt: Date;
+        completedAt: Date | null;
+        status: import("@prisma/client").$Enums.TraceStatus;
+        steps: import("@prisma/client/runtime/library").JsonValue;
+        totalSteps: number;
+        maxSteps: number;
+        totalTokensIn: number;
+        totalTokensOut: number;
+        totalCost: number;
+        toolCalls: import("@prisma/client/runtime/library").JsonValue;
+        toolSuccesses: number;
+        toolFailures: number;
+        l1Passed: boolean | null;
+        l1Failures: import("@prisma/client/runtime/library").JsonValue | null;
+        l2Score: number | null;
+        l2Breakdown: import("@prisma/client/runtime/library").JsonValue | null;
+        l3Triggered: boolean;
+        l3Blocked: boolean | null;
+        feedbackScore: number | null;
+        feedbackComment: string | null;
+        userEdited: boolean;
+        editDiff: string | null;
+    })[]>;
     /**
      * Get traces for a conversation
      */
-    static getConversationTraces(conversationId: string): Promise<any>;
+    static getConversationTraces(conversationId: string): Promise<({
+        aiEvents: {
+            id: string;
+            agentId: string | null;
+            conversationId: string | null;
+            userId: string;
+            workspaceId: string | null;
+            model: string;
+            tier: string;
+            tokensIn: number;
+            tokensOut: number;
+            cost: number;
+            latencyMs: number;
+            stepNumber: number;
+            action: string;
+            toolName: string | null;
+            toolInput: import("@prisma/client/runtime/library").JsonValue | null;
+            toolOutput: import("@prisma/client/runtime/library").JsonValue | null;
+            stepsUsed: number;
+            evalResult: string;
+            timestamp: Date;
+            traceId: string | null;
+        }[];
+    } & {
+        id: string;
+        agentId: string;
+        conversationId: string;
+        userId: string;
+        workspaceId: string;
+        latencyMs: number | null;
+        startedAt: Date;
+        completedAt: Date | null;
+        status: import("@prisma/client").$Enums.TraceStatus;
+        steps: import("@prisma/client/runtime/library").JsonValue;
+        totalSteps: number;
+        maxSteps: number;
+        totalTokensIn: number;
+        totalTokensOut: number;
+        totalCost: number;
+        toolCalls: import("@prisma/client/runtime/library").JsonValue;
+        toolSuccesses: number;
+        toolFailures: number;
+        l1Passed: boolean | null;
+        l1Failures: import("@prisma/client/runtime/library").JsonValue | null;
+        l2Score: number | null;
+        l2Breakdown: import("@prisma/client/runtime/library").JsonValue | null;
+        l3Triggered: boolean;
+        l3Blocked: boolean | null;
+        feedbackScore: number | null;
+        feedbackComment: string | null;
+        userEdited: boolean;
+        editDiff: string | null;
+    })[]>;
     /**
      * Get metrics for an agent
      */
     static getAgentMetrics(agentId: string, days?: number): Promise<{
-        total: any;
-        completed: any;
-        failed: any;
+        total: number;
+        completed: number;
+        failed: number;
         successRate: number;
         avgCost: number;
         avgLatency: number;

@@ -104,7 +104,7 @@ var AgentResource = class _AgentResource extends BaseResource {
       where: { id }
     });
     if (!agent) return null;
-    if (agent.workspaceId !== auth.workspaceId) {
+    if (agent.workspaceId && agent.workspaceId !== auth.workspaceId) {
       throw new PermissionError2(auth.userId, "Agent", "read");
     }
     return new _AgentResource(agent, auth);
@@ -114,7 +114,7 @@ var AgentResource = class _AgentResource extends BaseResource {
    */
   static async findAll(auth, options) {
     const agents = await prisma.agent.findMany({
-      where: workspaceScope(auth),
+      where: { userId: auth.userId },
       ...buildQueryOptions(options)
     });
     return agents.map((agent) => new _AgentResource(agent, auth));
@@ -125,8 +125,8 @@ var AgentResource = class _AgentResource extends BaseResource {
   static async findActive(auth, options) {
     const agents = await prisma.agent.findMany({
       where: {
-        ...workspaceScope(auth),
-        isActive: true
+        userId: auth.userId,
+        isEnabled: true
       },
       ...buildQueryOptions(options)
     });
@@ -138,12 +138,14 @@ var AgentResource = class _AgentResource extends BaseResource {
   static async create(auth, data) {
     const agent = await prisma.agent.create({
       data: {
-        ...data,
-        workspaceId: auth.workspaceId,
-        userId: auth.userId,
+        name: data.name,
+        description: data.description,
+        systemPrompt: data.systemPrompt,
         model: data.model ?? "ANTHROPIC",
         temperature: data.temperature ?? 0.7,
-        maxStepsPerRun: data.maxStepsPerRun ?? 10
+        maxStepsPerRun: data.maxStepsPerRun ?? 10,
+        workspaceId: auth.workspaceId,
+        userId: auth.userId
       }
     });
     return new _AgentResource(agent, auth);
@@ -153,7 +155,7 @@ var AgentResource = class _AgentResource extends BaseResource {
    */
   static async count(auth) {
     return prisma.agent.count({
-      where: workspaceScope(auth)
+      where: { userId: auth.userId }
     });
   }
   // ============================================
@@ -172,13 +174,13 @@ var AgentResource = class _AgentResource extends BaseResource {
     return this;
   }
   /**
-   * Soft delete the agent (set isActive to false).
+   * Soft delete the agent (set isEnabled to false).
    */
   async deactivate() {
     this.assertWrite();
     const updated = await prisma.agent.update({
       where: { id: this.id },
-      data: { isActive: false }
+      data: { isEnabled: false }
     });
     this._data = updated;
     return this;
@@ -232,8 +234,8 @@ var AgentResource = class _AgentResource extends BaseResource {
   get maxStepsPerRun() {
     return this._data.maxStepsPerRun;
   }
-  get isActive() {
-    return this._data.isActive;
+  get isEnabled() {
+    return this._data.isEnabled;
   }
   get workspaceId() {
     return this._data.workspaceId;
@@ -251,7 +253,7 @@ var AgentResource = class _AgentResource extends BaseResource {
       model: this.model,
       temperature: this.temperature,
       maxStepsPerRun: this.maxStepsPerRun,
-      isActive: this.isActive,
+      isEnabled: this.isEnabled,
       workspaceId: this.workspaceId,
       createdAt: this._data.createdAt.toISOString(),
       updatedAt: this._data.updatedAt.toISOString()
@@ -403,17 +405,17 @@ var CredentialResource = class _CredentialResource extends BaseResource {
       where: { id }
     });
     if (!credential) return null;
-    if (credential.workspaceId !== auth.workspaceId) {
+    if (credential.userId !== auth.userId) {
       throw new PermissionError4(auth.userId, "Credential", "read");
     }
     return new _CredentialResource(credential, auth);
   }
   /**
-   * Find all credentials in the workspace.
+   * Find all credentials for the user.
    */
   static async findAll(auth, options) {
     const credentials = await prisma.credential.findMany({
-      where: workspaceScope(auth),
+      where: { userId: auth.userId },
       ...buildQueryOptions(options)
     });
     return credentials.map(
@@ -426,7 +428,7 @@ var CredentialResource = class _CredentialResource extends BaseResource {
   static async findByType(auth, type, options) {
     const credentials = await prisma.credential.findMany({
       where: {
-        ...workspaceScope(auth),
+        userId: auth.userId,
         type
       },
       ...buildQueryOptions(options)
@@ -437,13 +439,14 @@ var CredentialResource = class _CredentialResource extends BaseResource {
   }
   /**
    * Create a new credential.
-   * NOTE: Data should already be encrypted before calling this.
+   * NOTE: Value should already be encrypted before calling this.
    */
   static async create(auth, data) {
     const credential = await prisma.credential.create({
       data: {
-        ...data,
-        workspaceId: auth.workspaceId,
+        name: data.name,
+        type: data.type,
+        value: data.value,
         userId: auth.userId
       }
     });
@@ -455,7 +458,7 @@ var CredentialResource = class _CredentialResource extends BaseResource {
   static async exists(auth, type) {
     const count = await prisma.credential.count({
       where: {
-        ...workspaceScope(auth),
+        userId: auth.userId,
         type
       }
     });
@@ -465,25 +468,25 @@ var CredentialResource = class _CredentialResource extends BaseResource {
   // Instance Methods
   // ============================================
   /**
-   * Update credential metadata (not the encrypted data).
+   * Update credential name.
    */
-  async updateMetadata(data) {
+  async updateName(name) {
     this.assertWrite();
     const updated = await prisma.credential.update({
       where: { id: this.id },
-      data
+      data: { name }
     });
     this._data = updated;
     return this;
   }
   /**
-   * Update the encrypted data (for key rotation).
+   * Update the encrypted value (for key rotation).
    */
-  async updateEncryptedData(encryptedData) {
+  async updateValue(value) {
     this.assertWrite();
     const updated = await prisma.credential.update({
       where: { id: this.id },
-      data: { encryptedData }
+      data: { value }
     });
     this._data = updated;
     return this;
@@ -497,13 +500,6 @@ var CredentialResource = class _CredentialResource extends BaseResource {
       where: { id: this.id }
     });
   }
-  /**
-   * Check if the credential is expired.
-   */
-  isExpired() {
-    if (!this._data.expiresAt) return false;
-    return this._data.expiresAt < /* @__PURE__ */ new Date();
-  }
   // ============================================
   // Getters
   // ============================================
@@ -513,28 +509,22 @@ var CredentialResource = class _CredentialResource extends BaseResource {
   get type() {
     return this._data.type;
   }
-  get workspaceId() {
-    return this._data.workspaceId;
-  }
   get userId() {
     return this._data.userId;
   }
-  get expiresAt() {
-    return this._data.expiresAt;
-  }
   /**
-   * Get encrypted data for decryption.
-   * Should only be used by the connector layer.
+   * Get encrypted value for decryption.
+   * Should only be used by the connector/crypto layer.
    */
-  getEncryptedData() {
+  getEncryptedValue() {
     this.assertRead();
-    return this._data.encryptedData;
+    return this._data.value;
   }
   // ============================================
   // Serialization
   // ============================================
   /**
-   * Returns metadata only - NEVER includes encrypted data.
+   * Returns metadata only - NEVER includes encrypted value.
    */
   toJSON() {
     this.assertRead();
@@ -542,10 +532,7 @@ var CredentialResource = class _CredentialResource extends BaseResource {
       id: this.id,
       name: this.name,
       type: this.type,
-      workspaceId: this.workspaceId,
       userId: this.userId,
-      expiresAt: this._data.expiresAt?.toISOString() ?? null,
-      isExpired: this.isExpired(),
       createdAt: this._data.createdAt.toISOString(),
       updatedAt: this._data.updatedAt.toISOString()
     };
@@ -644,7 +631,16 @@ var AgentRunResource = class _AgentRunResource extends BaseResource {
     this.assertWrite();
     const updated = await prisma.agentRun.update({
       where: { id: this.id },
-      data: eval_
+      data: {
+        l1Assertions: eval_.l1Assertions,
+        l1Passed: eval_.l1Passed,
+        l2Score: eval_.l2Score,
+        l2Breakdown: eval_.l2Breakdown,
+        l3Triggered: eval_.l3Triggered,
+        l3Blocked: eval_.l3Blocked,
+        l3Reason: eval_.l3Reason,
+        status: eval_.status
+      }
     });
     this._data = updated;
     return this;

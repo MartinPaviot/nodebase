@@ -8,7 +8,8 @@ import {
 } from "@/trpc/init";
 import z from "zod";
 import { PAGINATION } from "@/config/constants";
-import { AgentModel, MemoryCategory, TriggerType, TemplateCategory, TemplateRole, TemplateUseCase, SwarmStatus, KnowledgeSourceType, NodeType, Prisma } from "@prisma/client";
+import { AgentModel, MemoryCategory, TriggerType, TemplateCategory, TemplateRole, TemplateUseCase, SwarmStatus, KnowledgeSourceType, NodeType, Prisma, LeadStatus, CampaignStatus, FeedbackType } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 import { executeSwarm, cancelSwarm } from "@/lib/swarm-executor";
 import { indexDocument, searchKnowledge } from "@/lib/knowledge-base";
 
@@ -2245,27 +2246,6 @@ export const agentsRouter = createTRPCRouter({
       return getUserAnalytics(ctx.auth.user.id, input.days);
     }),
 
-  submitFeedback: protectedProcedure
-    .input(
-      z.object({
-        agentId: z.string(),
-        positive: z.boolean(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Verify agent ownership
-      await prisma.agent.findUniqueOrThrow({
-        where: { id: input.agentId, userId: ctx.auth.user.id },
-      });
-
-      const { recordMetric } = await import("@/lib/agent-analytics");
-      await recordMetric(input.agentId, {
-        feedbackPositive: input.positive,
-      });
-
-      return { success: true };
-    }),
-
   // ==================
   // ACTIVITY LOG
   // ==================
@@ -2516,6 +2496,63 @@ export const agentsRouter = createTRPCRouter({
       });
     }),
 
+  // Phase 3.2: Submit feedback on agent outputs
+  submitFeedback: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+        messageId: z.string(),
+        type: z.enum(["THUMBS_UP", "THUMBS_DOWN", "USER_EDIT"]),
+        originalOutput: z.string().optional(),
+        editedOutput: z.string().optional(),
+        metadata: z.record(z.unknown()).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the conversation to verify ownership and get agentId
+      const conversation = await prisma.conversation.findUniqueOrThrow({
+        where: { id: input.conversationId },
+        include: { agent: true },
+      });
+
+      if (conversation.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to submit feedback for this conversation",
+        });
+      }
+
+      // Find the most recent trace for this conversation
+      const latestTrace = await prisma.agentTrace.findFirst({
+        where: { conversationId: input.conversationId },
+        orderBy: { startedAt: "desc" },
+      });
+
+      if (!latestTrace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No trace found for this conversation",
+        });
+      }
+
+      // Create the feedback record
+      const feedback = await prisma.agentFeedback.create({
+        data: {
+          traceId: latestTrace.id,
+          conversationId: input.conversationId,
+          userId: ctx.auth.user.id,
+          agentId: conversation.agent.id,
+          type: input.type,
+          originalOutput: input.originalOutput || "",
+          userEdit: input.type === "USER_EDIT" ? input.editedOutput : null,
+          stepNumber: 0, // TODO: Track actual step number if needed
+          metadata: input.metadata as Prisma.InputJsonValue,
+        },
+      });
+
+      return { success: true, feedbackId: feedback.id };
+    }),
+
   getABTests: protectedProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -2600,5 +2637,615 @@ export const agentsRouter = createTRPCRouter({
       const { SelfModifier } = await import("@nodebase/core");
       const modifier = new SelfModifier();
       await modifier.applyModification(input.proposalId, input.approved);
+    }),
+
+  // ==================
+  // CAMPAIGNS (Cold Email Outreach)
+  // ==================
+
+  getCampaigns: protectedProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Verify agent ownership
+      await prisma.agent.findUniqueOrThrow({
+        where: { id: input.agentId, userId: ctx.auth.user.id },
+      });
+
+      const campaigns = await prisma.campaign.findMany({
+        where: { agentId: input.agentId },
+        orderBy: { updatedAt: "desc" },
+        include: {
+          _count: {
+            select: {
+              leads: true,
+              emails: true,
+            },
+          },
+        },
+      });
+
+      return campaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        leadCount: campaign.totalLeads,
+        contacted: campaign.leadsContacted,
+        replies: campaign.leadsReplied,
+        positiveReplies: campaign.leadsPositive,
+        bounced: campaign.leadsBounced,
+        startedAt: campaign.startedAt?.toISOString() ?? null,
+        createdAt: campaign.createdAt.toISOString(),
+      }));
+    }),
+
+  getCampaign: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        campaignId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Verify agent ownership
+      await prisma.agent.findUniqueOrThrow({
+        where: { id: input.agentId, userId: ctx.auth.user.id },
+      });
+
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId, agentId: input.agentId },
+        include: {
+          _count: {
+            select: {
+              leads: true,
+              emails: true,
+            },
+          },
+          dailyStats: {
+            orderBy: { date: "desc" },
+            take: 30,
+          },
+        },
+      });
+
+      // Aggregate delivered/opened from daily stats
+      const delivered = campaign.dailyStats.reduce((s, d) => s + d.emailsDelivered, 0);
+      const opened = campaign.dailyStats.reduce((s, d) => s + d.emailsOpened, 0);
+
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        leadCount: campaign.totalLeads,
+        contacted: campaign.leadsContacted,
+        replies: campaign.leadsReplied,
+        positiveReplies: campaign.leadsPositive,
+        bounced: campaign.leadsBounced,
+        delivered,
+        opened,
+        startedAt: campaign.startedAt?.toISOString() ?? null,
+        createdAt: campaign.createdAt.toISOString(),
+        abTestEnabled: campaign.abTestEnabled,
+        sequence: (campaign.steps ?? []) as Array<{
+          type: string;
+          directive?: string;
+          subjectHint?: string;
+          toneHint?: string;
+          maxWords?: number;
+          abEnabled?: boolean;
+          variants?: Array<{ directive: string; weight: number }>;
+          days?: number;
+          businessDaysOnly?: boolean;
+        }>,
+        config: {
+          ...(campaign.sendingSchedule as Record<string, unknown> ?? {}),
+          dailySendLimit: campaign.dailySendLimit,
+          mailboxStrategy: campaign.mailboxStrategy,
+          abTestEnabled: campaign.abTestEnabled,
+        },
+      };
+    }),
+
+  createCampaign: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        name: z.string().min(1).max(200),
+        // Accept both "steps" and "sequence" for compatibility
+        steps: z.array(z.any()).optional(),
+        sequence: z.array(z.any()).optional(),
+        // Accept both flat fields and nested config
+        sendingSchedule: z.any().optional(),
+        dailySendLimit: z.number().min(1).max(500).optional(),
+        mailboxStrategy: z
+          .enum(["ROUND_ROBIN", "RANDOM", "LEAST_USED", "DOMAIN_MATCH"])
+          .optional(),
+        config: z.object({
+          timezone: z.string().optional(),
+          sendingDays: z.array(z.string()).optional(),
+          startHour: z.number().optional(),
+          endHour: z.number().optional(),
+          dailySendLimit: z.number().optional(),
+          mailboxStrategy: z.string().optional(),
+          abTestEnabled: z.boolean().optional(),
+        }).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify agent ownership
+      await prisma.agent.findUniqueOrThrow({
+        where: { id: input.agentId, userId: ctx.auth.user.id },
+      });
+
+      const stepsData = input.sequence ?? input.steps ?? [];
+      const configData = input.config;
+      const dailyLimit = configData?.dailySendLimit ?? input.dailySendLimit ?? 50;
+      const strategy = (configData?.mailboxStrategy ?? input.mailboxStrategy ?? "ROUND_ROBIN") as "ROUND_ROBIN" | "RANDOM" | "LEAST_USED" | "DOMAIN_MATCH";
+
+      // Count email-type steps for totalSteps
+      const emailSteps = (stepsData as Array<{ type?: string }>).filter(
+        (step) => step.type === "email" || step.type === "follow_up"
+      );
+
+      const schedule = input.sendingSchedule ?? (configData ? {
+        timezone: configData.timezone,
+        days: configData.sendingDays,
+        startHour: configData.startHour,
+        endHour: configData.endHour,
+      } : undefined);
+
+      return prisma.campaign.create({
+        data: {
+          agentId: input.agentId,
+          name: input.name,
+          status: "DRAFT",
+          steps: stepsData as Prisma.InputJsonValue,
+          totalSteps: emailSteps.length,
+          sendingSchedule: schedule
+            ? (schedule as Prisma.InputJsonValue)
+            : undefined,
+          dailySendLimit: dailyLimit,
+          mailboxStrategy: strategy,
+          abTestEnabled: configData?.abTestEnabled ?? false,
+        },
+      });
+    }),
+
+  updateCampaign: protectedProcedure
+    .input(
+      z.object({
+        campaignId: z.string(),
+        data: z
+          .object({
+            name: z.string().min(1).max(200),
+            steps: z.array(z.any()),
+            sendingSchedule: z.any(),
+            dailySendLimit: z.number().min(1).max(500),
+            mailboxStrategy: z.enum([
+              "ROUND_ROBIN",
+              "RANDOM",
+              "LEAST_USED",
+              "DOMAIN_MATCH",
+            ]),
+            abTestEnabled: z.boolean(),
+          })
+          .partial(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      // Only updatable if DRAFT or PAUSED
+      if (campaign.status !== "DRAFT" && campaign.status !== "PAUSED") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Campaign can only be updated when in DRAFT or PAUSED status",
+        });
+      }
+
+      const updateData: Record<string, unknown> = {};
+
+      if (input.data.name !== undefined) updateData.name = input.data.name;
+      if (input.data.steps !== undefined) {
+        updateData.steps = input.data.steps as Prisma.InputJsonValue;
+        // Recalculate totalSteps
+        const emailSteps = (
+          input.data.steps as Array<{ type?: string }>
+        ).filter(
+          (step) => step.type === "email" || step.type === "follow_up"
+        );
+        updateData.totalSteps = emailSteps.length;
+      }
+      if (input.data.sendingSchedule !== undefined) {
+        updateData.sendingSchedule =
+          input.data.sendingSchedule as Prisma.InputJsonValue;
+      }
+      if (input.data.dailySendLimit !== undefined)
+        updateData.dailySendLimit = input.data.dailySendLimit;
+      if (input.data.mailboxStrategy !== undefined)
+        updateData.mailboxStrategy = input.data.mailboxStrategy;
+      if (input.data.abTestEnabled !== undefined)
+        updateData.abTestEnabled = input.data.abTestEnabled;
+
+      return prisma.campaign.update({
+        where: { id: input.campaignId },
+        data: updateData,
+      });
+    }),
+
+  startCampaign: protectedProcedure
+    .input(z.object({ campaignId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: {
+          agent: true,
+          _count: { select: { leads: true } },
+        },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      // Verify at least 1 lead exists
+      if (campaign._count.leads === 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Campaign must have at least 1 lead before starting",
+        });
+      }
+
+      // Verify at least 1 email step exists
+      const steps = campaign.steps as Array<{ type?: string }>;
+      const hasEmailStep = steps.some(
+        (step) => step.type === "email" || step.type === "follow_up"
+      );
+      if (!hasEmailStep) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Campaign must have at least 1 email step before starting",
+        });
+      }
+
+      return prisma.campaign.update({
+        where: { id: input.campaignId },
+        data: {
+          status: "ACTIVE",
+          startedAt: new Date(),
+        },
+      });
+    }),
+
+  pauseCampaign: protectedProcedure
+    .input(z.object({ campaignId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      return prisma.campaign.update({
+        where: { id: input.campaignId },
+        data: {
+          status: "PAUSED",
+          pausedAt: new Date(),
+        },
+      });
+    }),
+
+  importLeads: protectedProcedure
+    .input(
+      z.object({
+        campaignId: z.string(),
+        leads: z.array(
+          z.object({
+            email: z.string().email(),
+            firstName: z.string().optional(),
+            lastName: z.string().optional(),
+            company: z.string().optional(),
+            jobTitle: z.string().optional(),
+            linkedinUrl: z.string().optional(),
+            phone: z.string().optional(),
+            customVariables: z.record(z.string()).optional(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      // Bulk create leads, skipping duplicates on campaignId+email
+      const result = await prisma.lead.createMany({
+        data: input.leads.map((lead) => ({
+          campaignId: input.campaignId,
+          email: lead.email,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          company: lead.company,
+          jobTitle: lead.jobTitle,
+          linkedinUrl: lead.linkedinUrl,
+          phone: lead.phone,
+          customVariables: lead.customVariables
+            ? (lead.customVariables as Prisma.InputJsonValue)
+            : undefined,
+        })),
+        skipDuplicates: true,
+      });
+
+      const imported = result.count;
+      const skipped = input.leads.length - imported;
+
+      // Update campaign totalLeads count
+      const totalLeads = await prisma.lead.count({
+        where: { campaignId: input.campaignId },
+      });
+
+      await prisma.campaign.update({
+        where: { id: input.campaignId },
+        data: { totalLeads },
+      });
+
+      return { imported, skipped };
+    }),
+
+  getLeads: protectedProcedure
+    .input(
+      z.object({
+        campaignId: z.string(),
+        status: z.nativeEnum(LeadStatus).optional(),
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(100).default(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      const where = {
+        campaignId: input.campaignId,
+        ...(input.status && { status: input.status }),
+      };
+
+      const [items, totalCount] = await Promise.all([
+        prisma.lead.findMany({
+          where,
+          skip: (input.page - 1) * input.limit,
+          take: input.limit,
+          orderBy: { createdAt: "desc" },
+          include: {
+            emails: {
+              orderBy: { sequenceStep: "asc" },
+              select: {
+                id: true,
+                sequenceStep: true,
+                variant: true,
+                subject: true,
+                status: true,
+                sentAt: true,
+                openedAt: true,
+                repliedAt: true,
+                bouncedAt: true,
+              },
+            },
+          },
+        }),
+        prisma.lead.count({ where }),
+      ]);
+
+      const totalPages = Math.ceil(totalCount / input.limit);
+
+      return {
+        items,
+        page: input.page,
+        limit: input.limit,
+        totalCount,
+        totalPages,
+        hasNextPage: input.page < totalPages,
+        hasPreviousPage: input.page > 1,
+      };
+    }),
+
+  getCampaignStats: protectedProcedure
+    .input(
+      z.object({
+        campaignId: z.string(),
+        days: z.number().min(1).max(365).default(30),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      // Verify ownership through agent
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      const since = new Date();
+      since.setDate(since.getDate() - input.days);
+
+      return prisma.campaignDailyStats.findMany({
+        where: {
+          campaignId: input.campaignId,
+          date: { gte: since },
+        },
+        orderBy: { date: "asc" },
+      });
+    }),
+
+  // ======================================================================
+  // INBOX REPLIES
+  // ======================================================================
+
+  getInboxReplies: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        campaignId: z.string().optional(),
+        sentiment: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const agent = await prisma.agent.findUniqueOrThrow({
+        where: { id: input.agentId },
+      });
+
+      if (agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this agent",
+        });
+      }
+
+      // Get all campaigns for this agent
+      const campaigns = await prisma.campaign.findMany({
+        where: { agentId: input.agentId },
+        select: { id: true, name: true },
+      });
+
+      const campaignIds = input.campaignId
+        ? [input.campaignId]
+        : campaigns.map((c) => c.id);
+
+      // Find leads that have replied
+      const leads = await prisma.lead.findMany({
+        where: {
+          campaignId: { in: campaignIds },
+          repliedAt: { not: null },
+          ...(input.sentiment && {
+            replySentiment: input.sentiment as "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "OUT_OF_OFFICE" | "BOUNCE",
+          }),
+        },
+        include: {
+          campaign: { select: { id: true, name: true } },
+          emails: {
+            orderBy: { sequenceStep: "asc" },
+            select: {
+              id: true,
+              subject: true,
+              body: true,
+              sentAt: true,
+              repliedAt: true,
+              sequenceStep: true,
+            },
+          },
+        },
+        orderBy: { repliedAt: "desc" },
+        take: 100,
+      });
+
+      return leads.map((lead) => ({
+        id: lead.id,
+        leadName: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || lead.email,
+        leadEmail: lead.email,
+        leadCompany: lead.company ?? "",
+        campaignId: lead.campaignId,
+        campaignName: lead.campaign.name,
+        sentiment: lead.replySentiment ?? "NEUTRAL",
+        subject: lead.emails[0]?.subject ?? "",
+        snippet: lead.replyContent?.slice(0, 120) ?? "",
+        body: lead.replyContent ?? "",
+        threadHistory: lead.emails.map((e) => ({
+          id: e.id,
+          from: "agent",
+          to: lead.email,
+          subject: e.subject,
+          body: e.body,
+          sentAt: e.sentAt?.toISOString() ?? "",
+          direction: "OUTBOUND" as const,
+        })),
+        receivedAt: lead.repliedAt?.toISOString() ?? "",
+      }));
+    }),
+
+  // ======================================================================
+  // UPDATE CAMPAIGN STATUS
+  // ======================================================================
+
+  updateCampaignStatus: protectedProcedure
+    .input(
+      z.object({
+        campaignId: z.string(),
+        status: z.nativeEnum(CampaignStatus),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId },
+        include: { agent: true },
+      });
+
+      if (campaign.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not own this campaign",
+        });
+      }
+
+      const data: Record<string, unknown> = { status: input.status };
+
+      if (input.status === "ACTIVE" && !campaign.startedAt) {
+        data.startedAt = new Date();
+      }
+      if (input.status === "PAUSED") {
+        data.pausedAt = new Date();
+      }
+      if (input.status === "COMPLETED") {
+        data.completedAt = new Date();
+      }
+
+      return prisma.campaign.update({
+        where: { id: input.campaignId },
+        data,
+      });
     }),
 });

@@ -1,9 +1,6 @@
 import prisma from "./db";
 import { Anthropic } from "@anthropic-ai/sdk";
 
-// Note: In production, you'd use Recall.ai, Assembly AI, or similar
-// For now, we'll create the infrastructure that can be connected later
-
 export async function scheduleMeetingRecording(agentId: string, data: {
   title: string;
   meetingUrl: string;
@@ -37,26 +34,45 @@ export async function processTranscript(recordingId: string, transcript: string)
 
   const anthropic = new Anthropic();
 
-  // Generate summary and action items
+  const participants = (recording.participants as string[]) || [];
+
+  // Generate MEDDPICC-structured analysis + summary + action items
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
-    system: `You are a meeting summarizer. Analyze the transcript and provide:
-1. A concise summary (2-3 paragraphs)
-2. Key decisions made
-3. Action items with assignees if mentioned
-4. Follow-up items
+    max_tokens: 4096,
+    system: `You are a sales meeting analyst using the MEDDPICC framework.
 
-Output as JSON:
+Analyze the transcript and provide a structured JSON response:
+
 {
-  "summary": "...",
-  "decisions": ["..."],
+  "summary": "2-3 paragraph summary of the meeting",
+  "meddpicc": {
+    "metrics": "Quantifiable measures of success mentioned",
+    "economicBuyer": "Who has budget authority",
+    "decisionCriteria": "What factors drive their decision",
+    "decisionProcess": "Steps/timeline to close",
+    "paperProcess": "Legal/procurement steps",
+    "identifiedPain": "Core problems they're solving",
+    "champion": "Internal advocate",
+    "competition": "Other solutions mentioned"
+  },
+  "keyMoments": {
+    "objections": ["List of objections raised"],
+    "buyingSignals": ["Positive signals detected"],
+    "commitments": ["Commitments made by either side"],
+    "concerns": ["Red flags or concerns"]
+  },
+  "decisions": ["Key decisions made"],
   "actionItems": [{"task": "...", "assignee": "...", "dueDate": "..."}],
-  "followUps": ["..."]
-}`,
+  "followUps": ["Follow-up items"],
+  "nextSteps": "Agreed-upon next steps"
+}
+
+Only include information actually discussed in the meeting. Do not fabricate details.
+If a MEDDPICC field was not discussed, set it to null.`,
     messages: [{
       role: "user",
-      content: `Meeting: ${recording.title}\n\nTranscript:\n${transcript}`,
+      content: `Meeting: ${recording.title}\nParticipants: ${participants.join(", ")}\n\nTranscript:\n${transcript.slice(0, 30000)}`,
     }],
   });
 

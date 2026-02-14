@@ -12,5 +12,11 @@ export * from './queues';
 // Export workers
 export * from './workers';
 
+// Export outreach queues
+export * from './outreach-queues';
+
+// Export outreach workers
+export * from './outreach-workers';
+
 // Re-export BullMQ types for convenience
 export type { Queue, Worker, Job } from 'bullmq';

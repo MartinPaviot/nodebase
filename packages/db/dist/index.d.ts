@@ -1,5 +1,8 @@
 export { default as prisma } from './client.js';
 import { UserId, WorkspaceId, ScanCategory, ScanSignal, LLMUsage } from '@nodebase/types';
+import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
+import * as _prisma_client from '@prisma/client';
+import { AgentModel, CredentialType } from '@prisma/client';
 export { PrismaClient } from '@prisma/client';
 
 /**
@@ -18,7 +21,7 @@ interface ResourceAuth {
 }
 declare abstract class BaseResource<T extends {
     id: string;
-    workspaceId?: string;
+    workspaceId?: string | null;
 }> {
     protected _data: T;
     protected _auth: ResourceAuth;
@@ -66,22 +69,26 @@ interface QueryOptions {
     orderBy?: Record<string, "asc" | "desc">;
 }
 
-/**
- * Agent Resource
- *
- * Provides permission-checked access to Agent records.
- */
-
 interface AgentData {
     id: string;
-    workspaceId: string;
     name: string;
     description: string | null;
     systemPrompt: string;
-    model: string;
+    context: string | null;
+    model: AgentModel;
     temperature: number;
-    maxStepsPerRun: number;
-    isActive: boolean;
+    safeMode: boolean;
+    llmTier: string | null;
+    maxStepsPerRun: number | null;
+    evalRules: unknown;
+    workspaceId: string | null;
+    avatar: string | null;
+    tags: string[];
+    isEnabled: boolean;
+    isFavorite: boolean;
+    userId: string;
+    templateId: string | null;
+    credentialId: string | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -105,7 +112,7 @@ declare class AgentResource extends BaseResource<AgentData> {
         name: string;
         description?: string;
         systemPrompt: string;
-        model?: string;
+        model?: AgentModel;
         temperature?: number;
         maxStepsPerRun?: number;
     }): Promise<AgentResource>;
@@ -120,13 +127,13 @@ declare class AgentResource extends BaseResource<AgentData> {
         name: string;
         description: string;
         systemPrompt: string;
-        model: string;
+        model: AgentModel;
         temperature: number;
         maxStepsPerRun: number;
-        isActive: boolean;
+        isEnabled: boolean;
     }>): Promise<AgentResource>;
     /**
-     * Soft delete the agent (set isActive to false).
+     * Soft delete the agent (set isEnabled to false).
      */
     deactivate(): Promise<AgentResource>;
     /**
@@ -136,19 +143,42 @@ declare class AgentResource extends BaseResource<AgentData> {
     /**
      * Get agent's conversations.
      */
-    getConversations(options?: QueryOptions): Promise<any>;
+    getConversations(options?: QueryOptions): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        agentId: string;
+        title: string | null;
+        isArchived: boolean;
+        isPinned: boolean;
+        shareToken: string | null;
+        source: _prisma_client.$Enums.ConversationSource;
+    }[]>;
     /**
      * Get agent's triggers.
      */
-    getTriggers(): Promise<any>;
+    getTriggers(): Promise<{
+        name: string;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        type: _prisma_client.$Enums.TriggerType;
+        agentId: string;
+        enabled: boolean;
+        config: _prisma_client_runtime_library.JsonValue;
+        cronExpression: string | null;
+        nextRunAt: Date | null;
+        lastRunAt: Date | null;
+        webhookSecret: string | null;
+    }[]>;
     get name(): string;
     get description(): string | null;
     get systemPrompt(): string;
-    get model(): string;
+    get model(): AgentModel;
     get temperature(): number;
-    get maxStepsPerRun(): number;
-    get isActive(): boolean;
-    get workspaceId(): string;
+    get maxStepsPerRun(): number | null;
+    get isEnabled(): boolean;
+    get workspaceId(): string | null;
     toJSON(): Record<string, unknown>;
 }
 
@@ -160,7 +190,7 @@ declare class AgentResource extends BaseResource<AgentData> {
 
 interface ScanResultData {
     id: string;
-    workspaceId: string;
+    workspaceId: string | null;
     category: ScanCategory;
     signals: ScanSignal[];
     scannedAt: Date;
@@ -201,7 +231,7 @@ declare class ScanResource extends BaseResource<ScanResultData> {
     get signals(): ScanSignal[];
     get signalCount(): number;
     get scannedAt(): Date;
-    get workspaceId(): string;
+    get workspaceId(): string | null;
     toJSON(): Record<string, unknown>;
 }
 
@@ -214,12 +244,10 @@ declare class ScanResource extends BaseResource<ScanResultData> {
 
 interface CredentialData {
     id: string;
-    workspaceId: string;
-    userId: string;
     name: string;
-    type: string;
-    encryptedData: string;
-    expiresAt: Date | null;
+    value: string;
+    type: CredentialType;
+    userId: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -229,58 +257,48 @@ declare class CredentialResource extends BaseResource<CredentialData> {
      */
     static findById(id: string, auth: ResourceAuth): Promise<CredentialResource | null>;
     /**
-     * Find all credentials in the workspace.
+     * Find all credentials for the user.
      */
     static findAll(auth: ResourceAuth, options?: QueryOptions): Promise<CredentialResource[]>;
     /**
      * Find credentials by type.
      */
-    static findByType(auth: ResourceAuth, type: string, options?: QueryOptions): Promise<CredentialResource[]>;
+    static findByType(auth: ResourceAuth, type: CredentialType, options?: QueryOptions): Promise<CredentialResource[]>;
     /**
      * Create a new credential.
-     * NOTE: Data should already be encrypted before calling this.
+     * NOTE: Value should already be encrypted before calling this.
      */
     static create(auth: ResourceAuth, data: {
         name: string;
-        type: string;
-        encryptedData: string;
-        expiresAt?: Date;
+        type: CredentialType;
+        value: string;
     }): Promise<CredentialResource>;
     /**
      * Check if a credential exists for a type.
      */
-    static exists(auth: ResourceAuth, type: string): Promise<boolean>;
+    static exists(auth: ResourceAuth, type: CredentialType): Promise<boolean>;
     /**
-     * Update credential metadata (not the encrypted data).
+     * Update credential name.
      */
-    updateMetadata(data: {
-        name?: string;
-        expiresAt?: Date;
-    }): Promise<CredentialResource>;
+    updateName(name: string): Promise<CredentialResource>;
     /**
-     * Update the encrypted data (for key rotation).
+     * Update the encrypted value (for key rotation).
      */
-    updateEncryptedData(encryptedData: string): Promise<CredentialResource>;
+    updateValue(value: string): Promise<CredentialResource>;
     /**
      * Delete the credential.
      */
     delete(): Promise<void>;
-    /**
-     * Check if the credential is expired.
-     */
-    isExpired(): boolean;
     get name(): string;
-    get type(): string;
-    get workspaceId(): string;
+    get type(): CredentialType;
     get userId(): string;
-    get expiresAt(): Date | null;
     /**
-     * Get encrypted data for decryption.
-     * Should only be used by the connector layer.
+     * Get encrypted value for decryption.
+     * Should only be used by the connector/crypto layer.
      */
-    getEncryptedData(): string;
+    getEncryptedValue(): string;
     /**
-     * Returns metadata only - NEVER includes encrypted data.
+     * Returns metadata only - NEVER includes encrypted value.
      */
     toJSON(): Record<string, unknown>;
 }

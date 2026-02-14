@@ -1,23 +1,28 @@
-// Legacy Inngest types (kept for compatibility during migration)
-// TODO: Remove these once all executors are updated
-import { Realtime } from "@inngest/realtime";
-import type { GetStepTools, Inngest } from "inngest";
-
 export type WorkflowContext = Record<string, unknown>;
 
-// Legacy type - kept for backward compatibility
-export type StepTools = GetStepTools<Inngest.Any>;
+// Step tools interface — matches the BullMQ compat layer (queue/compat.ts)
+export interface StepTools {
+    run: <T>(name: string, fn: () => Promise<T> | T) => Promise<T>;
+    ai: {
+        wrap: <TArgs extends unknown[], TResult>(
+            name: string,
+            fn: (...args: TArgs) => Promise<TResult>,
+            ...args: TArgs
+        ) => Promise<TResult>;
+    };
+}
 
-// Node executor params - includes Inngest step/publish (still used by all executors)
-// TODO: Remove step/publish once migrated to BullMQ (Pattern #7)
+// Publish function for realtime status updates
+export type PublishFn = (message: unknown) => Promise<void>;
+
 export interface NodeExecutorParams<TData = Record<string, unknown>> {
     data: TData;
     nodeId: string;
     userId: string;
     context: WorkflowContext;
     step: StepTools;
-    publish: Realtime.PublishFn;
-};
+    publish: PublishFn;
+}
 
 export type NodeExecutor<TData = Record<string, unknown>> = (
     params: NodeExecutorParams<TData>,

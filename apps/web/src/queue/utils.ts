@@ -35,6 +35,6 @@ export async function sendWorkflowExecution(data: {
 }
 
 /**
- * Export topological sort utility (unchanged from inngest/utils.ts)
+ * Export topological sort utility
  */
-export { topologicalSort } from "@/inngest/utils";
+export { topologicalSort } from "@/lib/workflow/utils";

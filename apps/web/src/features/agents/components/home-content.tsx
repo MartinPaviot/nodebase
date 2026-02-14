@@ -41,45 +41,17 @@ import {
 import { CircleNotch } from "@phosphor-icons/react";
 import { Icon as IconifyIcon } from "@iconify/react";
 import {
+  getTemplateConfig,
+  triggerIcons,
+  type TriggerSuggestion,
+} from "@/lib/template-display";
+import { useIntegrationIcons } from "@/hooks/use-integration-icons";
+import { IntegrationIcon } from "@/components/integration-icon";
+import {
   useSuspenseTemplates,
   useCreateAgentFromTemplate,
 } from "@/features/templates/hooks/use-templates";
-import {
-  Robot,
-  Target,
-  EnvelopeOpen,
-  PhoneCall,
-  PhoneOutgoing,
-  CalendarCheck,
-  Newspaper,
-  Palette,
-  Eye,
-  Article,
-  UserPlus,
-  FileText,
-  Books,
-  UsersThree,
-  Handshake,
-  Binoculars,
-  ChatText,
-  ChartBar,
-  Kanban,
-  ListChecks,
-  CheckSquare,
-  Receipt,
-  Files,
-  Database,
-  Lightning,
-  ChatDots,
-  Tag,
-  Question,
-  ShieldCheck,
-  Repeat,
-  Bell,
-  Sparkle,
-  Smiley,
-  type Icon,
-} from "@phosphor-icons/react";
+import { DailyBriefingWidget } from "./daily-briefing-widget";
 
 // Template categories matching Lindy's structure
 const CATEGORIES = [
@@ -243,107 +215,6 @@ interface DBTemplate {
   useCase: string | null;
 }
 
-interface TriggerSuggestion {
-  type: string;
-  label: string;
-}
-
-// Template config: icon + gradient (same as templates page)
-type TemplateConfig = { icon: Icon; gradient: string };
-
-const templateConfigs: Record<string, TemplateConfig> = {
-  "sales meeting recorder": { icon: Microphone, gradient: "from-rose-400 to-red-600" },
-  "lead generator": { icon: Target, gradient: "from-amber-400 to-orange-500" },
-  "lead outreacher": { icon: PaperPlaneTilt, gradient: "from-violet-400 to-purple-500" },
-  "outbound phone call agent": { icon: PhoneOutgoing, gradient: "from-cyan-400 to-teal-600" },
-  "customer support email": { icon: EnvelopeOpen, gradient: "from-emerald-400 to-teal-500" },
-  "website customer support": { icon: Globe, gradient: "from-emerald-400 to-green-500" },
-  "support chatbot": { icon: ChatDots, gradient: "from-pink-400 to-rose-500" },
-  "email assistant": { icon: EnvelopeOpen, gradient: "from-indigo-400 to-blue-600" },
-  "email responder": { icon: Repeat, gradient: "from-blue-400 to-indigo-500" },
-  "email triager": { icon: Tag, gradient: "from-violet-400 to-purple-500" },
-  "meeting scheduler": { icon: CalendarCheck, gradient: "from-sky-400 to-blue-600" },
-  "meeting notetaker": { icon: BookOpen, gradient: "from-indigo-400 to-violet-600" },
-  "meeting recorder": { icon: Microphone, gradient: "from-rose-400 to-pink-600" },
-  "newsletter writer": { icon: Newspaper, gradient: "from-green-400 to-emerald-600" },
-  "content creator": { icon: Palette, gradient: "from-fuchsia-400 to-pink-600" },
-  "seo blog writer": { icon: Article, gradient: "from-emerald-400 to-teal-500" },
-  "resume screener": { icon: FileText, gradient: "from-amber-400 to-yellow-600" },
-  "resume screening agent": { icon: FileText, gradient: "from-amber-400 to-yellow-600" },
-  "company knowledge base": { icon: Books, gradient: "from-violet-400 to-purple-600" },
-  "employee onboarding": { icon: Handshake, gradient: "from-green-400 to-emerald-500" },
-  "web researcher": { icon: Globe, gradient: "from-emerald-400 to-teal-600" },
-  "competition tracker": { icon: Binoculars, gradient: "from-orange-400 to-red-500" },
-  "voice of the customer": { icon: ChatText, gradient: "from-blue-400 to-indigo-500" },
-  "web monitoring": { icon: Bell, gradient: "from-amber-400 to-orange-500" },
-  "productivity assistant": { icon: Lightning, gradient: "from-amber-400 to-yellow-500" },
-  "phone support agent": { icon: PhoneCall, gradient: "from-indigo-400 to-violet-500" },
-  "sms support bot": { icon: ChatText, gradient: "from-blue-400 to-indigo-500" },
-  "whatsapp support agent": { icon: ChatCircle, gradient: "from-green-400 to-emerald-500" },
-};
-
-function getTemplateConfig(templateName: string): TemplateConfig {
-  const normalizedName = templateName.toLowerCase();
-  for (const [key, config] of Object.entries(templateConfigs)) {
-    if (normalizedName.includes(key)) {
-      return config;
-    }
-  }
-  // Default fallback
-  let icon: Icon = Robot;
-  let gradient = "from-blue-400 to-blue-600";
-  if (normalizedName.includes("sales") || normalizedName.includes("lead")) icon = Target;
-  else if (normalizedName.includes("support") || normalizedName.includes("help")) icon = Headset;
-  else if (normalizedName.includes("email")) icon = EnvelopeOpen;
-  else if (normalizedName.includes("phone") || normalizedName.includes("call")) icon = PhoneCall;
-  else if (normalizedName.includes("meeting") || normalizedName.includes("calendar")) icon = CalendarCheck;
-  else if (normalizedName.includes("research") || normalizedName.includes("web")) icon = Globe;
-  return { icon, gradient };
-}
-
-// Integration icons mapping (same as templates page)
-const integrationIcons: Record<string, { icon: string; label: string; color?: string }> = {
-  gmail: { icon: "logos:google-gmail", label: "Gmail" },
-  "google-sheets": { icon: "simple-icons:googlesheets", label: "Google Sheets", color: "#34A853" },
-  "google-calendar": { icon: "logos:google-calendar", label: "Google Calendar" },
-  "google-drive": { icon: "logos:google-drive", label: "Google Drive" },
-  slack: { icon: "logos:slack-icon", label: "Slack" },
-  email: { icon: "mdi:email", label: "Email", color: "#6366F1" },
-  phone: { icon: "mdi:phone", label: "Phone", color: "#10B981" },
-  hubspot: { icon: "simple-icons:hubspot", label: "HubSpot", color: "#FF7A59" },
-  salesforce: { icon: "simple-icons:salesforce", label: "Salesforce", color: "#00A1E0" },
-  linkedin: { icon: "logos:linkedin-icon", label: "LinkedIn" },
-  notion: { icon: "simple-icons:notion", label: "Notion", color: "#000000" },
-  chat: { icon: "mdi:chat", label: "Chat with this Agent", color: "#6366F1" },
-  webhook: { icon: "mdi:webhook", label: "Webhook", color: "#6B7280" },
-  embed: { icon: "mdi:code-tags", label: "Embed", color: "#6366F1" },
-  "web-browser": { icon: "mdi:web", label: "Web browser", color: "#4285F4" },
-  "knowledge-base": { icon: "mdi:book-open-variant", label: "Knowledge base", color: "#6366F1" },
-  timer: { icon: "mdi:timer", label: "Timer", color: "#F59E0B" },
-  "meeting-recorder": { icon: "mdi:microphone", label: "Meeting recorder", color: "#F59E0B" },
-  ai: { icon: "mdi:robot", label: "AI", color: "#8B5CF6" },
-  github: { icon: "logos:github-icon", label: "GitHub" },
-  linear: { icon: "logos:linear-icon", label: "Linear" },
-  calendar: { icon: "mdi:calendar", label: "Calendar", color: "#4285F4" },
-  twilio: { icon: "logos:twilio-icon", label: "Twilio" },
-  whatsapp: { icon: "logos:whatsapp-icon", label: "WhatsApp" },
-  telegram: { icon: "logos:telegram", label: "Telegram" },
-};
-
-// Trigger icons mapping
-const triggerIcons: Record<string, { icon: string; color: string }> = {
-  SCHEDULE: { icon: "mdi:clock-outline", color: "#6366F1" },
-  WEBHOOK: { icon: "mdi:webhook", color: "#10B981" },
-  EMAIL: { icon: "mdi:email-receive-outline", color: "#F59E0B" },
-  CHAT: { icon: "mdi:message-text-outline", color: "#3B82F6" },
-  AGENT_MESSAGE: { icon: "mdi:robot-outline", color: "#8B5CF6" },
-  CALENDAR_EVENT: { icon: "mdi:calendar-clock", color: "#4285F4" },
-  NEW_ROW: { icon: "mdi:table-row-plus-after", color: "#34A853" },
-  EMBED: { icon: "mdi:code-tags", color: "#6366F1" },
-  SMS_RECEIVED: { icon: "mdi:message-processing", color: "#10B981" },
-  CALL_RECEIVED: { icon: "mdi:phone-incoming", color: "#10B981" },
-  MESSAGE_RECEIVED: { icon: "mdi:message-text", color: "#3B82F6" },
-};
 
 export function HomeContent() {
   const router = useRouter();
@@ -352,18 +223,22 @@ export function HomeContent() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
 
   const [prompt, setPrompt] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Close search when clicking outside
+  // Close search when clicking outside (both input and results area)
   useEffect(() => {
     if (!isSearchOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const isInsideSearchInput = searchContainerRef.current?.contains(target);
+      const isInsideSearchResults = searchResultsRef.current?.contains(target);
+      if (!isInsideSearchInput && !isInsideSearchResults) {
         setIsSearchOpen(false);
         setSearchQuery("");
       }
@@ -660,6 +535,11 @@ export function HomeContent() {
       <div className="h-32 relative z-[1]" />
 
       <div className="max-w-4xl mx-auto px-6 -mt-32 pb-12 relative z-[1]">
+        {/* Daily Briefing Widget */}
+        <div className="mb-8">
+          <DailyBriefingWidget />
+        </div>
+
         {/* Main title - more spacing above */}
         <h1 className="text-4xl font-bold text-center mb-2 pt-4">Create. Automate. Scale.</h1>
         <p className="text-lg text-muted-foreground text-center mb-10">Describe your workflow, we'll handle the rest.</p>
@@ -844,7 +724,7 @@ export function HomeContent() {
 
         {/* Search results or Category sections */}
         {searchQuery.trim() ? (
-          <div className="space-y-4">
+          <div ref={searchResultsRef} className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">
                 {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{searchQuery}"
@@ -1051,6 +931,7 @@ function DBTemplatePreviewModal({
   onUse: () => void;
   isPending: boolean;
 }) {
+  const { getIcon } = useIntegrationIcons();
   const config = getTemplateConfig(template.name);
   const integrations = template.suggestedIntegrations || [];
   const triggers = (template.suggestedTriggers || []) as TriggerSuggestion[];
@@ -1060,7 +941,7 @@ function DBTemplatePreviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-6" showCloseButton={false}>
+      <DialogContent className="sm:max-w-md p-6 max-h-[85vh] overflow-y-auto" showCloseButton={false}>
         {/* Icon */}
         <div className={cn("size-12 rounded-lg flex items-center justify-center bg-gradient-to-br", config.gradient)}>
           <config.icon className="size-6 text-white" weight="fill" />
@@ -1107,17 +988,14 @@ function DBTemplatePreviewModal({
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Apps used</p>
             <div className="flex flex-wrap gap-2">
               {allIntegrations.map((integration) => {
-                const info = integrationIcons[integration];
-                const iconName = info?.icon || "mdi:cog";
-                const label = info?.label || integration.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                const color = info?.color;
+                const iconData = getIcon(integration);
                 return (
                   <span
                     key={integration}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm"
                   >
-                    <IconifyIcon icon={iconName} className="size-4" style={color ? { color } : undefined} />
-                    {label}
+                    <IntegrationIcon data={iconData} className="size-4" />
+                    {iconData.label}
                   </span>
                 );
               })}
