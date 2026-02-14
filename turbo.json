@@ -1,6 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "OPENAI_API_KEY",
+    "SENTRY_AUTH_TOKEN",
+    "POLAR_ACCESS_TOKEN",
+    "POLAR_SUCCESS_URL",
+    "ENCRYPTION_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
