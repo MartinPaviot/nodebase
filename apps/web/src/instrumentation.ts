@@ -2,8 +2,12 @@ import * as Sentry from '@sentry/nextjs';
 import { validateConfig } from './lib/config';
 
 export async function register() {
-  // Validate configuration first - fail fast if config is invalid
-  validateConfig();
+  // Skip config validation during build phase (env vars may not be available)
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+  if (!isBuildPhase) {
+    // Validate configuration - fail fast if config is invalid at runtime
+    validateConfig();
+  }
 
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Sentry disabled for faster dev startup

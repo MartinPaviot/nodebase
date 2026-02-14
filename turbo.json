@@ -2,17 +2,25 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env"],
   "globalPassThroughEnv": [
+    "NODE_ENV",
     "DATABASE_URL",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",
+    "NEXT_PUBLIC_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_GENERATIVE_AI_API_KEY",
-    "OPENAI_API_KEY",
+    "COMPOSIO_API_KEY",
+    "REDIS_URL",
+    "CREDENTIAL_ENCRYPTION_KEY",
+    "ENCRYPTION_KEY",
+    "USE_CLAUDE_DIRECT",
     "SENTRY_AUTH_TOKEN",
+    "SENTRY_DSN",
     "POLAR_ACCESS_TOKEN",
-    "POLAR_SUCCESS_URL",
-    "ENCRYPTION_KEY"
+    "POLAR_SUCCESS_URL"
   ],
   "tasks": {
     "build": {
