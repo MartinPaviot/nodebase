@@ -204,17 +204,24 @@ Block if:
 }
 
 // ============================================
-// SINGLETON INSTANCE
+// LAZY SINGLETON (avoid module-level config access during build)
 // ============================================
 
-const l3Evaluator = new L3Evaluator();
+let l3Evaluator: L3Evaluator | null = null;
+
+function getL3Evaluator(): L3Evaluator {
+  if (!l3Evaluator) {
+    l3Evaluator = new L3Evaluator();
+  }
+  return l3Evaluator;
+}
 
 // ============================================
 // CONVENIENCE EXPORTS
 // ============================================
 
 export const evaluateL3 = (text: string, config: L3Config, userId: string) =>
-  l3Evaluator.evaluate(text, config, userId);
+  getL3Evaluator().evaluate(text, config, userId);
 
 export const quickEvalL3 = (text: string, action: string, userId: string) =>
-  l3Evaluator.quickEval(text, action, userId);
+  getL3Evaluator().quickEval(text, action, userId);
