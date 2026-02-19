@@ -1,16 +1,22 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, type ChangeEvent } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Paperclip,
-  Microphone,
   PaperPlaneTilt,
   CircleNotch,
   Robot,
+  X,
 } from "@phosphor-icons/react";
+import { VoiceInputButton } from "@/components/ui/voice-input-button";
+import { useVoiceInput } from "@/hooks/use-voice-input";
+import { toast } from "sonner";
+import type { ProcessedFile } from "@/lib/file-processor";
 import { BuilderSteps, type BuilderStep } from "./builder-steps";
 import { AgentCard } from "./agent-card";
 import { SuggestionsList } from "./suggestions-list";
@@ -50,6 +56,48 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
   const [isLoading, setIsLoading] = useState(false);
   const [agentContext, setAgentContext] = useState<{ id: string; name: string } | null>(null);
 
+  // File upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [initialFiles, setInitialFiles] = useState<ProcessedFile[] | null>(null);
+
+  // Read processed files from sessionStorage (passed from home page)
+  useEffect(() => {
+    const stored = sessionStorage.getItem("builder-files");
+    if (stored) {
+      try {
+        setInitialFiles(JSON.parse(stored));
+      } catch { /* ignore */ }
+      sessionStorage.removeItem("builder-files");
+    }
+  }, []);
+
+  const baseTextRef = useRef("");
+  const { isListening, isTranscribing, startListening } = useVoiceInput({
+    onTranscriptChange: (text) => setInput(text),
+    onListeningEnd: () => { baseTextRef.current = input; },
+    baseText: baseTextRef.current,
+  });
+  const handleMicClick = () => { baseTextRef.current = input; startListening(); };
+
+  const handleFileClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newFiles = Array.from(files);
+    if (attachedFiles.length + newFiles.length > 5) {
+      toast.error("Maximum 5 files allowed");
+      return;
+    }
+    setAttachedFiles(prev => [...prev, ...newFiles]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Current response state
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
   const [currentContent, setCurrentContent] = useState("");
@@ -75,13 +123,28 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
   }, [messages]);
 
   const handleSend = useCallback(
-    async (messageContent: string) => {
+    async (messageContent: string, filesToSend?: ProcessedFile[]) => {
       if (!messageContent.trim() || isLoading) return;
+
+      // Process any attached files from the Paperclip button
+      let processedFiles = filesToSend;
+      if (!processedFiles && attachedFiles.length > 0) {
+        try {
+          const formData = new FormData();
+          attachedFiles.forEach((f) => formData.append("files", f));
+          const res = await fetch("/api/files/process", { method: "POST", body: formData });
+          if (res.ok) {
+            const { files } = await res.json();
+            processedFiles = files;
+          }
+        } catch { /* ignore file processing errors */ }
+        setAttachedFiles([]);
+      }
 
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
-        content: messageContent.trim(),
+        content: messageContent.trim() + (processedFiles?.length ? ` [${processedFiles.length} file(s) attached]` : ""),
       };
 
       setMessages((prev) => [...prev, userMessage]);
@@ -101,6 +164,7 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
             message: messageContent,
             history,
             agentContext,
+            files: processedFiles,
           }),
         });
 
@@ -229,13 +293,16 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
     [isLoading, buildHistory, agentContext, onAgentCreated]
   );
 
-  // Auto-submit initial prompt - only once
+  // Auto-submit initial prompt - only once (with files from home page if available)
   useEffect(() => {
     if (initialPrompt && !hasSubmittedInitial && messages.length === 0 && !isLoading) {
       setHasSubmittedInitial(true);
-      setTimeout(() => handleSend(initialPrompt), 0);
+      setTimeout(() => {
+        handleSend(initialPrompt, initialFiles || undefined);
+        setInitialFiles(null);
+      }, 0);
     }
-  }, [initialPrompt, hasSubmittedInitial, messages.length, isLoading, handleSend]);
+  }, [initialPrompt, hasSubmittedInitial, messages.length, isLoading, handleSend, initialFiles]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,14 +367,7 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
 
                 {/* Text content */}
                 {contentWithoutSuggestions && (
-                  <div className="text-sm prose prose-sm max-w-none">
-                    {contentWithoutSuggestions
-                      .split("\n")
-                      .map(
-                        (paragraph: string, i: number) =>
-                          paragraph.trim() && <p key={i}>{paragraph}</p>
-                      )}
-                  </div>
+                  <MarkdownRenderer content={contentWithoutSuggestions} />
                 )}
 
                 {/* Suggestions */}
@@ -337,12 +397,35 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
       {/* Input */}
       <div className="border-t p-4">
         <form onSubmit={handleFormSubmit} className="max-w-3xl mx-auto">
+          {/* File badges */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2 px-1">
+              {attachedFiles.map((file, i) => (
+                <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                  <Paperclip className="size-3" />
+                  {file.name.length > 20 ? file.name.slice(0, 17) + "..." : file.name}
+                  <button type="button" onClick={() => removeFile(i)} className="ml-0.5 hover:text-destructive">
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            accept="image/*,.pdf,.txt,.csv,.json,.xml"
+            onChange={handleFileChange}
+          />
           <div className="flex items-end gap-2 bg-card rounded-xl border p-3">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="size-8 shrink-0"
+              onClick={handleFileClick}
             >
               <Paperclip className="size-4" />
             </Button>
@@ -352,7 +435,7 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
               onChange={(e) => setInput(e.target.value)}
               placeholder="Enter message"
               rows={1}
-              className="flex-1 bg-transparent resize-none outline-none text-sm min-h-[24px] max-h-32"
+              className="flex-1 bg-transparent resize-none overflow-hidden outline-none text-sm min-h-[24px] max-h-32"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -360,14 +443,13 @@ export function BuilderChat({ initialPrompt, onAgentCreated }: BuilderChatProps)
                 }
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0"
-            >
-              <Microphone className="size-4" />
-            </Button>
+            <VoiceInputButton
+              isListening={isListening}
+              isTranscribing={isTranscribing}
+              onClick={handleMicClick}
+              disabled={isLoading}
+              className="size-8"
+            />
             <Button
               type="submit"
               size="icon"
@@ -449,14 +531,7 @@ function MessageBubble({
 
         {/* Text content */}
         {contentWithoutSuggestions && (
-          <div className="text-sm prose prose-sm max-w-none">
-            {contentWithoutSuggestions
-              .split("\n")
-              .map(
-                (paragraph: string, i: number) =>
-                  paragraph.trim() && <p key={i}>{paragraph}</p>
-              )}
-          </div>
+          <MarkdownRenderer content={contentWithoutSuggestions} />
         )}
 
         {/* Suggestions - only show for the last message */}

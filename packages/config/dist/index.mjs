@@ -11,7 +11,7 @@ var __decorateClass = (decorators, target, key, kind) => {
 
 // src/index.ts
 import { z } from "zod";
-import { ConfigError } from "@nodebase/types";
+import { ConfigError } from "@elevay/types";
 var envMetadataMap = /* @__PURE__ */ new Map();
 function Env(keyOrOptions) {
   return (target, propertyKey) => {

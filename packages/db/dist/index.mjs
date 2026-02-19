@@ -4,7 +4,7 @@ import {
 } from "./chunk-UQ7FQ3YR.mjs";
 
 // src/resources/base.ts
-import { PermissionError } from "@nodebase/types";
+import { PermissionError } from "@elevay/types";
 function canRead(auth, resourceWorkspaceId) {
   return auth.workspaceId === resourceWorkspaceId;
 }
@@ -91,7 +91,7 @@ function workspaceScope(auth) {
 }
 
 // src/resources/agent.ts
-import { PermissionError as PermissionError2 } from "@nodebase/types";
+import { PermissionError as PermissionError2 } from "@elevay/types";
 var AgentResource = class _AgentResource extends BaseResource {
   // ============================================
   // Static Factory Methods
@@ -262,7 +262,7 @@ var AgentResource = class _AgentResource extends BaseResource {
 };
 
 // src/resources/scan.ts
-import { PermissionError as PermissionError3 } from "@nodebase/types";
+import { PermissionError as PermissionError3 } from "@elevay/types";
 function toScanResultData(scan) {
   return {
     id: scan.id,
@@ -392,7 +392,7 @@ var ScanResource = class _ScanResource extends BaseResource {
 };
 
 // src/resources/credential.ts
-import { PermissionError as PermissionError4 } from "@nodebase/types";
+import { PermissionError as PermissionError4 } from "@elevay/types";
 var CredentialResource = class _CredentialResource extends BaseResource {
   // ============================================
   // Static Factory Methods
@@ -540,7 +540,7 @@ var CredentialResource = class _CredentialResource extends BaseResource {
 };
 
 // src/resources/agent-run.ts
-import { PermissionError as PermissionError5 } from "@nodebase/types";
+import { PermissionError as PermissionError5 } from "@elevay/types";
 var AgentRunResource = class _AgentRunResource extends BaseResource {
   // ============================================
   // Static Factory Methods

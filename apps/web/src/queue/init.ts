@@ -92,7 +92,7 @@ function setupGracefulShutdown(): void {
         await removeCalendarTrigger();
         await removeScheduleTrigger();
 
-        // Close all workers gracefully (30s timeout from @nodebase/queue config)
+        // Close all workers gracefully (30s timeout from @elevay/queue config)
         await Promise.all([
           workflowWorker.close(),
           insightsWorker.close(),

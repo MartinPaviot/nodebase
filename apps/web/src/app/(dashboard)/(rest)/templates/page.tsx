@@ -11,14 +11,13 @@ import {
   CaretLeft,
   Plus,
   Star,
-  CircleNotch,
 } from "@phosphor-icons/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import {
   useSuspenseTemplates,
-  useCreateAgentFromTemplate,
 } from "@/features/templates/hooks/use-templates";
+import { TemplateSetupWizard } from "@/features/templates/components/template-setup-wizard";
 import {
   Collapsible,
   CollapsibleContent,
@@ -40,7 +39,7 @@ import {
 import { useIntegrationIcons } from "@/hooks/use-integration-icons";
 import { IntegrationIcon } from "@/components/integration-icon";
 
-// Role filters matching Lindy.ai
+// Role filters
 const ROLES = [
   { id: "HUMAN_RESOURCES", label: "Human Resources" },
   { id: "MARKETING", label: "Marketing" },
@@ -50,22 +49,8 @@ const ROLES = [
   { id: "SUPPORT", label: "Support" },
 ] as const;
 
-// Use case filters matching Lindy.ai
-const USE_CASES = [
-  { id: "AI_ASSISTANT", label: "AI Assistant" },
-  { id: "CHATBOT", label: "Chatbot" },
-  { id: "COACHING", label: "Coaching" },
-  { id: "CONTENT_CREATION", label: "Content creation" },
-  { id: "DOCUMENT_PROCESSING", label: "Document processing" },
-  { id: "EMAILS", label: "Emails" },
-  { id: "MEETINGS", label: "Meetings" },
-  { id: "OUTREACH", label: "Outreach" },
-  { id: "PHONE", label: "Phone" },
-  { id: "PRODUCTIVITY", label: "Productivity" },
-  { id: "RESEARCH", label: "Research" },
-  { id: "TEAMS", label: "Teams" },
-  { id: "WEB_SCRAPER", label: "Web scraper" },
-] as const;
+// Visible templates (only show these by name)
+const VISIBLE_TEMPLATES = ["AI Sales Development Representative"];
 
 // Map old categories to roles for filtering
 const CATEGORY_TO_ROLE: Record<string, string> = {
@@ -157,16 +142,14 @@ interface TemplatePreviewDialogProps {
   template: Template | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUse: () => void;
-  isPending: boolean;
+  onSetup: () => void;
 }
 
 function TemplatePreviewDialog({
   template,
   open,
   onOpenChange,
-  onUse,
-  isPending,
+  onSetup,
 }: TemplatePreviewDialogProps) {
   const { getIcon } = useIntegrationIcons();
 
@@ -245,15 +228,10 @@ function TemplatePreviewDialog({
 
         {/* Add button */}
         <Button
-          onClick={onUse}
-          disabled={isPending}
+          onClick={onSetup}
           className="mt-6 gap-1.5"
         >
-          {isPending ? (
-            <CircleNotch className="size-4 animate-spin" />
-          ) : (
-            <Plus className="size-4" />
-          )}
+          <Plus className="size-4" />
           Add
         </Button>
       </DialogContent>
@@ -264,24 +242,52 @@ function TemplatePreviewDialog({
 function TemplatesContent({
   search,
   selectedRoles,
-  selectedUseCases,
 }: {
   search: string;
   selectedRoles: string[];
-  selectedUseCases: string[];
 }) {
   // Fetch all templates - filtering is done client-side
   const templates = useSuspenseTemplates({
     search,
   });
-  const createFromTemplate = useCreateAgentFromTemplate();
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // State for preview modal
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
 
-  // Filter templates client-side for roles and use cases
+  // State for setup wizard
+  const [wizardTemplate, setWizardTemplate] = useState<Template | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardInitialStep, setWizardInitialStep] = useState<"welcome" | "connect" | "ready">("welcome");
+
+  // Handle OAuth return: ?setup=TEMPLATE_ID
+  useEffect(() => {
+    const setupId = searchParams.get("setup");
+    if (setupId && templates.data) {
+      const template = (templates.data as Template[]).find((t) => t.id === setupId);
+      if (template) {
+        setWizardTemplate(template);
+        setWizardInitialStep("connect");
+        setWizardOpen(true);
+        // Clean up URL param
+        const params = new URLSearchParams(window.location.search);
+        params.delete("setup");
+        const newUrl = params.toString() ? `?${params.toString()}` : "/templates";
+        router.replace(newUrl, { scroll: false });
+      }
+    }
+  }, [searchParams, templates.data, router]);
+
+  // Filter templates client-side for roles and visible templates
   const filteredTemplates = useMemo(() => {
     let result = templates.data as Template[];
+
+    // Only show visible templates
+    result = result.filter((t) =>
+      VISIBLE_TEMPLATES.some((name) => t.name.toLowerCase().includes(name.toLowerCase()))
+    );
 
     // Filter by roles
     if (selectedRoles.length > 0) {
@@ -293,16 +299,6 @@ function TemplatesContent({
         // Fallback to category mapping
         const mappedRole = CATEGORY_TO_ROLE[t.category];
         return selectedRoles.includes(mappedRole);
-      });
-    }
-
-    // Filter by use cases
-    if (selectedUseCases.length > 0) {
-      result = result.filter((t) => {
-        if (t.useCase) {
-          return selectedUseCases.includes(t.useCase);
-        }
-        return false;
       });
     }
 
@@ -321,7 +317,7 @@ function TemplatesContent({
     result = result.sort((a, b) => a.name.localeCompare(b.name));
 
     return result;
-  }, [templates.data, selectedRoles, selectedUseCases]);
+  }, [templates.data, selectedRoles]);
 
   // Get featured templates (first 4)
   const featuredTemplates = filteredTemplates.filter((t) => t.isFeatured).slice(0, 4);
@@ -332,9 +328,12 @@ function TemplatesContent({
       ? "Selected Roles"
       : "All";
 
-  const handleUseTemplate = () => {
+  const handleSetupTemplate = () => {
     if (selectedTemplate) {
-      createFromTemplate.mutate({ templateId: selectedTemplate.id });
+      setWizardTemplate(selectedTemplate);
+      setWizardInitialStep("welcome");
+      setWizardOpen(true);
+      setSelectedTemplate(null); // Close preview dialog
     }
   };
 
@@ -411,19 +410,16 @@ function TemplatesContent({
         template={selectedTemplate}
         open={!!selectedTemplate}
         onOpenChange={(open) => !open && setSelectedTemplate(null)}
-        onUse={handleUseTemplate}
-        isPending={createFromTemplate.isPending}
+        onSetup={handleSetupTemplate}
       />
 
-      {/* Loading overlay */}
-      {createFromTemplate.isPending && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="flex flex-col items-center gap-4">
-            <CircleNotch className="size-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Creating your agent...</p>
-          </div>
-        </div>
-      )}
+      {/* Template setup wizard */}
+      <TemplateSetupWizard
+        template={wizardTemplate}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        initialStep={wizardInitialStep}
+      />
     </div>
   );
 }
@@ -442,9 +438,7 @@ export default function TemplatesPage() {
     }
     return [];
   });
-  const [selectedUseCases, setSelectedUseCases] = useState<string[]>([]);
   const [roleOpen, setRoleOpen] = useState(true);
-  const [useCaseOpen, setUseCaseOpen] = useState(true);
 
   // Sync URL with selected roles
   useEffect(() => {
@@ -465,14 +459,6 @@ export default function TemplatesPage() {
       prev.includes(roleId)
         ? prev.filter((id) => id !== roleId)
         : [...prev, roleId]
-    );
-  };
-
-  const toggleUseCase = (useCaseId: string) => {
-    setSelectedUseCases((prev) =>
-      prev.includes(useCaseId)
-        ? prev.filter((id) => id !== useCaseId)
-        : [...prev, useCaseId]
     );
   };
 
@@ -528,38 +514,6 @@ export default function TemplatesPage() {
             </CollapsibleContent>
           </Collapsible>
 
-          <div className="border-t my-6" />
-
-          {/* Use case filter */}
-          <Collapsible open={useCaseOpen} onOpenChange={setUseCaseOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full mb-4">
-              <span className="text-sm font-medium">Use case</span>
-              <ChevronUp
-                className={`size-4 text-muted-foreground transition-transform ${
-                  useCaseOpen ? "" : "rotate-180"
-                }`}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-3">
-              {USE_CASES.map((useCase) => (
-                <label
-                  key={useCase.id}
-                  className={cn(
-                    "flex items-center gap-3 cursor-pointer py-0.5 -ml-2 pl-2",
-                    selectedUseCases.includes(useCase.id) && "border-l-[3px] border-primary"
-                  )}
-                >
-                  <Checkbox
-                    checked={selectedUseCases.includes(useCase.id)}
-                    onCheckedChange={() => toggleUseCase(useCase.id)}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {useCase.label}
-                  </span>
-                </label>
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
         </aside>
 
         {/* Main content */}
@@ -581,7 +535,6 @@ export default function TemplatesPage() {
             <TemplatesContent
               search={search}
               selectedRoles={selectedRoles}
-              selectedUseCases={selectedUseCases}
             />
           </Suspense>
           </div>

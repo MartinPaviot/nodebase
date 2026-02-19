@@ -4,7 +4,7 @@
  * Specialized queue for executing workflows (replaces Inngest executeWorkflow function).
  */
 import { Queue, Worker, Job } from "bullmq";
-import type { JobData, JobResult } from "@nodebase/types";
+import type { JobData, JobResult } from "@elevay/types";
 export interface WorkflowJobData extends JobData {
     workflowId: string;
     userId?: string;

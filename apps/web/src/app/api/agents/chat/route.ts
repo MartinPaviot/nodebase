@@ -1,10 +1,13 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { AgentModel, MessageRole, ActivityType, MemoryCategory } from "@prisma/client";
+import { TONE_SUFFIX } from "@/lib/flow-executor/prompt-utils";
 import { executeWorkflowSync } from "@/lib/workflow-executor";
+import { extractAndSaveMemories } from "@/lib/memory-extractor";
+import { buildContextWithSummarization } from "@/lib/conversation-summarizer";
+import { getRelevantMemories } from "@/lib/memory-search";
 import type { AgentTool, Workflow } from "@prisma/client";
 import {
   searchKnowledge,
@@ -44,29 +47,20 @@ import {
 } from "@/lib/integrations/notion";
 import { recordMetric } from "@/lib/agent-analytics";
 import { logActivity } from "@/lib/activity-logger";
-import { AgentTracer } from "@nodebase/core";
-import { ClaudeClient, type ClaudeTool, type ClaudeToolResult, type StreamEvent, type ModelTier } from "@/lib/ai/claude-client";
-import { calculateCost } from "@/lib/config";
-import { EvalEngine, type EvalConfig, type EvalResult, type Assertion } from "@/lib/eval";
+import { AgentTracer } from "@elevay/core";
+import { ClaudeClient, type ClaudeMessage, type ClaudeTool, type ClaudeToolResult, type StreamEvent, type ModelTier } from "@/lib/ai/claude-client";
+import { calculateCost, getPlatformApiKey } from "@/lib/config";
+import { EvalEngine, type EvalConfig, type EvalResult, type Assertion, type GroundingSource } from "@/lib/eval";
+import { validateActionOutput } from "@/lib/eval/action-schemas";
+import { SIDE_EFFECT_ACTIONS, ACTION_LABELS } from "@/lib/eval/constants";
+import { getAutonomyConfig, type AutonomyTier, type AutonomyConfig } from "@/lib/autonomy";
 import { formatStyleCorrectionsForPrompt } from "@/lib/style-learner";
+import { type ToolDef, zodToInputSchema, sanitizeToolName } from "@/lib/llm-tools";
+import type { ProcessedFile } from "@/lib/file-processor";
 
 export const maxDuration = 300; // 5 minutes for Pro plan
 
-// Actions that have side effects and require confirmation in Safe Mode
-const SIDE_EFFECT_ACTIONS = new Set([
-  "send_email",
-  "create_calendar_event",
-  "send_slack_message",
-  "create_notion_page",
-  "append_to_notion",
-  "append_to_sheet",
-  "update_sheet",
-  "create_spreadsheet",
-  "upload_drive_file",
-  "delete_drive_file",
-  "create_doc",
-  "append_to_doc",
-]);
+// SIDE_EFFECT_ACTIONS imported from @/lib/eval/constants
 
 // Map action types to activity types for logging
 const ACTION_TO_ACTIVITY_TYPE: Record<string, ActivityType> = {
@@ -84,21 +78,7 @@ const ACTION_TO_ACTIVITY_TYPE: Record<string, ActivityType> = {
   append_to_doc: ActivityType.TOOL_CALLED,
 };
 
-// Action labels for user display
-const ACTION_LABELS: Record<string, string> = {
-  send_email: "Send Email",
-  create_calendar_event: "Create Calendar Event",
-  send_slack_message: "Send Slack Message",
-  create_notion_page: "Create Notion Page",
-  append_to_notion: "Append to Notion Page",
-  append_to_sheet: "Append to Google Sheet",
-  update_sheet: "Update Google Sheet",
-  create_spreadsheet: "Create Spreadsheet",
-  upload_drive_file: "Upload to Google Drive",
-  delete_drive_file: "Delete from Google Drive",
-  create_doc: "Create Google Doc",
-  append_to_doc: "Append to Google Doc",
-};
+// ACTION_LABELS imported from @/lib/eval/constants
 
 type AgentToolWithWorkflow = AgentTool & { workflow: Workflow | null };
 
@@ -117,7 +97,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { conversationId, messages: incomingMessages } = body;
+    const { conversationId, messages: incomingMessages, files } = body as {
+      conversationId: string;
+      messages: Array<{ role: string; content: string }>;
+      files?: ProcessedFile[];
+    };
 
     if (!conversationId) {
       return new Response("Missing conversationId", { status: 400 });
@@ -136,7 +120,6 @@ export async function POST(request: Request) {
       include: {
         agent: {
           include: {
-            credential: true,
             agentTools: {
               include: {
                 workflow: true,
@@ -145,11 +128,7 @@ export async function POST(request: Request) {
             connectedTo: {
               where: { enabled: true },
               include: {
-                targetAgent: {
-                  include: {
-                    credential: true,
-                  },
-                },
+                targetAgent: true,
               },
             },
           },
@@ -210,17 +189,8 @@ export async function POST(request: Request) {
       }
     );
 
-    // Get API key
-    let apiKey: string | undefined;
-    if (agent.credential) {
-      apiKey = decrypt(agent.credential.value);
-    }
-
-    if (!apiKey) {
-      return new Response("No API credential configured for this agent", {
-        status: 400,
-      });
-    }
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Only Anthropic models supported with ClaudeClient streaming
     if (agent.model !== AgentModel.ANTHROPIC) {
@@ -239,15 +209,15 @@ export async function POST(request: Request) {
       },
     });
 
-    // Build message history (user + assistant messages only)
-    const messageHistory = conversation.messages
-      .filter((msg) => msg.role !== MessageRole.TOOL)
-      .map((msg) => ({
-        role: msg.role.toLowerCase() as "user" | "assistant",
-        content: msg.content,
-      }));
-
-    messageHistory.push({ role: "user" as const, content: message });
+    // Build message history with automatic summarization for long conversations.
+    // Tool outputs are merged into adjacent assistant messages (Phase 1).
+    // For conversations > 40 messages, older messages are summarized (Phase 5).
+    const { summaryPrefix, messages: messageHistory } = await buildContextWithSummarization(
+      conversationId,
+      agent.id,
+      conversation.messages as Array<{ id: string; role: MessageRole; content: string; toolName: string | null; toolOutput: unknown; createdAt: Date }>,
+      message,
+    );
 
     // RAG: Search knowledge base for relevant context
     let ragContext = "";
@@ -260,14 +230,18 @@ export async function POST(request: Request) {
       console.warn("RAG search failed:", error);
     }
 
-    // Fetch agent memories for context
-    const memories = await prisma.agentMemory.findMany({
-      where: { agentId: agent.id },
-      select: { key: true, value: true, category: true },
-    });
+    // Fetch agent memories using hybrid retrieval (Phase 6):
+    // Core memories (INSTRUCTION, PREFERENCE) always loaded,
+    // contextual memories (GENERAL, CONTEXT, HISTORY) retrieved by semantic relevance.
+    const memories = await getRelevantMemories(agent.id, message);
 
     // Build enhanced system prompt
     let enhancedSystemPrompt = agent.systemPrompt;
+
+    // Inject conversation summary for long conversations (Phase 5)
+    if (summaryPrefix) {
+      enhancedSystemPrompt += `\n\n${summaryPrefix}`;
+    }
 
     if (agent.context) {
       enhancedSystemPrompt += `\n\n## Context (Always keep in mind)\n${agent.context}`;
@@ -287,21 +261,57 @@ export async function POST(request: Request) {
       enhancedSystemPrompt += `\n\n${ragContext}\n\nUse the above knowledge base context to inform your responses when relevant. If the context doesn't contain relevant information, rely on your general knowledge.`;
     }
 
-    enhancedSystemPrompt += `\n\nYou have access to memory tools to save, retrieve, and delete memories. Use these to remember important information across conversations (like user preferences, important facts, or standing instructions).`;
+    enhancedSystemPrompt += `\n\n## Memory Management
 
-    // Create tools from all sources
+You have persistent memory that survives across conversations. Use it proactively.
+
+**When to save (use save_memory tool):**
+- User states a preference (timezone, language, communication style, format)
+- User gives standing instructions ("always CC my manager", "use formal tone")
+- Important task parameters: target companies, search criteria, filters, roles being searched
+- Key findings from tools or workflows that the user might reference later
+- User corrections to your behavior or output
+
+**Memory categories (use the category parameter):**
+- PREFERENCE: User preferences (language, tone, format, timezone)
+- INSTRUCTION: Standing orders ("always do X", "never do Y")
+- CONTEXT: Active task context (companies being researched, ongoing project details, current search criteria)
+- HISTORY: Important past events (results found, emails sent, decisions made)
+- GENERAL: Other important facts
+
+**Key naming rules:**
+- Use specific, descriptive keys: "target_companies_lead_search", "preferred_email_tone", "current_project_focus"
+- Same key = overwrite previous value (good for updating context)
+- Do NOT save transient chat details — only facts with lasting value
+
+**When to delete (use delete_memory tool):**
+- User explicitly says to forget something
+- Information is outdated or contradicted by newer info
+- Temporary context that is no longer relevant`;
+
+    // If files are attached, add a note about file support
+    if (files && files.length > 0) {
+      enhancedSystemPrompt += `\n\nThe user has attached files (images, PDFs, or text files) to this message. Reference their content when relevant to your response.`;
+    }
+
+    enhancedSystemPrompt += TONE_SUFFIX;
+
+    // Create tools from all sources (pass conversation context for workflow memory persistence)
     const workflowTools = createToolsFromAgentTools(
       agent.agentTools as AgentToolWithWorkflow[],
-      session.user.id
+      session.user.id,
+      messageHistory,
+      memories
     );
 
     const agentConnectionTools = createToolsFromAgentConnections(
       agent.connectedTo as AgentConnectionWithTarget[]
     );
 
+    const autonomyConfig = getAutonomyConfig(agent);
     const integrationTools = await createIntegrationTools(
       session.user.id,
-      agent.safeMode,
+      autonomyConfig,
       conversationId,
       { id: agent.id, evalRules: agent.evalRules }
     );
@@ -343,13 +353,52 @@ export async function POST(request: Request) {
       l3Passed: boolean;
     }> = [];
 
+    // Track tool results for post-turn memory extraction
+    const toolResultsCollected: Array<{ toolName: string; input: unknown; output: unknown }> = [];
+
+    // Inject file content blocks into the last user message if files are present
+    let chatMessages: Array<{ role: "user" | "assistant"; content: string | Array<{ type: string; [key: string]: unknown }> }> = messageHistory;
+    if (files && files.length > 0) {
+      // Find the last user message and replace its content with multi-content-block
+      const lastIdx = messageHistory.length - 1;
+      if (lastIdx >= 0 && messageHistory[lastIdx].role === "user") {
+        const textContent = messageHistory[lastIdx].content;
+        const contentBlocks: Array<{ type: string; [key: string]: unknown }> = [];
+
+        for (const file of files) {
+          if (file.type === "image" && file.base64Data) {
+            contentBlocks.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: file.mimeType,
+                data: file.base64Data,
+              },
+            });
+          } else if (file.type === "text" && file.textContent) {
+            contentBlocks.push({
+              type: "text",
+              text: `[Attached file: ${file.name}]\n${file.textContent}`,
+            });
+          }
+        }
+
+        contentBlocks.push({ type: "text", text: textContent });
+
+        chatMessages = [
+          ...messageHistory.slice(0, lastIdx),
+          { role: "user" as const, content: contentBlocks },
+        ];
+      }
+    }
+
     // Create SSE stream
     const readable = new ReadableStream({
       async start(controller) {
         try {
           const streamGen = claudeClient.chatStream({
             model: llmTier,
-            messages: messageHistory,
+            messages: chatMessages as ClaudeMessage[],
             systemPrompt: enhancedSystemPrompt,
             temperature: agent.temperature,
             maxSteps: 5,
@@ -388,6 +437,9 @@ export async function POST(request: Request) {
               try {
                 const result = await tool.execute(toolCall.input);
                 totalToolCallCount++;
+
+                // Collect tool result for post-turn memory extraction
+                toolResultsCollected.push({ toolName: toolCall.name, input: toolCall.input, output: result });
 
                 // Collect eval results if present (Phase 2.2)
                 const resultWithEval = result as Record<string, unknown> & {
@@ -537,6 +589,17 @@ export async function POST(request: Request) {
             data: { updatedAt: new Date() },
           });
 
+          // Post-turn memory extraction (fire-and-forget, non-blocking)
+          if (assistantContent) {
+            extractAndSaveMemories(
+              agent.id,
+              message,
+              assistantContent,
+              toolResultsCollected,
+              memories,
+            ).catch(err => console.warn("Post-turn memory extraction failed:", err));
+          }
+
           // Auto-generate title if first exchange
           if (conversation.messages.length === 0 && !conversation.title) {
             const title = message.slice(0, 50) + (message.length > 50 ? "..." : "");
@@ -646,99 +709,18 @@ export async function POST(request: Request) {
 // ============================================
 // TOOL TYPES & ZOD → JSON SCHEMA CONVERTER
 // ============================================
-
-interface ToolDef {
-  description: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  parameters: z.ZodObject<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  execute: (args: any) => Promise<Record<string, unknown>>;
-}
+// ToolDef, zodToInputSchema, sanitizeToolName are imported from @/lib/llm-tools
 
 /**
- * Convert a Zod schema to JSON Schema format for Anthropic API
- */
-function zodToInputSchema(schema: z.ZodTypeAny): ClaudeTool["input_schema"] {
-  if (schema instanceof z.ZodObject) {
-    const shape = schema.shape;
-    const properties: Record<string, unknown> = {};
-    const required: string[] = [];
-
-    for (const [key, value] of Object.entries(shape)) {
-      const { jsonSchema, isOptional } = convertZodType(value as z.ZodTypeAny);
-      properties[key] = jsonSchema;
-      if (!isOptional) {
-        required.push(key);
-      }
-    }
-
-    return { type: "object", properties, ...(required.length > 0 ? { required } : {}) };
-  }
-
-  return { type: "object", properties: {} };
-}
-
-function convertZodType(zodType: z.ZodTypeAny): { jsonSchema: Record<string, unknown>; isOptional: boolean } {
-  let isOptional = false;
-  let current = zodType;
-
-  // Unwrap optional and default wrappers
-  while (true) {
-    if (current instanceof z.ZodOptional) {
-      isOptional = true;
-      current = current.unwrap();
-    } else if (current instanceof z.ZodDefault) {
-      isOptional = true;
-      current = current.removeDefault();
-    } else {
-      break;
-    }
-  }
-
-  const description = current.description;
-  let schema: Record<string, unknown> = {};
-
-  if (current instanceof z.ZodString) {
-    schema = { type: "string" };
-  } else if (current instanceof z.ZodNumber) {
-    schema = { type: "number" };
-  } else if (current instanceof z.ZodBoolean) {
-    schema = { type: "boolean" };
-  } else if (current instanceof z.ZodArray) {
-    const itemSchema = convertZodType(current.element);
-    schema = { type: "array", items: itemSchema.jsonSchema };
-  } else if (current instanceof z.ZodEnum) {
-    schema = { type: "string", enum: current.options };
-  } else if (current instanceof z.ZodObject) {
-    schema = zodToInputSchema(current);
-  } else {
-    schema = { type: "string" };
-  }
-
-  if (description) {
-    schema.description = description;
-  }
-
-  return { jsonSchema: schema, isOptional };
-}
-
-/**
- * Sanitize tool name to match API requirements (alphanumeric + underscores)
- */
-function sanitizeToolName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
-/**
- * Convert AgentTools (connected workflows) to AI SDK tool format
+ * Convert AgentTools (connected workflows) to AI SDK tool format.
+ * Passes conversation context and agent memories so workflows can
+ * reference the ongoing conversation for memory persistence.
  */
 function createToolsFromAgentTools(
   agentTools: AgentToolWithWorkflow[],
-  userId: string
+  userId: string,
+  conversationHistory?: Array<{ role: string; content: string }>,
+  agentMemories?: Array<{ key: string; value: string; category: string }>,
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: Record<string, any> = {};
@@ -766,6 +748,11 @@ function createToolsFromAgentTools(
               workflowId: agentTool.workflowId,
               userId,
               initialData,
+              // Pass conversation context for memory persistence
+              conversationContext: conversationHistory?.length
+                ? { recentMessages: conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content })) }
+                : undefined,
+              agentMemories: agentMemories?.length ? agentMemories : undefined,
             });
 
             if (!result.success) {
@@ -808,7 +795,6 @@ type AgentConnectionWithTarget = {
     systemPrompt: string;
     model: AgentModel;
     temperature: number;
-    credential: { value: string } | null;
   };
 };
 
@@ -837,18 +823,9 @@ function createToolsFromAgentConnections(
         try {
           const targetAgent = connection.targetAgent;
 
-          if (!targetAgent.credential) {
-            return {
-              error: true,
-              message: `Agent "${targetAgent.name}" has no API credential configured`,
-            };
-          }
-
-          const targetApiKey = decrypt(targetAgent.credential.value);
-
           // Use ClaudeClient for Anthropic models
           if (targetAgent.model === AgentModel.ANTHROPIC) {
-            const client = new ClaudeClient(targetApiKey);
+            const client = new ClaudeClient(getPlatformApiKey());
             const result = await client.chat({
               model: "smart",
               messages: [{ role: "user", content: args.message }],
@@ -916,8 +893,17 @@ function getDefaultEvalRules(): {
 function extractContentForEval(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
     case "send_email":
-      return (args.body as string) || "";
+    case "send_outlook_email":
+      return `To: ${args.to || ""}\nSubject: ${args.subject || ""}\n\n${args.body || ""}`;
+    case "create_calendar_event": {
+      const parts = [`Event: ${args.summary || args.subject || ""}`];
+      if (args.start) parts.push(`Start: ${args.start}`);
+      if (args.end) parts.push(`End: ${args.end}`);
+      if (args.attendees) parts.push(`Attendees: ${Array.isArray(args.attendees) ? args.attendees.join(", ") : args.attendees}`);
+      return parts.join("\n");
+    }
     case "send_slack_message":
+    case "send_teams_message":
       return (args.text as string) || (args.message as string) || "";
     case "create_notion_page":
     case "append_to_notion":
@@ -925,27 +911,61 @@ function extractContentForEval(toolName: string, args: Record<string, unknown>):
     case "create_doc":
     case "append_to_doc":
       return (args.content as string) || (args.text as string) || "";
+    case "append_to_sheet":
+    case "update_sheet":
+      return `Sheet: ${args.spreadsheetId || ""} Range: ${args.range || ""}\nValues: ${JSON.stringify(args.values || [])}`;
     default:
       return JSON.stringify(args);
   }
 }
 
 /**
- * Helper function to create a safe mode wrapper for side-effect tools with EvalEngine integration
+ * Autonomy wrapper for side-effect tools.
+ *
+ * Decision tree:
+ * - readonly + side-effect → BLOCK immediately
+ * - Non side-effect → pass through
+ * - Schema validation → BLOCK if invalid
+ * - EvalEngine L1/L2/L3 → BLOCK if L1/L3 fails
+ * - auto + canAutoSend → EXECUTE directly
+ * - auto + low score → QUEUE for approval
+ * - review → always QUEUE for approval
  */
-function createSafeModeWrapper(
+function createAutonomyWrapper(
   toolName: string,
   originalExecute: (args: Record<string, unknown>) => Promise<Record<string, unknown>>,
-  safeMode: boolean,
+  autonomyConfig: AutonomyConfig,
   conversationId: string,
   agent: { id: string; evalRules: unknown },
   userId: string
 ) {
-  if (!safeMode || !SIDE_EFFECT_ACTIONS.has(toolName)) {
+  // Non side-effect tools pass through regardless of tier
+  if (!SIDE_EFFECT_ACTIONS.has(toolName)) {
     return originalExecute;
   }
 
+  // Readonly tier: block ALL side-effect actions immediately
+  if (autonomyConfig.tier === "readonly") {
+    return async (_args: Record<string, unknown>): Promise<Record<string, unknown>> => ({
+      error: true,
+      blocked: true,
+      reason: "Agent is in read-only mode. Side-effect actions are disabled.",
+    });
+  }
+
   return async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    // Schema validation — cheapest check, runs first
+    const schemaResult = validateActionOutput(toolName, args);
+    if (!schemaResult.valid) {
+      return {
+        error: true,
+        blocked: true,
+        reason: `Schema validation failed: ${schemaResult.errors.join("; ")}`,
+        suggestions: ["Ensure all required fields are present and properly formatted"],
+        evalResult: { l1Passed: false, l2Score: 0, l3Triggered: false, l3Passed: false },
+      };
+    }
+
     // Extract content to evaluate
     const contentToEval = extractContentForEval(toolName, args);
 
@@ -959,6 +979,13 @@ function createSafeModeWrapper(
         })
       : getDefaultEvalRules();
 
+    // Build grounding source context from the action args
+    const sourceContext: GroundingSource[] = [{
+      type: "action_args",
+      label: `${toolName} arguments`,
+      content: JSON.stringify(args, null, 2),
+    }];
+
     // Run evaluation
     const evalResult: EvalResult = await EvalEngine.evaluate({
       text: contentToEval,
@@ -969,43 +996,48 @@ function createSafeModeWrapper(
       l1Assertions: evalRules.assertions || getDefaultEvalRules().assertions,
       enableL2: true,
       l2MinScore: evalRules.minConfidence || 60,
+      enableGrounding: true,
+      sourceContext,
       enableL3: true,
       l3Trigger: evalRules.l3Trigger || "on_irreversible_action",
-      l3AutoSendThreshold: evalRules.autoSendThreshold || 85,
+      l3AutoSendThreshold: evalRules.autoSendThreshold || autonomyConfig.autoSendThreshold,
     });
 
-    // L1 or L3 hard block - return error immediately
+    const evalSummary = {
+      l1Passed: evalResult.l1Passed,
+      l2Score: evalResult.l2Score,
+      l2Passed: evalResult.l2Passed,
+      groundingScore: evalResult.groundingScore,
+      groundingPassed: evalResult.groundingPassed,
+      claims: evalResult.grounding?.claims?.map((c) => ({ text: c.text, type: c.type, grounded: c.grounded, evidence: c.evidence })),
+      l3Triggered: evalResult.l3Triggered,
+      l3Passed: evalResult.l3Passed,
+      suggestions: evalResult.suggestions,
+      blockReason: evalResult.blockReason,
+    };
+
+    // L1 or L3 hard block — return error immediately
     if (!evalResult.passed && (evalResult.blockReason?.includes("L1") || evalResult.blockReason?.includes("L3"))) {
       return {
         error: true,
         blocked: true,
         reason: evalResult.blockReason,
         suggestions: evalResult.suggestions,
-        evalResult: {
-          l1Passed: evalResult.l1Passed,
-          l2Score: evalResult.l2Score,
-          l3Triggered: evalResult.l3Triggered,
-          l3Passed: evalResult.l3Passed,
-        },
+        evalResult: evalSummary,
       };
     }
 
-    // Can auto-send - execute directly without confirmation
-    if (evalResult.canAutoSend && evalResult.passed) {
+    // Auto tier: execute directly if eval passes and score meets threshold
+    if (autonomyConfig.tier === "auto" && evalResult.canAutoSend && evalResult.passed) {
       const result = await originalExecute(args);
       return {
         ...result,
         autoSent: true,
-        evalResult: {
-          l1Passed: evalResult.l1Passed,
-          l2Score: evalResult.l2Score,
-          l3Triggered: evalResult.l3Triggered,
-          l3Passed: evalResult.l3Passed,
-        },
+        evalResult: evalSummary,
       };
     }
 
-    // Requires approval - create ConversationActivity with eval details
+    // Review tier (or auto with low score): queue for approval
     const activity = await prisma.conversationActivity.create({
       data: {
         conversationId,
@@ -1014,15 +1046,7 @@ function createSafeModeWrapper(
         details: {
           actionType: toolName,
           actionArgs: args as Record<string, string | number | boolean | null>,
-          evalResult: {
-            l1Passed: evalResult.l1Passed,
-            l2Score: evalResult.l2Score,
-            l2Passed: evalResult.l2Passed,
-            l3Triggered: evalResult.l3Triggered,
-            l3Passed: evalResult.l3Passed,
-            suggestions: evalResult.suggestions,
-            blockReason: evalResult.blockReason,
-          },
+          evalResult: evalSummary,
         },
         requiresConfirmation: true,
       },
@@ -1035,14 +1059,7 @@ function createSafeModeWrapper(
       actionLabel: ACTION_LABELS[toolName] || toolName,
       message: `This action requires your confirmation. Please review the details and confirm or reject the action.`,
       details: args,
-      evalResult: {
-        l1Passed: evalResult.l1Passed,
-        l2Score: evalResult.l2Score,
-        l2Passed: evalResult.l2Passed,
-        l3Triggered: evalResult.l3Triggered,
-        l3Passed: evalResult.l3Passed,
-        suggestions: evalResult.suggestions,
-      },
+      evalResult: evalSummary,
     };
   };
 }
@@ -1052,7 +1069,7 @@ function createSafeModeWrapper(
  */
 async function createIntegrationTools(
   userId: string,
-  safeMode: boolean = false,
+  autonomyConfig: AutonomyConfig = { tier: "review", autoSendThreshold: 85 },
   conversationId?: string,
   agent?: { id: string; evalRules: unknown }
 ) {
@@ -1671,15 +1688,15 @@ async function createIntegrationTools(
     };
   }
 
-  // Wrap side-effect tools with Safe Mode if enabled
-  if (safeMode && conversationId && agent) {
+  // Wrap side-effect tools with autonomy wrapper (schema validation + eval + tiered execution)
+  if (conversationId && agent) {
     for (const toolName of SIDE_EFFECT_ACTIONS) {
       if (tools[toolName]) {
         const originalExecute = tools[toolName].execute;
-        tools[toolName].execute = createSafeModeWrapper(
+        tools[toolName].execute = createAutonomyWrapper(
           toolName,
           originalExecute,
-          safeMode,
+          autonomyConfig,
           conversationId,
           agent,
           userId

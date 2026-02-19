@@ -36,6 +36,7 @@ __export(index_exports, {
   ConnectorError: () => ConnectorError,
   CredentialError: () => CredentialError,
   EVAL_SEVERITIES: () => EVAL_SEVERITIES,
+  ElevayError: () => ElevayError,
   EvalAssertionSchema: () => EvalAssertionSchema,
   EvalRulesSchema: () => EvalRulesSchema,
   EvalSeveritySchema: () => EvalSeveritySchema,
@@ -44,7 +45,6 @@ __export(index_exports, {
   LLMTierSchema: () => LLMTierSchema,
   LLM_MODELS: () => LLM_MODELS,
   LLM_TIERS: () => LLM_TIERS,
-  NodebaseError: () => NodebaseError,
   PermissionError: () => PermissionError,
   SCAN_CATEGORIES: () => SCAN_CATEGORIES,
   ScanCategorySchema: () => ScanCategorySchema,
@@ -126,15 +126,15 @@ var CONNECTOR_CATEGORIES = [
   "STORAGE",
   "ANALYTICS"
 ];
-var NodebaseError = class extends Error {
+var ElevayError = class extends Error {
   constructor(message, code, context) {
     super(message);
     this.code = code;
     this.context = context;
-    this.name = "NodebaseError";
+    this.name = "ElevayError";
   }
 };
-var ScanError = class extends NodebaseError {
+var ScanError = class extends ElevayError {
   constructor(signalId, connectorId, message) {
     super(`Scan failed on signal ${signalId} via ${connectorId}: ${message}`, "SCAN_ERROR", {
       signalId,
@@ -145,7 +145,7 @@ var ScanError = class extends NodebaseError {
     this.name = "ScanError";
   }
 };
-var AgentExecutionError = class extends NodebaseError {
+var AgentExecutionError = class extends ElevayError {
   constructor(agentId, runId, message) {
     super(`Agent ${agentId} execution failed (run: ${runId}): ${message}`, "AGENT_EXECUTION_ERROR", {
       agentId,
@@ -156,7 +156,7 @@ var AgentExecutionError = class extends NodebaseError {
     this.name = "AgentExecutionError";
   }
 };
-var ConnectorError = class extends NodebaseError {
+var ConnectorError = class extends ElevayError {
   constructor(connectorId, action, message) {
     super(`Connector ${connectorId} failed on ${action}: ${message}`, "CONNECTOR_ERROR", {
       connectorId,
@@ -167,7 +167,7 @@ var ConnectorError = class extends NodebaseError {
     this.name = "ConnectorError";
   }
 };
-var CredentialError = class extends NodebaseError {
+var CredentialError = class extends ElevayError {
   constructor(credentialId, message) {
     super(`Credential ${credentialId} error: ${message}`, "CREDENTIAL_ERROR", {
       credentialId
@@ -176,7 +176,7 @@ var CredentialError = class extends NodebaseError {
     this.name = "CredentialError";
   }
 };
-var PermissionError = class extends NodebaseError {
+var PermissionError = class extends ElevayError {
   constructor(userId, resource, action) {
     super(
       `User ${userId} does not have permission to ${action} on ${resource}`,
@@ -189,7 +189,7 @@ var PermissionError = class extends NodebaseError {
     this.name = "PermissionError";
   }
 };
-var ConfigError = class extends NodebaseError {
+var ConfigError = class extends ElevayError {
   constructor(envVar, message) {
     super(`Configuration error for ${envVar}: ${message}`, "CONFIG_ERROR", { envVar });
     this.envVar = envVar;
@@ -357,6 +357,7 @@ var SignalSchema = import_zod.z.object({
   ConnectorError,
   CredentialError,
   EVAL_SEVERITIES,
+  ElevayError,
   EvalAssertionSchema,
   EvalRulesSchema,
   EvalSeveritySchema,
@@ -365,7 +366,6 @@ var SignalSchema = import_zod.z.object({
   LLMTierSchema,
   LLM_MODELS,
   LLM_TIERS,
-  NodebaseError,
   PermissionError,
   SCAN_CATEGORIES,
   ScanCategorySchema,

@@ -15,7 +15,7 @@ import {
   Star,
   SlidersHorizontal,
   FlowArrow,
-  ListChecks,
+  ChatCircle,
   Play,
   Pencil,
   ClockCounterClockwise,
@@ -45,7 +45,7 @@ import {
 import { cn } from "@/lib/utils";
 
 // Agent icon config based on name
-type AgentConfig = { icon: Icon; gradient: string };
+export type AgentConfig = { icon: Icon; gradient: string };
 
 const agentConfigs: Record<string, AgentConfig> = {
   "lead generator": { icon: Target, gradient: "from-amber-400 to-orange-500" },
@@ -84,7 +84,7 @@ const keywordGradients: Record<string, string> = {
   task: "from-violet-400 to-purple-500",
 };
 
-function getAgentConfig(agentName: string): AgentConfig {
+export function getAgentConfig(agentName: string): AgentConfig {
   const normalizedName = agentName.toLowerCase();
 
   for (const [key, config] of Object.entries(agentConfigs)) {
@@ -159,7 +159,7 @@ export function FlowEditorHeader({
   return (
     <header className="h-14 border-b border-[#e5e7eb] flex items-center px-4 bg-white z-20 shrink-0">
       {/* Left side */}
-      <div className="flex-1 min-w-0 flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex items-center gap-2 lg:gap-3 overflow-hidden">
         {!open && <SidebarTrigger />}
 
         {/* Agent icon - square with rounded corners and gradient */}
@@ -169,7 +169,7 @@ export function FlowEditorHeader({
               <div className={`size-6 rounded-[4px] bg-gradient-to-br ${config.gradient} flex items-center justify-center`}>
                 <IconComponent className="size-4 text-white" weight="fill" />
               </div>
-              <span className="font-semibold text-[15px] text-[#1a1a1a] truncate max-w-[200px]">{agentName}</span>
+              <span className="font-semibold text-[15px] text-[#1a1a1a] truncate max-w-[100px] sm:max-w-[120px] md:max-w-[150px] lg:max-w-[200px]">{agentName}</span>
               <CaretDown className="size-4 text-[#9CA3AF]" />
             </button>
           </DropdownMenuTrigger>
@@ -203,21 +203,21 @@ export function FlowEditorHeader({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Favorite star - Lindy style */}
-        <button className="p-1.5 hover:bg-[#F3F4F6] rounded-lg transition-colors">
+        {/* Favorite star */}
+        <button className="p-1.5 hover:bg-[#F3F4F6] rounded-lg transition-colors hidden xl:block">
           <Star className="size-5 text-[#D1D5DB]" />
         </button>
 
-        {/* Enable/Disable toggle - Lindy style */}
+        {/* Enable/Disable toggle */}
         <Switch
           checked={isEnabled}
           onCheckedChange={onToggleEnabled}
-          className="data-[state=checked]:bg-[#10b981] h-5 w-9"
+          className="data-[state=checked]:bg-[#10b981] h-5 w-9 hidden md:inline-flex"
         />
       </div>
 
-      {/* Center - Tabs (Lindy style: simple text with icons) */}
-      <div className="flex-shrink-0 flex items-center gap-1">
+      {/* Center - Tabs */}
+      <div className="shrink min-w-0 flex items-center gap-1">
         <TabButton
           icon={<SlidersHorizontal className="size-4" />}
           label="Settings"
@@ -231,20 +231,20 @@ export function FlowEditorHeader({
           onClick={() => onTabChange("flow")}
         />
         <TabButton
-          icon={<ListChecks className="size-4" />}
-          label="Tasks"
+          icon={<ChatCircle className="size-4" />}
+          label="Agent"
           isActive={activeTab === "tasks"}
           onClick={() => onTabChange("tasks")}
         />
       </div>
 
-      {/* Right side - Lindy style buttons */}
-      <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+      {/* Right side */}
+      <div className="flex-1 min-w-0 flex items-center justify-end gap-2 overflow-hidden">
         <Button
           variant="ghost"
           size="sm"
           onClick={onShare}
-          className="text-[#374151] font-medium hover:bg-[#F3F4F6] h-9 px-4"
+          className="text-[#374151] font-medium hover:bg-[#F3F4F6] h-9 px-4 hidden sm:flex"
         >
           Share
         </Button>
@@ -255,7 +255,7 @@ export function FlowEditorHeader({
           onClick={onTest}
         >
           <Play className="size-3.5" weight="fill" />
-          Test
+          <span className="hidden sm:inline">Test</span>
         </Button>
         <Button
           size="sm"
@@ -298,7 +298,7 @@ function TabButton({ icon, label, isActive, onClick }: TabButtonProps) {
       )}
     >
       {icon}
-      <span className="hidden md:inline">{label}</span>
+      <span className="hidden lg:inline">{label}</span>
     </button>
   );
 }

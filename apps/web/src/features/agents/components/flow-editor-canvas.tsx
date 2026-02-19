@@ -8,6 +8,8 @@ import {
   BackgroundVariant,
   useNodesState,
   useEdgesState,
+  useNodes,
+  ViewportPortal,
   addEdge,
   type Node,
   type Edge,
@@ -20,7 +22,9 @@ import {
   Position,
   SelectionMode,
   getBezierPath,
+  getSmoothStepPath,
   BaseEdge,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -48,12 +52,33 @@ import { Icon } from "@iconify/react";
 import { AddActionModal } from "./add-action-modal";
 import { SelectKnowledgeBaseModal } from "./select-knowledge-base-modal";
 import { PDLIcon } from "@/components/icons/pdl-icon";
+import type { FlowStateSnapshot } from "@/features/agents/types/flow-builder-types";
+import { NODE_TYPE_TO_ACTION_ID } from "@/features/agents/types/flow-builder-types";
+import { ACTION_ICONS, INTEGRATION_NODE_CONFIG } from "@/features/agents/lib/node-icons";
 
 // Standard node width for consistency
-const NODE_WIDTH = 200;
+const NODE_WIDTH = 230;
+
+// Vertical spacing between nodes (px in flow-space)
+const NODE_Y_GAP = 45;        // gap between regular sequential nodes
+const BRANCH_Y_GAP = 35;      // gap from condition to its branch nodes
+const OUTCOME_Y_GAP = 30;     // gap from chatAgent to chatOutcome
+const SHIFT_Y_GAP = 40;       // amount to shift existing nodes down when inserting
+
+// Custom event name used to close all "Select next step" menus when clicking on the pane
+const CLOSE_NODE_MENUS_EVENT = "closeNodeMenus";
+
+/** Hook that closes a menu when the user clicks on the React Flow pane (background). */
+function useCloseOnPaneClick(setShowMenu: (v: boolean) => void) {
+  useEffect(() => {
+    const handler = () => setShowMenu(false);
+    document.addEventListener(CLOSE_NODE_MENUS_EVENT, handler);
+    return () => document.removeEventListener(CLOSE_NODE_MENUS_EVENT, handler);
+  }, [setShowMenu]);
+}
 
 // Execution status types for workflow animation
-type ExecutionStatus = "idle" | "running" | "completed" | "error" | "skipped";
+type ExecutionStatus = "idle" | "running" | "completed" | "error" | "skipped" | "reused";
 
 function getExecutionStyles(status?: ExecutionStatus) {
   switch (status) {
@@ -74,6 +99,12 @@ function getExecutionStyles(status?: ExecutionStatus) {
         containerClass: "ring-2 ring-red-400 ring-offset-1",
         overlayIcon: "x-circle" as const,
         opacity: "",
+      };
+    case "reused":
+      return {
+        containerClass: "ring-2 ring-slate-300 ring-offset-1 opacity-70",
+        overlayIcon: "check-circle" as const,
+        opacity: "opacity-70",
       };
     case "skipped":
       return {
@@ -108,7 +139,7 @@ function ExecutionBadge({ status }: { status?: ExecutionStatus }) {
   return null;
 }
 
-// Credits badge for nodes that consume credits (Lindy-style "⊙ 0.5")
+// Credits badge for nodes that consume credits
 function CreditsBadge({ credits }: { credits?: number }) {
   if (credits == null) return null;
   return (
@@ -275,7 +306,7 @@ const INTEGRATION_ICONS: Record<string, { icon: string; label: string }> = {
   stripe: { icon: "logos:stripe", label: "Stripe" },
   github: { icon: "mdi:github", label: "GitHub" },
   discord: { icon: "logos:discord-icon", label: "Discord" },
-  perplexity: { icon: "ph:compass-duotone", label: "Perplexity" },
+  perplexity: { icon: "simple-icons:perplexity", label: "Perplexity" },
   browser: { icon: "ph:globe-duotone", label: "Browser" },
   code: { icon: "ph:code-duotone", label: "Code" },
   channels: { icon: "ph:chat-circle-dots-duotone", label: "Channels" },
@@ -297,7 +328,7 @@ function MessageReceivedNode({ data, selected }: { data?: { executionStatus?: Ex
         style={{ width: NODE_WIDTH }}
       >
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+        <div className="size-6 rounded-md bg-blue-500 flex items-center justify-center flex-shrink-0">
           <Chats className="size-3.5 text-white" weight="fill" />
         </div>
         <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">Message Received</span>
@@ -326,13 +357,14 @@ function MessageReceivedNode({ data, selected }: { data?: { executionStatus?: Ex
 // Chat Agent Node - for "Chat with this Agent" actions (Observe messages / Send message)
 function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; variant?: "observe" | "send"; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const variant = data.variant || "observe";
   const label = data.label || (variant === "observe" ? "Observe messages" : "Send message");
   const execStyles = getExecutionStyles(data.executionStatus);
-  const iconBg = variant === "send" ? "bg-amber-500" : "bg-blue-500";
-  const borderColor = variant === "send" ? "border-amber-200" : "border-blue-200";
+  const iconBg = "bg-blue-500";
+  const borderColor = "border-blue-200";
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -357,14 +389,11 @@ function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: str
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className={`size-6 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+          <div className={`size-6 rounded-md ${iconBg} flex items-center justify-center flex-shrink-0`}>
             <Chats className="size-3.5 text-white" weight="fill" />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">{label}</span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -411,11 +440,48 @@ function ChatAgentNode({ id, data, selected }: { id: string; data: { label?: str
           position={Position.Top}
           className="!bg-blue-500 !border-white !border-2 !size-2.5 !-top-1"
         />
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          className="!bg-blue-500 !border-white !border-2 !size-2.5 !-bottom-1"
-        />
+        {/* Send variant has two source handles for "After message sent" / "After reply received" */}
+        {variant === "send" ? (
+          <>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="sent"
+              className="!bg-blue-400 !border-white !border-2 !size-2 !-bottom-1"
+              style={{ left: '35%' }}
+            />
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="reply"
+              className="!bg-blue-400 !border-white !border-2 !size-2 !-bottom-1"
+              style={{ left: '65%' }}
+            />
+          </>
+        ) : variant === "observe" && data.hasOutgoingEdge ? (
+          <>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="observation"
+              className="!bg-blue-400 !border-white !border-2 !size-2 !-bottom-1"
+              style={{ left: '35%' }}
+            />
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="received"
+              className="!bg-blue-400 !border-white !border-2 !size-2 !-bottom-1"
+              style={{ left: '65%' }}
+            />
+          </>
+        ) : (
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            className="!bg-blue-500 !border-white !border-2 !size-2.5 !-bottom-1"
+          />
+        )}
       </div>
 
       {/* Integrated add button with menu - only show if no outgoing edge */}
@@ -469,9 +535,10 @@ interface AgentStepDataExtended extends AgentStepData, NodeCallbacks {
   executionStatus?: ExecutionStatus;
 }
 
-// Agent Step Node - Compact Lindy-style design
+// Agent Step Node - Compact design
 function AgentStepNode({ id, data, selected }: { id: string; data: AgentStepDataExtended; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const execStyles = getExecutionStyles(data.executionStatus);
@@ -500,7 +567,7 @@ function AgentStepNode({ id, data, selected }: { id: string; data: AgentStepData
       >
         {/* Header */}
         <div className="flex items-center gap-2 mb-1.5">
-          <div className="size-5 rounded bg-indigo-500 flex items-center justify-center flex-shrink-0">
+          <div className="size-5 rounded-md bg-indigo-500 flex items-center justify-center flex-shrink-0">
             <Robot className="size-3 text-white" weight="fill" />
           </div>
           <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">Agent Step</span>
@@ -627,9 +694,10 @@ function AgentStepNode({ id, data, selected }: { id: string; data: AgentStepData
   );
 }
 
-// Add Node Button with dropdown menu - Lindy style
+// Add Node Button with dropdown menu
 function AddNodePlaceholder({ data }: { data: { onSelectAction?: (actionId: string) => void } }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -690,7 +758,7 @@ function AddNodePlaceholder({ data }: { data: { onSelectAction?: (actionId: stri
   );
 }
 
-// Condition Node - Lindy style (purple icon, multiple outputs for branches)
+// Condition Node (purple icon, multiple outputs for branches)
 function ConditionNode({ id, data, selected }: { id: string; data: { label?: string; conditions?: Array<{ id: string; text: string }>; onAddCondition?: (nodeId: string) => void; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
@@ -713,10 +781,10 @@ function ConditionNode({ id, data, selected }: { id: string; data: { label?: str
         className={`bg-white rounded-xl px-3 py-2 shadow-sm hover:shadow transition-shadow relative ${
           selected ? "border-2 border-cyan-400" : "border border-violet-200"
         } ${execStyles.containerClass}`}
-        style={{ width: NODE_WIDTH }}
+        style={{ width: 280 }}
       >
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-violet-500 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-violet-500 flex items-center justify-center flex-shrink-0">
             <GitBranch className="size-3.5 text-white" weight="fill" />
           </div>
           <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
@@ -814,22 +882,23 @@ function ConditionNode({ id, data, selected }: { id: string; data: { label?: str
   );
 }
 
-// Condition Branch Node - subtle pill style like Lindy
+// Condition Branch Node - subtle pill style
 function ConditionBranchNode({ id, data, selected }: { id: string; data: { conditionText?: string; branchLabel?: string; conditionIndex?: number; hasWarning?: boolean; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
-  const text = data.conditionText || "";
+  const rawText = data.conditionText || "";
+  // Strip "Go down this path if" prefix since the settings panel already shows it
+  const text = rawText.replace(/^Go down this path if\s*/i, "");
   const isEmpty = text.trim() === "" && !data.branchLabel;
 
-  // Use branchLabel if provided (e.g. "Yes", "No"), otherwise truncate text
+  // Use branchLabel if provided (e.g. "Yes", "No"), otherwise show index + truncated text
   const displayText = data.branchLabel
-    ? `${data.branchLabel} ...`
+    ? data.branchLabel
     : isEmpty
       ? "Define a condition"
-      : text.length > 28
-        ? text.substring(0, 25) + "..."
-        : text;
+      : `${data.conditionIndex != null ? `#${data.conditionIndex} ` : ""}${text.length > 22 ? text.substring(0, 19) + "..." : text}`;
 
   const menuItems = [
     { id: "action", label: "Perform an action", icon: Sparkle, color: "text-pink-500" },
@@ -847,7 +916,7 @@ function ConditionBranchNode({ id, data, selected }: { id: string; data: { condi
 
   return (
     <div className="flex flex-col items-center">
-      {/* Subtle condition pill - Lindy style */}
+      {/* Subtle condition pill */}
       <div
         className={`bg-gray-200 rounded-full px-3 py-1.5 border transition-all ${
           selected ? "border-cyan-400 border-2" : isEmpty ? "border-amber-300 border-dashed" : "border-slate-200"
@@ -947,100 +1016,12 @@ function ConditionBranchNode({ id, data, selected }: { id: string; data: { condi
   );
 }
 
-// Icon mapping for action nodes based on integration/type
-const ACTION_ICONS: Record<string, { icon: string; color: string }> = {
-  // Google
-  "google-sheets": { icon: "logos:google-sheets", color: "bg-green-500" },
-  "google-drive": { icon: "logos:google-drive", color: "bg-blue-500" },
-  "google-calendar": { icon: "logos:google-calendar", color: "bg-blue-500" },
-  "gmail": { icon: "logos:google-gmail", color: "bg-red-500" },
-  "google": { icon: "logos:google-icon", color: "bg-white border border-gray-200" },
-  // Communication
-  "slack": { icon: "logos:slack-icon", color: "bg-purple-500" },
-  "discord": { icon: "logos:discord-icon", color: "bg-indigo-500" },
-  "telegram": { icon: "logos:telegram", color: "bg-blue-500" },
-  "whatsapp": { icon: "logos:whatsapp-icon", color: "bg-green-500" },
-  "teams": { icon: "logos:microsoft-teams", color: "bg-purple-500" },
-  "zoom": { icon: "logos:zoom-icon", color: "bg-blue-500" },
-  "outlook": { icon: "logos:microsoft-icon", color: "bg-blue-500" },
-  // CRM & Sales
-  "hubspot": { icon: "logos:hubspot", color: "bg-orange-500" },
-  "salesforce": { icon: "logos:salesforce", color: "bg-blue-500" },
-  "pipedrive": { icon: "simple-icons:pipedrive", color: "bg-green-500" },
-  "apollo": { icon: "ph:rocket-fill", color: "bg-purple-500" },
-  "clearbit": { icon: "simple-icons:clearbit", color: "bg-blue-500" },
-  "clay": { icon: "ph:cube-fill", color: "bg-indigo-500" },
-  "hunter": { icon: "ph:envelope-simple-fill", color: "bg-orange-500" },
-  "lemlist": { icon: "ph:paper-plane-tilt-fill", color: "bg-purple-500" },
-  "snov": { icon: "ph:envelope-fill", color: "bg-blue-500" },
-  "crunchbase": { icon: "simple-icons:crunchbase", color: "bg-blue-500" },
-  // Project Management
-  "notion": { icon: "logos:notion-icon", color: "bg-slate-800" },
-  "airtable": { icon: "logos:airtable", color: "bg-blue-500" },
-  "jira": { icon: "logos:jira", color: "bg-blue-500" },
-  "asana": { icon: "logos:asana-icon", color: "bg-red-500" },
-  "trello": { icon: "logos:trello", color: "bg-blue-500" },
-  "monday": { icon: "logos:monday-icon", color: "bg-yellow-500" },
-  "linear": { icon: "logos:linear-icon", color: "bg-indigo-500" },
-  // Development
-  "github": { icon: "logos:github-icon", color: "bg-slate-800" },
-  "gitlab": { icon: "logos:gitlab", color: "bg-orange-500" },
-  "bitbucket": { icon: "logos:bitbucket", color: "bg-blue-500" },
-  // Cloud
-  "aws": { icon: "logos:aws", color: "bg-orange-500" },
-  "azure": { icon: "logos:azure-icon", color: "bg-blue-500" },
-  "gcp": { icon: "logos:google-cloud", color: "bg-blue-500" },
-  // Storage
-  "dropbox": { icon: "logos:dropbox", color: "bg-blue-500" },
-  "box": { icon: "simple-icons:box", color: "bg-blue-500" },
-  "onedrive": { icon: "logos:microsoft-onedrive", color: "bg-blue-500" },
-  // Marketing & Email
-  "mailchimp": { icon: "logos:mailchimp", color: "bg-yellow-500" },
-  "sendgrid": { icon: "logos:sendgrid-icon", color: "bg-blue-500" },
-  // Payments
-  "stripe": { icon: "logos:stripe", color: "bg-purple-500" },
-  // Support
-  "zendesk": { icon: "logos:zendesk-icon", color: "bg-green-500" },
-  "intercom": { icon: "logos:intercom-icon", color: "bg-blue-500" },
-  // Social Media
-  "twitter": { icon: "logos:twitter", color: "bg-blue-500" },
-  "facebook": { icon: "logos:facebook", color: "bg-blue-500" },
-  "instagram": { icon: "logos:instagram-icon", color: "bg-pink-500" },
-  "linkedin": { icon: "logos:linkedin-icon", color: "bg-white border border-gray-200" },
-  "youtube": { icon: "ph:youtube-logo-fill", color: "bg-red-500" },
-  "tiktok": { icon: "logos:tiktok-icon", color: "bg-slate-800" },
-  "reddit": { icon: "logos:reddit-icon", color: "bg-orange-500" },
-  "pinterest": { icon: "logos:pinterest", color: "bg-red-500" },
-  // E-commerce
-  "shopify": { icon: "logos:shopify", color: "bg-green-500" },
-  "woocommerce": { icon: "logos:woocommerce-icon", color: "bg-purple-500" },
-  // Forms
-  "typeform": { icon: "simple-icons:typeform", color: "bg-slate-800" },
-  "calendly": { icon: "simple-icons:calendly", color: "bg-blue-500" },
-  // AI & Research
-  "perplexity": { icon: "ph:compass-fill", color: "bg-teal-600" },
-  "people-data-labs": { icon: "mdi:account-search", color: "bg-[#7F35FD]" },
-  "ai": { icon: "ph:sparkle-fill", color: "bg-violet-500" },
-  // Utilities
-  "web-browser": { icon: "ph:globe-fill", color: "bg-blue-500" },
-  "http": { icon: "ph:globe-fill", color: "bg-blue-500" },
-  "generate-media": { icon: "ph:image-fill", color: "bg-pink-500" },
-  "meeting-recorder": { icon: "ph:microphone-fill", color: "bg-red-500" },
-  "nodebase-phone": { icon: "ph:phone-fill", color: "bg-green-500" },
-  "utilities": { icon: "ph:wrench-fill", color: "bg-slate-500" },
-  // Generic
-  "table": { icon: "ph:table-fill", color: "bg-emerald-500" },
-  "send": { icon: "ph:paper-plane-tilt-fill", color: "bg-cyan-500" },
-  "search": { icon: "ph:magnifying-glass-bold", color: "bg-blue-500" },
-  "message": { icon: "ph:chat-circle-text-fill", color: "bg-indigo-500" },
-  // Automation
-  "zapier": { icon: "logos:zapier-icon", color: "bg-orange-500" },
-  "twilio": { icon: "logos:twilio-icon", color: "bg-red-500" },
-};
+// ACTION_ICONS imported from @/features/agents/lib/node-icons
 
 // Action Node (colored based on icon type)
 function ActionNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; icon?: string; hasWarning?: boolean; warningText?: string; credits?: number; outputs?: string[]; hasOutgoingEdge?: boolean; executionStatus?: ExecutionStatus; onSelectAction?: (actionId: string, sourceNodeId?: string) => void; onOpenReplaceModal?: (nodeId: string) => void }; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1110,17 +1091,13 @@ function ActionNode({ id, data, selected }: { id: string; data: { label?: string
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className={`size-6 rounded-lg ${iconConfig.color} flex items-center justify-center flex-shrink-0`}>
+          <div className={`size-6 rounded-md ${iconConfig.color} ${iconConfig.color === "bg-white" ? "border border-gray-200" : ""} flex items-center justify-center flex-shrink-0`}>
             <Icon icon={iconConfig.icon} className={`size-3.5 ${iconConfig.icon.startsWith("logos:") ? "" : "text-white"}`} />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">
               {data.label || "Action"}
             </span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
-            {data.credits != null && <CreditsBadge credits={data.credits} />}
           </div>
           {data.hasWarning && (
             <Warning className="size-3 text-amber-500 flex-shrink-0" weight="fill" />
@@ -1255,17 +1232,13 @@ function SendEmailNode({ id, data, selected }: { id: string; data: { label?: str
         style={{ width: NODE_WIDTH }}
       >
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
+        <div className="size-6 rounded-md bg-orange-500 flex items-center justify-center flex-shrink-0">
           <Envelope className="size-3.5 text-white" weight="fill" />
         </div>
         <div className="flex-1 min-w-0">
           <span className="font-medium text-slate-700 text-xs block truncate">
             {data.label || "Send email"}
           </span>
-          {data.subtitle && (
-            <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-          )}
-          {data.credits != null && <CreditsBadge credits={data.credits} />}
         </div>
         {data.hasWarning && (
           <Warning className="size-3 text-amber-500 flex-shrink-0" weight="fill" />
@@ -1341,6 +1314,7 @@ function SendEmailNode({ id, data, selected }: { id: string; data: { label?: str
 // People Data Labs Node - Search for leads
 function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; credits?: number; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Search for leads";
@@ -1371,17 +1345,13 @@ function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?
       >
         <div className="flex items-center gap-2">
           {/* People Data Labs icon */}
-          <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <PDLIcon size={14} />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">
               {label}
             </span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
-            {data.credits != null && <CreditsBadge credits={data.credits} />}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -1479,6 +1449,7 @@ function PeopleDataLabsNode({ id, data, selected }: { id: string; data: { label?
 // Google Sheets Node
 function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: string; subtitle?: string; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Google Sheets";
@@ -1509,16 +1480,13 @@ function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: 
       >
         <div className="flex items-center gap-2">
           {/* Google Sheets logo */}
-          <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <Icon icon="logos:google-sheets" className="size-4" />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">
               {label}
             </span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -1613,22 +1581,12 @@ function GoogleSheetsNode({ id, data, selected }: { id: string; data: { label?: 
   );
 }
 
-// Integration configuration for generic integration nodes
-const INTEGRATION_NODE_CONFIG: Record<string, { icon: string; color: string; borderColor: string }> = {
-  gmail: { icon: "logos:google-gmail", color: "#EA4335", borderColor: "#EA4335" },
-  googleDrive: { icon: "logos:google-drive", color: "#4285F4", borderColor: "#4285F4" },
-  googleDocs: { icon: "simple-icons:googledocs", color: "#4285F4", borderColor: "#4285F4" },
-  googleCalendar: { icon: "logos:google-calendar", color: "#4285F4", borderColor: "#4285F4" },
-  outlook: { icon: "vscode-icons:file-type-outlook", color: "#0078D4", borderColor: "#0078D4" },
-  outlookCalendar: { icon: "vscode-icons:file-type-outlook", color: "#0078D4", borderColor: "#0078D4" },
-  microsoftTeams: { icon: "logos:microsoft-teams", color: "#6264A7", borderColor: "#6264A7" },
-  slack: { icon: "logos:slack-icon", color: "#4A154B", borderColor: "#4A154B" },
-  notion: { icon: "simple-icons:notion", color: "#000000", borderColor: "#000000" },
-};
+// INTEGRATION_NODE_CONFIG imported from @/features/agents/lib/node-icons
 
 // Generic Integration Node (for gmail, googleDrive, etc.)
 function IntegrationNode({ id, data, selected, type }: { id: string; type: string; data: { label?: string; subtitle?: string; credits?: number; actionId?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const execStyles = getExecutionStyles(data.executionStatus);
@@ -1661,17 +1619,13 @@ function IntegrationNode({ id, data, selected, type }: { id: string; type: strin
       >
         <div className="flex items-center gap-2">
           {/* Integration logo */}
-          <div className="size-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
             <Icon icon={config.icon} className="size-4" />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">
               {label}
             </span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
-            {data.credits != null && <CreditsBadge credits={data.credits} />}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -1784,8 +1738,8 @@ function EnterLoopNode({ id, data, selected }: { id: string; data: { label?: str
         style={{ width: NODE_WIDTH }}
       >
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
-          <Play className="size-3.5 text-white" weight="fill" />
+        <div className="size-6 rounded-md bg-teal-500 flex items-center justify-center flex-shrink-0">
+          <ArrowsClockwise className="size-3.5 text-white" weight="bold" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1">
@@ -1798,9 +1752,6 @@ function EnterLoopNode({ id, data, selected }: { id: string; data: { label?: str
               </span>
             )}
           </div>
-          {data.subtitle && (
-            <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-          )}
         </div>
         <div className="relative flex-shrink-0">
           <button
@@ -1873,13 +1824,13 @@ function ExitLoopNode({ id, data, selected }: { id: string; data: { label?: stri
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
-            <Stop className="size-3.5 text-white" weight="fill" />
+          <div className="size-6 rounded-md bg-teal-500 flex items-center justify-center flex-shrink-0">
+            <ArrowsClockwise className="size-3.5 text-white" weight="bold" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
               <span className="font-medium text-slate-700 text-xs truncate">
-                {data.label || "Exit loop"}
+                Exit loop
               </span>
               {data.loopNumber != null && (
                 <span className="ml-0.5 size-4 rounded-full bg-violet-100 text-violet-600 text-[9px] font-semibold inline-flex items-center justify-center flex-shrink-0">
@@ -1887,9 +1838,6 @@ function ExitLoopNode({ id, data, selected }: { id: string; data: { label?: stri
                 </span>
               )}
             </div>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -1959,7 +1907,7 @@ function SelectActionNode({ id, data, selected }: { id: string; data: { label?: 
       style={{ width: NODE_WIDTH }}
     >
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-violet-500 flex items-center justify-center flex-shrink-0">
+        <div className="size-6 rounded-md bg-violet-500 flex items-center justify-center flex-shrink-0">
           <Sparkle className="size-3.5 text-white" weight="fill" />
         </div>
         <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
@@ -2025,6 +1973,7 @@ function SelectActionNode({ id, data, selected }: { id: string; data: { label?: 
 // Search Knowledge Base Node - Same format as Condition
 function SearchKnowledgeBaseNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto" } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Search knowledge base";
@@ -2053,7 +2002,7 @@ function SearchKnowledgeBaseNode({ id, data, selected }: { id: string; data: { l
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-blue-500 flex items-center justify-center flex-shrink-0">
             <MagnifyingGlass className="size-3.5 text-white" weight="bold" />
           </div>
           <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
@@ -2156,6 +2105,7 @@ function SearchKnowledgeBaseNode({ id, data, selected }: { id: string; data: { l
 // Loop Node - Sleek minimal with integrated "+" button
 function LoopNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; onSelectAction?: (actionId: string, sourceNodeId?: string) => void; onOpenReplaceModal?: (nodeId: string) => void }; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -2182,7 +2132,7 @@ function LoopNode({ id, data, selected }: { id: string; data: { label?: string; 
         style={{ width: NODE_WIDTH }}
       >
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-green-500 flex items-center justify-center flex-shrink-0">
+          <div className="size-6 rounded-md bg-green-500 flex items-center justify-center flex-shrink-0">
             <ArrowsClockwise className="size-3.5 text-white" weight="bold" />
           </div>
           <span className="font-medium text-slate-700 text-xs flex-1 text-left truncate">
@@ -2281,19 +2231,32 @@ function AddButtonEdge({
 }: EdgeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
+  useCloseOnPaneClick(setShowMenu);
 
   // Check if this is a structural edge (condition → branch) or placeholder edge (to "add" node) - don't show "+" on these
   const isStructuralEdge = (data as { isStructural?: boolean })?.isStructural === true;
   const isPlaceholderEdge = (data as { isPlaceholder?: boolean })?.isPlaceholder === true;
+  const isBranchEdge = (data as { isBranchEdge?: boolean })?.isBranchEdge === true;
+
+  // Use smoothstep for condition-related edges (structural + branch→target) for clean orthogonal routing
+  const [edgePath, labelX, labelY] = (isStructuralEdge || isBranchEdge)
+    ? getSmoothStepPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+        borderRadius: 8,
+      })
+    : getBezierPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+      });
 
   // Check if this edge is connected to the selected node
   const selectedNodeId = (data as { selectedNodeId?: string })?.selectedNodeId;
@@ -2317,10 +2280,12 @@ function AddButtonEdge({
   const baseStroke = isConnectedToSelected ? "#22D3EE" : "#94A3B8"; // cyan-400 when selected
   const strokeWidth = isConnectedToSelected ? 2 : 1.5;
 
-  // Placeholder edges should be dashed
+  // Placeholder edges dashed, structural edges (condition→branch) lighter violet
   const edgeStyle = isPlaceholderEdge
     ? { ...style, strokeDasharray: "5,5", stroke: "#CBD5E1", strokeWidth: 1.5 }
-    : { ...style, stroke: baseStroke, strokeWidth };
+    : isStructuralEdge
+      ? { ...style, stroke: "#C4B5FD", strokeWidth: 1.2 }
+      : { ...style, stroke: baseStroke, strokeWidth };
 
   return (
     <>
@@ -2410,6 +2375,7 @@ function AnimatedEdge({
   data,
 }: EdgeProps) {
   const isActive = (data as { isActive?: boolean })?.isActive;
+  const isCompleted = (data as { isCompleted?: boolean })?.isCompleted;
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -2420,6 +2386,12 @@ function AnimatedEdge({
     targetPosition,
   });
 
+  const pathId = `animated-edge-path-${id}`;
+
+  // Blue for running, green for completed, gray for idle
+  const strokeColor = isActive ? "#3B82F6" : isCompleted ? "#10B981" : "#94A3B8";
+  const strokeW = isActive ? 2.5 : isCompleted ? 2 : 1.5;
+
   return (
     <>
       {/* Base edge */}
@@ -2428,28 +2400,45 @@ function AnimatedEdge({
         markerEnd={markerEnd}
         style={{
           ...style,
-          stroke: isActive ? "#3B82F6" : "#94A3B8",
-          strokeWidth: isActive ? 2.5 : 1.5,
+          stroke: strokeColor,
+          strokeWidth: strokeW,
         }}
       />
-      {/* Animated dashed overlay when active */}
+      {/* Blue animation only for running edges */}
       {isActive && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke="#3B82F6"
-          strokeWidth={2.5}
-          strokeDasharray="8 4"
-          style={{ animation: "edge-flow 0.6s linear infinite" }}
-        />
+        <>
+          {/* Animated dashed overlay */}
+          <path
+            id={pathId}
+            d={edgePath}
+            fill="none"
+            stroke="#3B82F6"
+            strokeWidth={2.5}
+            strokeDasharray="8 4"
+            style={{ animation: "edge-flow 1s linear infinite" }}
+          />
+          {/* Travelling dot along the edge */}
+          <circle r={4} fill="#3B82F6" opacity={0.9}>
+            <animateMotion dur="2s" repeatCount="indefinite">
+              <mpath xlinkHref={`#${pathId}`} />
+            </animateMotion>
+          </circle>
+          {/* Glow effect on travelling dot */}
+          <circle r={8} fill="#3B82F6" opacity={0.2}>
+            <animateMotion dur="2s" repeatCount="indefinite">
+              <mpath xlinkHref={`#${pathId}`} />
+            </animateMotion>
+          </circle>
+        </>
       )}
     </>
   );
 }
 
-// Chat Outcome Node - subtle pill style like Lindy ("After message sent" / "After reply received")
+// Chat Outcome Node - subtle pill style ("After message sent" / "After reply received")
 function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: string; hasOutgoingEdge?: boolean; fieldsMode?: "manual" | "auto"; executionStatus?: ExecutionStatus } & NodeCallbacks; selected?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const label = data.label || "Outcome";
@@ -2471,14 +2460,14 @@ function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: s
   return (
     <div className="flex flex-col items-center relative">
       <ExecutionBadge status={data.executionStatus} />
-      {/* Subtle outcome pill - Lindy style */}
+      {/* Outcome label - blue text */}
       <div
-        className={`bg-gray-200 rounded-full px-3 py-1.5 border transition-all ${
-          selected ? "border-cyan-400 border-2" : "border-slate-200"
+        className={`px-2 py-1 transition-all ${
+          selected ? "ring-2 ring-cyan-400 ring-offset-1 rounded" : ""
         } ${execStyles.containerClass}`}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{label}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-blue-500">{label}</span>
           <div className="relative flex-shrink-0">
             <button
               ref={optionsBtnRef}
@@ -2513,12 +2502,12 @@ function ChatOutcomeNode({ id, data, selected }: { id: string; data: { label?: s
         <Handle
           type="target"
           position={Position.Top}
-          className="!bg-slate-300 !border-white !border-2 !size-2 !-top-1"
+          className="!bg-blue-400 !border-white !border-2 !size-2 !-top-0.5"
         />
         <Handle
           type="source"
           position={Position.Bottom}
-          className="!bg-slate-300 !border-white !border-2 !size-2 !-bottom-1"
+          className="!bg-blue-400 !border-white !border-2 !size-2 !-bottom-0.5"
         />
       </div>
 
@@ -2589,6 +2578,7 @@ function ComposioActionNode({
   selected?: boolean;
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  useCloseOnPaneClick(setShowMenu);
   const [showOptions, setShowOptions] = useState(false);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const execStyles = getExecutionStyles(data.executionStatus);
@@ -2610,17 +2600,13 @@ function ComposioActionNode({
       >
         <div className="flex items-center gap-2">
           {/* Icon for Composio action */}
-          <div className={`size-6 rounded-lg ${iconConfig.color} flex items-center justify-center flex-shrink-0`}>
+          <div className={`size-6 rounded-md ${iconConfig.color} ${iconConfig.color === "bg-white" ? "border border-gray-200" : ""} flex items-center justify-center flex-shrink-0`}>
             <Icon icon={iconConfig.icon} className={`size-3.5 ${iconConfig.icon.startsWith("logos:") ? "" : "text-white"}`} />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-medium text-slate-700 text-xs block truncate">
               {data.label || data.composioActionName || "Composio Action"}
             </span>
-            {data.subtitle && (
-              <span className="text-[9px] text-slate-400 block truncate">{data.subtitle}</span>
-            )}
-            {data.credits != null && <CreditsBadge credits={data.credits} />}
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -2643,13 +2629,6 @@ function ComposioActionNode({
             )}
           </div>
         </div>
-
-        {/* Description hint */}
-        {data.description && (
-          <div className="mt-1 px-1">
-            <p className="text-[10px] text-slate-400 truncate">{data.description}</p>
-          </div>
-        )}
 
         <Handle
           type="target"
@@ -2676,18 +2655,100 @@ function ComposioActionNode({
   );
 }
 
-// Loop Container Node - visual dashed border around loop children (no handles, purely decorative)
-function LoopContainerNode({ data }: { data: { width?: number; height?: number } }) {
+// Loop Container Overlay — renders transparent violet rectangles around loop bodies.
+// Uses ViewportPortal to render INSIDE the React Flow viewport div (.react-flow__viewport-portal),
+// so elements are in the same coordinate system as nodes (auto pan/zoom).
+function LoopContainersOverlay() {
+  const nodes = useNodes();
+
+  const loopRects = useMemo(() => {
+    // Stack-based matching: traverse all enter/exit loop nodes sorted by Y position.
+    // Push on enterLoop, pop on exitLoop — correctly handles nested loops.
+    const allLoopNodes = nodes
+      .filter(n => n.type === "enterLoop" || n.type === "exitLoop")
+      .sort((a, b) => a.position.y - b.position.y);
+
+    const stack: Node[] = [];
+    const pairs: Array<{ enter: Node; exit: Node }> = [];
+
+    for (const node of allLoopNodes) {
+      if (node.type === "enterLoop") {
+        stack.push(node);
+      } else if (node.type === "exitLoop" && stack.length > 0) {
+        const enter = stack.pop()!;
+        pairs.push({ enter, exit: node });
+      }
+    }
+
+    const rects: Array<{ key: string; x: number; y: number; w: number; h: number }> = [];
+
+    for (const { enter, exit } of pairs) {
+      // Collect all nodes between enter and exit (by Y position)
+      const childNodes = nodes.filter(n =>
+        n.id !== enter.id && n.id !== exit.id &&
+        n.type !== "loopContainer" &&
+        n.type !== "addNode" &&
+        n.position.y >= enter.position.y &&
+        n.position.y <= exit.position.y
+      );
+
+      const allNodes = [enter, exit, ...childNodes];
+      const paddingX = 40;
+      const paddingTop = 15;
+      const paddingBottom = 20;
+      const nodeW = NODE_WIDTH;
+      const exitNodeH = 45;
+
+      // Center rectangle symmetrically on the enterLoop node.
+      // The Y-range filter may capture condition branches and nested structures at
+      // different x positions — using min/max creates an asymmetric rectangle.
+      // Instead, center on the enter node and extend equally on both sides.
+      const enterCenterX = enter.position.x + nodeW / 2;
+      const allLeft = Math.min(...allNodes.map(n => n.position.x));
+      const allRight = Math.max(...allNodes.map(n => n.position.x)) + nodeW;
+      const distLeft = enterCenterX - allLeft + paddingX;
+      const distRight = allRight - enterCenterX + paddingX;
+      const halfWidth = Math.max(distLeft, distRight);
+      const minX = enterCenterX - halfWidth;
+      const maxX = enterCenterX + halfWidth;
+      const minY = enter.position.y - paddingTop;
+      const maxY = exit.position.y + exitNodeH + paddingBottom;
+
+      rects.push({ key: `${enter.id}-${exit.id}`, x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+    }
+
+    // Sort by area descending so outer loops render first (behind inner loops)
+    rects.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+    return rects;
+  }, [nodes]);
+
+  if (loopRects.length === 0) return null;
+
   return (
-    <div
-      className="rounded-2xl border-2 border-dashed border-violet-200/60 bg-violet-50/20"
-      style={{
-        width: data.width || 400,
-        height: data.height || 300,
-        pointerEvents: "none",
-      }}
-    />
+    <ViewportPortal>
+      {loopRects.map((rect) => (
+        <div
+          key={`loop-overlay-${rect.key}`}
+          style={{
+            position: "absolute",
+            left: `${rect.x}px`,
+            top: `${rect.y}px`,
+            width: `${rect.w}px`,
+            height: `${rect.h}px`,
+            borderRadius: 16,
+            backgroundColor: "rgba(139, 92, 246, 0.06)",
+            border: "1.5px solid rgba(167, 139, 250, 0.35)",
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+    </ViewportPortal>
   );
+}
+
+// Legacy LoopContainerNode — kept for nodeTypes registry (skipped during execution)
+function LoopContainerNode() {
+  return null;
 }
 
 // Node types
@@ -2750,6 +2811,7 @@ export interface FlowExecutionState {
   completedNodeIds: string[];
   errorNodeIds: string[];
   skippedNodeIds: string[];
+  reusedNodeIds: string[];
 }
 
 // Flow data from template
@@ -2793,6 +2855,14 @@ export interface FlowEditorCanvasRef {
   deleteNode: (nodeId: string) => void;
   updateNodeLabel: (nodeId: string, newLabel: string) => void;
   replaceNode: (nodeId: string, newType: string, newData: Record<string, unknown>) => string;
+  // Smart Builder API
+  addNode: (nodeType: string, afterNodeId?: string, data?: Record<string, unknown>) => string | null;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
+  connectNodes: (sourceId: string, targetId: string, sourceHandle?: string) => boolean;
+  getFlowStateSnapshot: () => FlowStateSnapshot;
+  // Canvas UX
+  fitView: () => void;
+  duplicateNode: (nodeId: string) => string | null;
 }
 
 export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvasProps>(function FlowEditorCanvas({
@@ -2808,6 +2878,9 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
   // Modal state for adding actions
   const [showActionModal, setShowActionModal] = useState(false);
   const [showKBModal, setShowKBModal] = useState(false);
+
+  // Track whether an execution has occurred (to avoid clearing on initial mount)
+  const hadExecutionRef = useRef(false);
 
   // Track the source node when opening modals (to know where to place new nodes)
   const pendingSourceNodeRef = useRef<string | undefined>(undefined);
@@ -2845,6 +2918,9 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
   const onDeleteNodeRef = useRef<(nodeId: string) => void>(() => {});
   const onAddErrorHandlingRef = useRef<(nodeId: string) => void>(() => {});
   const onSetFieldsModeRef = useRef<(nodeId: string, mode: "manual" | "auto") => void>(() => {});
+
+  // React Flow instance ref for fitView
+  const reactFlowInstanceRef = useRef<{ fitView: (opts?: { padding?: number; duration?: number; maxZoom?: number }) => void } | null>(null);
 
   // Edge style configuration
   const edgeStyle = {
@@ -3016,28 +3092,34 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
             conditions,
           };
 
-          // Create branch nodes - use saved positions if available, otherwise calculate
-          const defaultBranchY = node.position.y + 80;
-          const branchSpacing = 160; // pixels between branch centers
-          const totalBranchWidth = (conditions.length - 1) * branchSpacing;
+          // Create branch nodes - position directly under source handles for clean edges
+          const defaultBranchY = node.position.y + BRANCH_Y_GAP;
+          const CONDITION_NODE_WIDTH = 280; // ConditionNode uses width: 280
+          const BRANCH_HALF_WIDTH = 35; // approximate half-width of branch pill node
+          const totalDivisions = conditions.length + 2; // same formula as handle positioning
           conditions.forEach((condition, index) => {
             const branchId = condition.id || `${node.id}-branch-${index}`;
 
             // Check if this branch node exists in saved flowData with a position
             const savedBranchNode = initialFlowData.nodes?.find(n => n.id === branchId);
 
-            // Use saved position if available, otherwise calculate default position
+            // Use saved position if available, otherwise align under source handle
             let branchPosition: { x: number; y: number };
             if (savedBranchNode?.position) {
               branchPosition = savedBranchNode.position;
             } else {
-              // Center all branches around the condition node
-              const offsetX = -totalBranchWidth / 2 + index * branchSpacing;
-              branchPosition = { x: node.position.x + offsetX, y: defaultBranchY };
+              // Position branch directly under its source handle on the condition node
+              // Handle leftPercent = ((index + 1) / totalDivisions) * 100 (from ConditionNode)
+              const handleFraction = (index + 1) / totalDivisions;
+              const handleAbsoluteX = node.position.x + CONDITION_NODE_WIDTH * handleFraction;
+              branchPosition = { x: handleAbsoluteX - BRANCH_HALF_WIDTH, y: defaultBranchY };
             }
 
             // Check if this branch has an outgoing edge (a node connected to it)
-            const hasOutgoingEdge = initialFlowData.edges?.some(e => e.source === branchId) || false;
+            // Check both direct edges from the branch ID AND condition edges that map to this branch
+            const hasOutgoingEdge = initialFlowData.edges?.some(
+              e => e.source === branchId || (e.source === node.id && e.sourceHandle === `branch-${index}`)
+            ) || false;
             branchNodesToAdd.push({
               id: branchId,
               type: "conditionBranch",
@@ -3094,41 +3176,8 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         });
       }
 
-      // Calculate loop container bounding boxes
-      const enterLoopNodes = flowNodes.filter(n => n.type === "enterLoop");
-      enterLoopNodes.forEach(enterNode => {
-        const loopNum = (enterNode.data as { loopNumber?: number }).loopNumber;
-        if (loopNum == null) return;
-        const exitNode = flowNodes.find(
-          n => n.type === "exitLoop" && (n.data as { loopNumber?: number }).loopNumber === loopNum
-        );
-        if (!exitNode) return;
-
-        // Find all nodes between enter and exit (by position Y)
-        const childNodes = flowNodes.filter(n =>
-          n.id !== enterNode.id && n.id !== exitNode.id &&
-          n.type !== "loopContainer" &&
-          n.position.y >= enterNode.position.y &&
-          n.position.y <= exitNode.position.y
-        );
-
-        const allNodes = [enterNode, exitNode, ...childNodes];
-        const padding = 40;
-        const minX = Math.min(...allNodes.map(n => n.position.x)) - padding;
-        const maxX = Math.max(...allNodes.map(n => n.position.x)) + NODE_WIDTH + padding;
-        const minY = enterNode.position.y - 10;
-        const maxY = exitNode.position.y + 60;
-
-        flowNodes.push({
-          id: `loop-container-${loopNum}`,
-          type: "loopContainer",
-          position: { x: minX, y: minY },
-          data: { width: maxX - minX, height: maxY - minY },
-          selectable: false,
-          draggable: false,
-          zIndex: -1,
-        });
-      });
+      // NOTE: Loop containers are rendered by <LoopContainersOverlay> (SVG layer inside ReactFlow),
+      // NOT as React Flow nodes. This avoids React Flow's visibility/z-index pipeline issues.
 
       // Only add the "add" node if there are no condition nodes
       // (branches have their own "+" buttons)
@@ -3144,7 +3193,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         flowNodes.push({
           id: "add",
           type: "addNode",
-          position: { x: lastNode.position.x + 57, y: lastNode.position.y + 100 },
+          position: { x: lastNode.position.x + 57, y: lastNode.position.y + NODE_Y_GAP },
           data: {
             onSelectAction: (actionId: string) => handleSelectActionRef.current(actionId),
           },
@@ -3165,7 +3214,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       {
         id: "add",
         type: "addNode",
-        position: { x: 357, y: 180 },
+        position: { x: 357, y: 50 + NODE_Y_GAP },
         data: {
           onSelectAction: (actionId: string) => handleSelectActionRef.current(actionId),
         },
@@ -3199,13 +3248,19 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
           data: { onInsertNode: handleInsertNodeRef.current },
         }));
 
+      // Collect condition edges from template (they were filtered out above)
+      // so we can re-map them as branch → target edges
+      const conditionEdgesFromTemplate = initialFlowData.edges.filter(
+        edge => conditionNodeIds.has(edge.source)
+      );
+
       // Add edges from condition nodes to their branch nodes (consistently created)
       // Use a Set to track edge IDs and avoid duplicates
       const existingEdgeIds = new Set(flowEdges.map(e => e.id));
 
       initialFlowData.nodes?.forEach((node) => {
         if (node.type === "condition") {
-          const conditions = (node.data?.conditions as Array<{ id: string; text: string }>) || [
+          const conditions = (node.data?.conditions as Array<{ id: string; text: string; label?: string }>) || [
             { id: `${node.id}-branch-0`, text: "" },
           ];
 
@@ -3231,6 +3286,25 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
                 data: { isStructural: true }, // Structural edge - no "+" on hover
               });
             }
+
+            // Re-create branch → target edges from the filtered template condition edges
+            const templateEdge = conditionEdgesFromTemplate.find(
+              e => e.source === node.id && e.sourceHandle === `branch-${index}`
+            );
+            if (templateEdge) {
+              const branchToTargetId = `e-${branchId}-${templateEdge.target}`;
+              if (!existingEdgeIds.has(branchToTargetId)) {
+                existingEdgeIds.add(branchToTargetId);
+                flowEdges.push({
+                  id: branchToTargetId,
+                  source: branchId,
+                  target: templateEdge.target,
+                  type: "addButton",
+                  style: edgeStyle,
+                  data: { onInsertNode: handleInsertNodeRef.current, isBranchEdge: true },
+                });
+              }
+            }
           });
         }
       });
@@ -3243,6 +3317,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         // Don't add edge from condition to "add" - branches handle the continuation
       } else {
         // Find the last node from the edges to connect to "add"
+        if (initialFlowData.edges.length === 0) return flowEdges;
         const lastTarget = initialFlowData.edges.reduce((prev, curr) => {
           const prevNode = initialFlowData.nodes?.find((n) => n.id === prev.target);
           const currNode = initialFlowData.nodes?.find((n) => n.id === curr.target);
@@ -3296,13 +3371,35 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
 
   // Inject execution status into nodes and animate edges when executionState changes
   useEffect(() => {
-    if (!executionState) return;
+    if (!executionState) {
+      // Only clear visuals if an execution actually happened (not on initial mount)
+      if (!hadExecutionRef.current) return;
+
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          data: { ...node.data, executionStatus: "idle" as ExecutionStatus },
+        }))
+      );
+      setEdges((eds) =>
+        eds.map((edge) =>
+          edge.type === "animated"
+            ? { ...edge, type: "addButton", data: { ...edge.data, isActive: false, isCompleted: false } }
+            : edge
+        )
+      );
+      hadExecutionRef.current = false;
+      return;
+    }
+
+    hadExecutionRef.current = true;
 
     // Update node execution status
     setNodes((nds) =>
       nds.map((node) => {
         let status: ExecutionStatus = "idle";
         if (executionState.currentNodeId === node.id) status = "running";
+        else if (executionState.reusedNodeIds.includes(node.id)) status = "reused";
         else if (executionState.completedNodeIds.includes(node.id)) status = "completed";
         else if (executionState.errorNodeIds.includes(node.id)) status = "error";
         else if (executionState.skippedNodeIds.includes(node.id)) status = "skipped";
@@ -3317,25 +3414,33 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       })
     );
 
-    // Update edges: animate edges leading to running or completed nodes
+    // Update edges: blue animated for running, green static for completed
     setEdges((eds) =>
       eds.map((edge) => {
-        const targetIsActive = executionState.completedNodeIds.includes(edge.target)
-          || executionState.currentNodeId === edge.target;
+        const targetIsRunning = executionState.currentNodeId === edge.target;
+        const targetIsReused = executionState.reusedNodeIds.includes(edge.target);
+        const targetIsCompleted = executionState.completedNodeIds.includes(edge.target) || targetIsReused;
 
-        if (targetIsActive) {
+        if (targetIsRunning) {
           return {
             ...edge,
             type: "animated",
-            data: { ...edge.data, isActive: true },
+            data: { ...edge.data, isActive: true, isCompleted: false },
           };
         }
-        // Reset to normal for non-active edges
+        if (targetIsCompleted) {
+          return {
+            ...edge,
+            type: "animated",
+            data: { ...edge.data, isActive: false, isCompleted: true },
+          };
+        }
+        // Reset non-active edges
         if (edge.type === "animated") {
           return {
             ...edge,
             type: "addButton",
-            data: { ...edge.data, isActive: false },
+            data: { ...edge.data, isActive: false, isCompleted: false },
           };
         }
         return edge;
@@ -3379,7 +3484,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         const newTotalCount = existingBranches.length + 1;
         const branchSpacing = 160;
         const totalBranchWidth = (newTotalCount - 1) * branchSpacing;
-        const branchY = conditionNode.position.y + 80;
+        const branchY = conditionNode.position.y + BRANCH_Y_GAP;
 
         // Create new branch node at its centered position
         const newBranchOffsetX = -totalBranchWidth / 2 + branchIndex * branchSpacing;
@@ -3452,7 +3557,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         const newTotalCount = updatedConditions.length;
         const branchSpacing = 160;
         const totalBranchWidth = (newTotalCount - 1) * branchSpacing;
-        const branchY = conditionNode.position.y + 80;
+        const branchY = conditionNode.position.y + BRANCH_Y_GAP;
 
         // Filter out the deleted branch node
         const filteredNodes = nds.filter(n => n.id !== branchId);
@@ -3646,25 +3751,25 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       return newNodeId;
     },
     getFlowData: () => {
-      // Return a clean version of the flow data (without internal handlers)
-      // Filter out the "add" placeholder node
+      // Return a clean version of the flow data — strip runtime handlers/functions
+      // but preserve ALL serializable data (execution params, prompts, configs, etc.)
+      const INTERNAL_KEYS = new Set([
+        "onSelectAction", "onOpenReplaceModal", "onRename", "onDelete",
+        "onAddErrorHandling", "onSetFieldsMode", "onAddCondition",
+        "hasOutgoingEdge", // runtime-computed, re-derived on load
+      ]);
+
       const cleanNodes = nodes
-        .filter((node) => node.type !== "addNode")
+        .filter((node) => node.type !== "addNode" && node.type !== "loopContainer")
         .map((node) => {
           const cleanData: Record<string, unknown> = {};
-          if (node.data?.label) cleanData.label = node.data.label;
-          if (node.data?.rolePreview) cleanData.rolePreview = node.data.rolePreview;
-          if (node.data?.integrations) cleanData.integrations = node.data.integrations;
-          if (node.data?.conditions) cleanData.conditions = node.data.conditions;
-          if (node.data?.conditionText) cleanData.conditionText = node.data.conditionText;
-          if (node.data?.conditionIndex !== undefined) cleanData.conditionIndex = node.data.conditionIndex;
-          if (node.data?.icon) cleanData.icon = node.data.icon;
-          if (node.data?.hasWarning !== undefined) cleanData.hasWarning = node.data.hasWarning;
-          if (node.data?.outputs) cleanData.outputs = node.data.outputs;
-          if (node.data?.model) cleanData.model = node.data.model;
-          if (node.data?.forceSelectBranch !== undefined) cleanData.forceSelectBranch = node.data.forceSelectBranch;
-          if (node.data?.variant) cleanData.variant = node.data.variant;
-          if (node.data?.actionType) cleanData.actionType = node.data.actionType;
+          if (node.data) {
+            for (const [key, value] of Object.entries(node.data)) {
+              // Skip internal handlers and functions
+              if (INTERNAL_KEYS.has(key) || typeof value === "function") continue;
+              cleanData[key] = value;
+            }
+          }
 
           return {
             id: node.id,
@@ -3698,6 +3803,200 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         nodes: cleanNodes,
         edges: cleanEdges,
       };
+    },
+
+    // ============================================
+    // SMART BUILDER API
+    // ============================================
+
+    addNode: (nodeType: string, afterNodeId?: string, data?: Record<string, unknown>): string | null => {
+      // Map nodeType to actionId and delegate to handleSelectAction
+      const actionId = NODE_TYPE_TO_ACTION_ID[nodeType] || nodeType;
+      handleSelectActionRef.current(actionId, afterNodeId);
+
+      // After handleSelectAction runs, update the new node's data if provided
+      if (data) {
+        // The new node was just created with an ID based on Date.now() or "condition-{ts}"
+        // We need to find it and apply the extra data
+        setTimeout(() => {
+          setNodes((nds) => {
+            // Find the most recently added node (highest timestamp in ID)
+            const sortedByTime = [...nds]
+              .filter(n => n.type !== "addNode" && n.type !== "loopContainer" && n.type !== "conditionBranch")
+              .sort((a, b) => {
+                const tsA = parseInt(a.id.replace(/\D/g, "")) || 0;
+                const tsB = parseInt(b.id.replace(/\D/g, "")) || 0;
+                return tsB - tsA;
+              });
+            const newest = sortedByTime[0];
+            if (!newest) return nds;
+
+            return nds.map((n) => {
+              if (n.id === newest.id) {
+                return {
+                  ...n,
+                  data: { ...n.data, ...data },
+                };
+              }
+              return n;
+            });
+          });
+          onFlowChangeRef.current?.();
+        }, 50);
+      }
+
+      return null; // Node ID is generated asynchronously
+    },
+
+    updateNodeData: (nodeId: string, data: Record<string, unknown>) => {
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: { ...node.data, ...data },
+            };
+          }
+          return node;
+        })
+      );
+      onFlowChangeRef.current?.();
+    },
+
+    connectNodes: (sourceId: string, targetId: string, sourceHandle?: string): boolean => {
+      const sourceExists = nodes.some((n) => n.id === sourceId);
+      const targetExists = nodes.some((n) => n.id === targetId);
+      if (!sourceExists || !targetExists) return false;
+
+      // Check for duplicate edge
+      const duplicate = edges.some(
+        (e) => e.source === sourceId && e.target === targetId
+      );
+      if (duplicate) return false;
+
+      const newEdge: Edge = {
+        id: `e-${sourceId}-${targetId}`,
+        source: sourceId,
+        target: targetId,
+        type: "addButton",
+        style: edgeStyleForRef,
+        data: { onInsertNode: handleInsertNodeRef.current },
+      };
+      if (sourceHandle) newEdge.sourceHandle = sourceHandle;
+
+      setEdges((eds) => eds.concat(newEdge));
+
+      // Mark source as having outgoing edge
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === sourceId) {
+            return { ...n, data: { ...n.data, hasOutgoingEdge: true } };
+          }
+          return n;
+        })
+      );
+
+      onFlowChangeRef.current?.();
+      return true;
+    },
+
+    getFlowStateSnapshot: (): FlowStateSnapshot => {
+      const INTERNAL_KEYS = new Set([
+        "onSelectAction", "onOpenReplaceModal", "onRename", "onDelete",
+        "onAddErrorHandling", "onSetFieldsMode", "onAddCondition",
+        "hasOutgoingEdge",
+      ]);
+
+      const cleanNodes = nodes
+        .filter((n) => n.type !== "addNode" && n.type !== "loopContainer")
+        .map((n) => {
+          const cleanData: Record<string, unknown> = {};
+          if (n.data) {
+            for (const [key, value] of Object.entries(n.data)) {
+              if (INTERNAL_KEYS.has(key) || typeof value === "function") continue;
+              cleanData[key] = value;
+            }
+          }
+          return {
+            id: n.id,
+            type: n.type || "unknown",
+            label: (n.data?.label as string) || n.type || "unknown",
+            position: n.position,
+            data: Object.keys(cleanData).length > 0 ? cleanData : undefined,
+          };
+        });
+
+      const cleanEdges = edges
+        .filter((e) => e.source !== "add" && e.target !== "add")
+        .map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          ...(e.sourceHandle ? { sourceHandle: e.sourceHandle } : {}),
+        }));
+
+      // Build human-readable summary
+      const nodeMap = new Map(cleanNodes.map((n) => [n.id, n]));
+      const edgeMap = new Map<string, string[]>();
+      for (const e of cleanEdges) {
+        if (!edgeMap.has(e.source)) edgeMap.set(e.source, []);
+        edgeMap.get(e.source)!.push(e.target);
+      }
+
+      const lines: string[] = [];
+      const visited = new Set<string>();
+
+      const describe = (nodeId: string, depth: number) => {
+        if (visited.has(nodeId) || depth > 10) return;
+        visited.add(nodeId);
+        const node = nodeMap.get(nodeId);
+        if (!node) return;
+        const indent = "  ".repeat(depth);
+        lines.push(`${indent}- [${node.type}] "${node.label}" (id: ${node.id})`);
+        const children = edgeMap.get(nodeId) || [];
+        for (const childId of children) {
+          describe(childId, depth + 1);
+        }
+      };
+
+      // Start from trigger nodes (messageReceived) or root nodes (no incoming edges)
+      const targetIds = new Set(cleanEdges.map((e) => e.target));
+      const roots = cleanNodes.filter(
+        (n) => n.type === "messageReceived" || !targetIds.has(n.id)
+      );
+      for (const root of roots) {
+        describe(root.id, 0);
+      }
+
+      const summary = cleanNodes.length === 0
+        ? "Empty flow — no nodes configured yet."
+        : `Flow with ${cleanNodes.length} nodes and ${cleanEdges.length} connections:\n${lines.join("\n")}`;
+
+      return { nodes: cleanNodes, edges: cleanEdges, summary };
+    },
+
+    fitView: () => {
+      reactFlowInstanceRef.current?.fitView({ padding: 0.3, duration: 300, maxZoom: 0.65 });
+    },
+
+    duplicateNode: (nodeId: string): string | null => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return null;
+
+      const newId = `${node.type}-${Date.now()}`;
+      const newNode: Node = {
+        ...node,
+        id: newId,
+        position: { x: node.position.x, y: node.position.y + 120 },
+        selected: false,
+        data: {
+          ...node.data,
+          label: `${(node.data?.label as string) || node.type} (copy)`,
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      return newId;
     },
   }), [nodes, edges, setNodes, setEdges]);
 
@@ -3848,7 +4147,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         if (sourceNode) {
           conditionPosition = {
             x: sourceNode.position.x,
-            y: sourceNode.position.y + 100,
+            y: sourceNode.position.y + NODE_Y_GAP,
           };
         }
       } else {
@@ -3873,7 +4172,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       };
 
       // Create single branch node below the condition (centered - offset 0 for single branch)
-      const branchY = conditionPosition.y + 80;
+      const branchY = conditionPosition.y + BRANCH_Y_GAP;
       const branch1Node: Node = {
         id: branch1Id,
         type: "conditionBranch",
@@ -3960,7 +4259,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       if (sourceNode) {
         newNodePosition = {
           x: sourceNode.position.x,
-          y: sourceNode.position.y + 100,
+          y: sourceNode.position.y + NODE_Y_GAP,
         };
       }
     } else {
@@ -3981,7 +4280,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId),
     };
     if (actionId === "observe-messages") {
-      nodeData = { label: "Observe messages", variant: "observe", hasOutgoingEdge: false, onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId) };
+      nodeData = { label: "Observe messages", variant: "observe", hasOutgoingEdge: true, onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId) };
     } else if (actionId === "send-message") {
       // Send message has hasOutgoingEdge: true because it always connects to outcome nodes
       nodeData = { label: "Send message", variant: "send", hasOutgoingEdge: true, onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId) };
@@ -4103,7 +4402,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         "ai": "AI",
         "generate-media": "Generate media",
         "meeting-recorder": "Meeting recorder",
-        "nodebase-phone": "Nodebase phone",
+        "elevay-phone": "Elevay phone",
         "utilities": "Utilities",
         "perplexity": "Perplexity",
         "people-data-labs": "People Data Labs",
@@ -4132,11 +4431,13 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       data: nodeData,
     };
 
-    // For send-message, also create the two outcome nodes
+    // For send-message and observe-messages, also create outcome nodes
     const isSendMessage = actionId === "send-message";
+    const isObserveMessages = actionId === "observe-messages";
+    const hasOutcomes = isSendMessage || isObserveMessages;
     const outcomeNodes: Node[] = [];
     if (isSendMessage) {
-      const outcomeY = newNodePosition.y + 60;
+      const outcomeY = newNodePosition.y + OUTCOME_Y_GAP;
       const leftOutcomeId = `${newNodeId}-outcome-sent`;
       const rightOutcomeId = `${newNodeId}-outcome-reply`;
 
@@ -4161,6 +4462,32 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         },
       });
     }
+    if (isObserveMessages) {
+      const outcomeY = newNodePosition.y + OUTCOME_Y_GAP;
+      const leftOutcomeId = `${newNodeId}-outcome-observation`;
+      const rightOutcomeId = `${newNodeId}-outcome-received`;
+
+      outcomeNodes.push({
+        id: leftOutcomeId,
+        type: "chatOutcome",
+        position: { x: newNodePosition.x - 60, y: outcomeY },
+        data: {
+          label: "After observation starts",
+          hasOutgoingEdge: false,
+          onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId),
+        },
+      });
+      outcomeNodes.push({
+        id: rightOutcomeId,
+        type: "chatOutcome",
+        position: { x: newNodePosition.x + 60, y: outcomeY },
+        data: {
+          label: "After message received",
+          hasOutgoingEdge: false,
+          onSelectAction: (actionId: string, sourceNodeId?: string) => handleSelectActionRef.current(actionId, sourceNodeId),
+        },
+      });
+    }
 
     // Update nodes
     setNodes((nds) => {
@@ -4177,8 +4504,8 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
           return n;
         }).concat(nodesToAdd);
       } else {
-        // Move the "add" button down (extra space for outcome nodes if send-message)
-        const yOffset = isSendMessage ? 140 : 70;
+        // Move the "add" button down (extra space for outcome nodes if send/observe-message)
+        const yOffset = hasOutcomes ? (NODE_Y_GAP + OUTCOME_Y_GAP + 10) : SHIFT_Y_GAP;
         return nds.map((n) => {
           if (n.id === "add") {
             return {
@@ -4193,7 +4520,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
 
     // Add edges (workflow edges - show "+" on hover)
     setEdges((eds) => {
-      // For send-message, we don't add edges from the chatAgent to "add" node
+      // For send/observe-message, we don't add edges from the chatAgent to "add" node
       // because the outcome nodes have their own "+" buttons
 
       // Dashed edge style for outcome connections
@@ -4203,7 +4530,47 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
         strokeDasharray: "4,4",
       };
 
+      // Helper to add dashed edges from chatAgent to its outcome nodes
+      const addOutcomeEdges = (edges: Edge[]) => {
+        if (isSendMessage) {
+          edges.push({
+            id: `e-${newNodeId}-${newNodeId}-outcome-sent`,
+            source: newNodeId,
+            sourceHandle: "sent",
+            target: `${newNodeId}-outcome-sent`,
+            style: dashedEdgeStyle,
+          });
+          edges.push({
+            id: `e-${newNodeId}-${newNodeId}-outcome-reply`,
+            source: newNodeId,
+            sourceHandle: "reply",
+            target: `${newNodeId}-outcome-reply`,
+            style: dashedEdgeStyle,
+          });
+        }
+        if (isObserveMessages) {
+          edges.push({
+            id: `e-${newNodeId}-${newNodeId}-outcome-observation`,
+            source: newNodeId,
+            sourceHandle: "observation",
+            target: `${newNodeId}-outcome-observation`,
+            style: dashedEdgeStyle,
+          });
+          edges.push({
+            id: `e-${newNodeId}-${newNodeId}-outcome-received`,
+            source: newNodeId,
+            sourceHandle: "received",
+            target: `${newNodeId}-outcome-received`,
+            style: dashedEdgeStyle,
+          });
+        }
+      };
+
       if (sourceNodeId) {
+        // Check if source is a conditionBranch for edge routing
+        const sourceNode = nodes.find(n => n.id === sourceNodeId);
+        const isFromBranch = sourceNode?.type === "conditionBranch";
+
         // Add edge from source to new node
         const newEdges: Edge[] = [{
           id: `e-${sourceNodeId}-${newNodeId}`,
@@ -4211,26 +4578,11 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
           target: newNodeId,
           type: "addButton",
           style: edgeStyle,
-          data: { onInsertNode: handleInsertNodeRef.current },
+          data: { onInsertNode: handleInsertNodeRef.current, ...(isFromBranch && { isBranchEdge: true }) },
         }];
 
-        // For send-message, add dashed edges to outcome nodes
-        if (isSendMessage) {
-          const leftOutcomeId = `${newNodeId}-outcome-sent`;
-          const rightOutcomeId = `${newNodeId}-outcome-reply`;
-          newEdges.push({
-            id: `e-${newNodeId}-${leftOutcomeId}`,
-            source: newNodeId,
-            target: leftOutcomeId,
-            style: dashedEdgeStyle,
-          });
-          newEdges.push({
-            id: `e-${newNodeId}-${rightOutcomeId}`,
-            source: newNodeId,
-            target: rightOutcomeId,
-            style: dashedEdgeStyle,
-          });
-        }
+        // Add dashed edges to outcome nodes
+        addOutcomeEdges(newEdges);
 
         return eds.concat(newEdges);
       } else {
@@ -4246,24 +4598,11 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
           },
         ];
 
-        // For send-message, add dashed edges to outcome nodes
-        if (isSendMessage) {
-          const leftOutcomeId = `${newNodeId}-outcome-sent`;
-          const rightOutcomeId = `${newNodeId}-outcome-reply`;
-          newEdges.push({
-            id: `e-${newNodeId}-${leftOutcomeId}`,
-            source: newNodeId,
-            target: leftOutcomeId,
-            style: dashedEdgeStyle,
-          });
-          newEdges.push({
-            id: `e-${newNodeId}-${rightOutcomeId}`,
-            source: newNodeId,
-            target: rightOutcomeId,
-            style: dashedEdgeStyle,
-          });
-        } else {
-          // For non-send-message nodes, add the placeholder edge to "add" node
+        // Add dashed edges to outcome nodes
+        addOutcomeEdges(newEdges);
+
+        if (!hasOutcomes) {
+          // For non-outcome nodes, add the placeholder edge to "add" node
           newEdges.push({
             id: `e-${newNodeId}-add`,
             source: newNodeId,
@@ -4306,7 +4645,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
     const newTotalCount = currentConditions.length + 1;
     const branchSpacing = 160;
     const totalBranchWidth = (newTotalCount - 1) * branchSpacing;
-    const branchY = conditionNode.position.y + 80;
+    const branchY = conditionNode.position.y + BRANCH_Y_GAP;
 
     // Create new branch node at its centered position
     const newBranchOffsetX = -totalBranchWidth / 2 + newIndex * branchSpacing;
@@ -4545,7 +4884,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
       type: "chatOutcome",
       position: {
         x: sourceNode.position.x + 60,
-        y: sourceNode.position.y + 100,
+        y: sourceNode.position.y + NODE_Y_GAP,
       },
       data: {
         label: "On error",
@@ -4755,7 +5094,9 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
           onNodesDelete={onNodesDelete}
           onConnect={onConnect}
           onSelectionChange={onSelectionChange}
+          onPaneClick={() => document.dispatchEvent(new Event(CLOSE_NODE_MENUS_EVENT))}
           onPaneContextMenu={onPaneContextMenu}
+          onInit={(instance) => { reactFlowInstanceRef.current = instance; }}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: "addButton" }}
@@ -4776,6 +5117,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
             gap={17}
             size={1.2}
           />
+          <LoopContainersOverlay />
         </ReactFlow>
 
         {/* Context Menu */}
@@ -4854,7 +5196,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
             if (sourceNode) {
               newNodePosition = {
                 x: sourceNode.position.x,
-                y: sourceNode.position.y + 100,
+                y: sourceNode.position.y + NODE_Y_GAP,
               };
               effectiveSourceId = pendingSource;
             }
@@ -4891,7 +5233,7 @@ export const FlowEditorCanvas = forwardRef<FlowEditorCanvasRef, FlowEditorCanvas
                 if (n.id === "add") {
                   return {
                     ...n,
-                    position: { x: n.position.x, y: n.position.y + 70 },
+                    position: { x: n.position.x, y: n.position.y + SHIFT_Y_GAP },
                   };
                 }
                 return n;

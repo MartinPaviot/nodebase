@@ -211,15 +211,18 @@ model Agent {
   description String?  @db.Text
   systemPrompt String  @db.Text
 
-  // Context (read-only instructions, like Lindy)
+  // Context (read-only instructions)
   context     String?  @db.Text
 
   // Configuration
   model       AgentModel @default(ANTHROPIC)
   temperature Float      @default(0.7)
 
-  // Safe Mode - ask confirmation before side-effect actions
+  // Safe Mode - ask confirmation before side-effect actions (legacy, kept for backward compat)
   safeMode    Boolean  @default(false)
+
+  // Autonomy Tier - replaces binary safeMode: "auto" | "review" | "readonly"
+  autonomyTier String  @default("review")
 
   // V6 Features - LLM Configuration
   llmTier         String?  // "fast" (Haiku) | "smart" (Sonnet) | "deep" (Opus)
@@ -240,7 +243,7 @@ model Agent {
   // Favorite
   isFavorite  Boolean  @default(false)
 
-  // Enabled/Active status (like Lindy)
+  // Enabled/Active status
   isEnabled   Boolean  @default(true)
 
   // Template reference (for loading flowData)
@@ -304,6 +307,9 @@ model Agent {
   feedbacks     AgentFeedback[]
   abTests       AgentABTest[]
   optimizationRuns OptimizationRun[]
+
+  // Conversation summaries (for long conversations)
+  conversationSummaries ConversationSummary[]
 
   // Meta-Agent (Phase 4)
   modificationProposals ModificationProposal[]
@@ -391,7 +397,7 @@ model Conversation {
 
   messages  Message[]
 
-  // Thread features (like Lindy)
+  // Thread features
   isArchived  Boolean @default(false)
   isPinned    Boolean @default(false)
 
@@ -413,6 +419,9 @@ model Conversation {
   // Feedback (Phase 3)
   feedbacks   AgentFeedback[]
 
+  // Conversation summaries (for long conversations)
+  summaries   ConversationSummary[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -427,6 +436,34 @@ enum ConversationSource {
   SLACK       // From Slack mention
   WEBHOOK     // From webhook trigger
   SCHEDULE    // From scheduled trigger
+}
+
+model ConversationSummary {
+  id              String   @id @default(cuid())
+
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Summary content
+  summary         String   @db.Text
+  keyFacts        String[] @default([])
+
+  // For semantic search across past conversations
+  embedding       Float[]  @default([])
+
+  // Scope tracking
+  messageCount    Int      @default(0)
+  isComplete      Boolean  @default(false) // true = conversation ended or fully summarized
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([agentId])
+  @@map("conversation_summary")
 }
 
 enum MessageRole {
@@ -505,7 +542,7 @@ enum ActivityType {
 // AGENT MEMORY SYSTEM
 // ===================
 
-// Persistent memory entries (like Lindy's "small snippets of information")
+// Persistent memory entries
 model AgentMemory {
   id        String   @id @default(cuid())
 
@@ -540,7 +577,7 @@ enum MemoryCategory {
   STYLE_CORRECTION  // Style Learner corrections (outreach)
 }
 
-// Knowledge base documents for RAG (like Lindy)
+// Knowledge base documents for RAG
 model KnowledgeDocument {
   id        String   @id @default(cuid())
 
@@ -554,7 +591,7 @@ model KnowledgeDocument {
   mimeType  String   @default("text/plain")
   fileSize  Int?     // bytes
 
-  // Source type (like Lindy)
+  // Source type
   sourceType KnowledgeSourceType @default(TEXT)
 
   // For external sources (Google Drive, etc.)
@@ -619,7 +656,7 @@ model KnowledgeSettings {
   agentId   String   @unique
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  // Search configuration (like Lindy)
+  // Search configuration
   searchFuzziness  Int     @default(100)  // 0=keyword, 100=semantic
   maxResults       Int     @default(4)    // 1-10
   autoRefresh      Boolean @default(true)
@@ -801,7 +838,7 @@ model AgentEmbed {
   welcomeMessage String?
   logo          String?
 
-  // Customization - Colors (like Lindy)
+  // Customization - Colors
   accentColor       String  @default("#6366f1")
   backgroundColor   String  @default("#ffffff")
   textColor         String  @default("#1f2937")
@@ -855,7 +892,7 @@ model AgentEmailAddress {
 
   // Unique email address for this agent
   localPart String   // e.g., "agent-abc123"
-  domain    String   @default("agents.nodebase.app")
+  domain    String   @default("agents.elevay.app")
 
   // Configuration
   autoReply Boolean  @default(true)

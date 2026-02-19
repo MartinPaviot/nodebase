@@ -1,5 +1,5 @@
 {
-  "name": "@nodebase/connectors",
+  "name": "@elevay/connectors",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -24,9 +24,9 @@
     "vitest": "^2.1.0"
   },
   "dependencies": {
-    "@nodebase/types": "workspace:*",
-    "@nodebase/config": "workspace:*",
-    "@nodebase/crypto": "workspace:*",
+    "@elevay/types": "workspace:*",
+    "@elevay/config": "workspace:*",
+    "@elevay/crypto": "workspace:*",
     "composio-core": "^0.5.0",
     "zod": "^3.24.0"
   }

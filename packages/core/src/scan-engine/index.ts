@@ -15,7 +15,7 @@ import {
   type ScanResult,
   type WorkspaceId,
   ScanError,
-} from "@nodebase/types";
+} from "@elevay/types";
 
 // ============================================
 // Types
@@ -241,8 +241,8 @@ export const DEFAULT_SCAN_RULES: Record<ScanCategory, ScanRule[]> = {
 
 export class ScanEngine {
   private config: Required<ScanEngineConfig>;
-  private composioClient?: any; // ComposioClient from @nodebase/connectors
-  private connectorRegistry?: any; // ConnectorRegistry from @nodebase/connectors
+  private composioClient?: any; // ComposioClient from @elevay/connectors
+  private connectorRegistry?: any; // ConnectorRegistry from @elevay/connectors
 
   constructor(
     config: ScanEngineConfig = {},

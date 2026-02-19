@@ -4,8 +4,8 @@
  * BullMQ Worker wrapper with graceful shutdown and error handling.
  */
 import { Worker as BullWorker, WorkerOptions, Job } from "bullmq";
-import type { JobData, JobResult } from "@nodebase/types";
-export interface NodebaseWorkerOptions extends Partial<WorkerOptions> {
+import type { JobData, JobResult } from "@elevay/types";
+export interface ElevayWorkerOptions extends Partial<WorkerOptions> {
     redisUrl?: string;
     concurrency?: number;
 }
@@ -23,7 +23,7 @@ export type JobProcessor<T extends JobData = JobData, R extends JobResult = JobR
  * });
  * ```
  */
-export declare function createWorker<T extends JobData = JobData, R extends JobResult = JobResult>(queueName: string, processor: JobProcessor<T, R>, options?: NodebaseWorkerOptions): BullWorker<T, R>;
+export declare function createWorker<T extends JobData = JobData, R extends JobResult = JobResult>(queueName: string, processor: JobProcessor<T, R>, options?: ElevayWorkerOptions): BullWorker<T, R>;
 /**
  * Wait for all workers to finish and shutdown gracefully.
  * This is the implementation of Pattern #8: Graceful Shutdown.

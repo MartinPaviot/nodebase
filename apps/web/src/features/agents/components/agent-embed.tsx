@@ -519,7 +519,7 @@ export function AgentEmbed({ agentId }: AgentEmbedProps) {
                   <div>
                     <Label>Show Branding</Label>
                     <p className="text-xs text-muted-foreground">
-                      Show &quot;Powered by Nodebase&quot;
+                      Show &quot;Powered by Elevay&quot;
                     </p>
                   </div>
                   <Switch
@@ -654,7 +654,7 @@ export function AgentEmbed({ agentId }: AgentEmbedProps) {
                 id="customCss"
                 value={config.customCss}
                 onChange={(e) => updateConfig("customCss", e.target.value)}
-                placeholder={`.nodebase-chat { /* your styles */ }`}
+                placeholder={`.elevay-chat { /* your styles */ }`}
                 className="font-mono text-sm"
                 rows={5}
               />
@@ -812,7 +812,7 @@ export function AgentEmbed({ agentId }: AgentEmbedProps) {
                     className="text-center py-1 text-[10px] opacity-50"
                     style={{ color: config.textColor }}
                   >
-                    Powered by Nodebase
+                    Powered by Elevay
                   </div>
                 )}
               </div>

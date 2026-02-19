@@ -1,4 +1,4 @@
-# CLAUDE.md — Nodebase
+# CLAUDE.md — Elevay
 
 > **Dernière mise à jour :** Février 2026
 > **Document de référence :** `.claude/idea_scoping_v6.md`
@@ -213,7 +213,7 @@ Deux features différenciantes :
 ### 2.3 Architecture monorepo cible
 
 ```
-nodebase/
+elevay/
 ├── apps/
 │   └── web/                          # Next.js App Router
 │       ├── app/                      # Routes
@@ -221,14 +221,14 @@ nodebase/
 │       └── lib/                      # Hooks, utils
 │
 ├── packages/
-│   ├── @nodebase/types/              # Interfaces partagées
-│   ├── @nodebase/db/                 # Prisma + Resource pattern
-│   ├── @nodebase/config/             # @Env() + Zod validation
-│   ├── @nodebase/crypto/             # AES-256 encryption + redaction
-│   ├── @nodebase/ai/                 # Anthropic SDK + events + tiering
-│   ├── @nodebase/core/               # Scan engine + Agent engine + Eval + Hooks
-│   ├── @nodebase/connectors/         # BaseConnector + intégrations
-│   └── @nodebase/queue/              # BullMQ workers
+│   ├── @elevay/types/              # Interfaces partagées
+│   ├── @elevay/db/                 # Prisma + Resource pattern
+│   ├── @elevay/config/             # @Env() + Zod validation
+│   ├── @elevay/crypto/             # AES-256 encryption + redaction
+│   ├── @elevay/ai/                 # Anthropic SDK + events + tiering
+│   ├── @elevay/core/               # Scan engine + Agent engine + Eval + Hooks
+│   ├── @elevay/connectors/         # BaseConnector + intégrations
+│   └── @elevay/queue/              # BullMQ workers
 │
 ├── templates/                        # ~93 agent templates (JSON + prompts)
 │   ├── sales/
@@ -266,22 +266,22 @@ nodebase/
 |------|-------------|--------|
 | **Structure monorepo** | Flat (`src/`) | Migrer vers `apps/web` + `packages/*` |
 | **pnpm + Turborepo** | npm | Migrer npm → pnpm, ajouter turbo.json |
-| **Package @nodebase/types** | Types dispersés | Centraliser interfaces partagées |
-| **Package @nodebase/db** | Prisma direct partout | Resource pattern + permissions |
-| **Package @nodebase/config** | `.env` direct | @Env() decorator + Zod validation |
+| **Package @elevay/types** | Types dispersés | Centraliser interfaces partagées |
+| **Package @elevay/db** | Prisma direct partout | Resource pattern + permissions |
+| **Package @elevay/config** | `.env` direct | @Env() decorator + Zod validation |
 
 ### P1 — Produit core
 
 | Item | État actuel | Action |
 |------|-------------|--------|
 | **Pipedream Connect** | NON INTÉGRÉ | **CRITIQUE** — Intégrer Pipedream Connect pour 2,800+ APIs (OAuth, tokens, refresh, rate limits gérés). Voir section 3.2 |
-| **Scan Engine** | Non implémenté | Créer `@nodebase/core/scan-engine/` — détection metadata-only sur CRM, support, marketing, HR, finance, projets |
-| **Agent Engine** | Basique (chat) | Refactor vers `@nodebase/core/agent-engine/` — exécution avec hooks, eval, maxStepsPerRun |
+| **Scan Engine** | Non implémenté | Créer `@elevay/core/scan-engine/` — détection metadata-only sur CRM, support, marketing, HR, finance, projets |
+| **Agent Engine** | Basique (chat) | Refactor vers `@elevay/core/agent-engine/` — exécution avec hooks, eval, maxStepsPerRun |
 | **Eval Layer (L1/L2/L3)** | Non implémenté | L1 assertions, L2 scoring rule-based, L3 LLM-as-Judge |
-| **Package @nodebase/ai** | Vercel AI SDK (+ @anthropic-ai/sdk déjà installé mais non utilisé) | Migrer vers @anthropic-ai/sdk direct + tiering (Haiku/Sonnet/Opus) + AI event logging |
-| **Package @nodebase/queue** | Inngest | Migrer vers BullMQ + Redis workers |
-| **Package @nodebase/connectors** | Intégrations ad-hoc | BaseConnector interface + Pipedream Connect |
-| **Package @nodebase/crypto** | Cryptr basique | AES-256 avec rotation de clés + redaction |
+| **Package @elevay/ai** | Vercel AI SDK (+ @anthropic-ai/sdk déjà installé mais non utilisé) | Migrer vers @anthropic-ai/sdk direct + tiering (Haiku/Sonnet/Opus) + AI event logging |
+| **Package @elevay/queue** | Inngest | Migrer vers BullMQ + Redis workers |
+| **Package @elevay/connectors** | Intégrations ad-hoc | BaseConnector interface + Pipedream Connect |
+| **Package @elevay/crypto** | Cryptr basique | AES-256 avec rotation de clés + redaction |
 | **Style Learner** | Non implémenté | Capturer diffs, few-shot injection |
 | **Daily Briefing** | Non implémenté | Agrégation scan par persona |
 
@@ -308,7 +308,7 @@ nodebase/
    src/lib/integrations/notion.ts   → Pipedream Connect
    src/lib/integrations/twilio.ts   → Pipedream Connect
    ```
-3. **Créer `@nodebase/connectors`** avec :
+3. **Créer `@elevay/connectors`** avec :
    - `BaseConnector` interface
    - Wrapper Pipedream pour chaque catégorie (CRM, Support, Marketing, HR, Finance)
 4. **Mapper les `suggestedIntegrations`** des templates vers des connecteurs Pipedream
@@ -471,7 +471,7 @@ pnpm add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin es
 
 ```bash
 # 1. Créer structure
-mkdir -p apps/web packages/@nodebase/{types,db,config,crypto,ai,core,connectors,queue}
+mkdir -p apps/web packages/@elevay/{types,db,config,crypto,ai,core,connectors,queue}
 
 # 2. Déplacer src/ vers apps/web/
 mv src apps/web/
@@ -563,7 +563,7 @@ model AiEvent {
 
 | Type | Convention | Exemple |
 |------|------------|---------|
-| **Packages** | `@nodebase/` | `@nodebase/core`, `@nodebase/ai` |
+| **Packages** | `@elevay/` | `@elevay/core`, `@elevay/ai` |
 | **Fichiers** | kebab-case | `scan-engine.ts`, `agent-worker.ts` |
 | **Classes** | PascalCase | `ScanResource`, `AgentEngine` |
 | **Fonctions** | camelCase | `runScan()`, `executeAgent()` |
@@ -591,7 +591,7 @@ class ScanResource {
 }
 
 // Error Hierarchy — JAMAIS throw new Error("...")
-class ScanError extends NodebaseError {
+class ScanError extends ElevayError {
   constructor(public signalId: string, public connectorId: string, message: string) {
     super(`Scan failed on signal ${signalId} via ${connectorId}: ${message}`);
   }
@@ -638,10 +638,10 @@ pnpm lint            # ESLint all packages
 pnpm test            # Jest all packages
 pnpm typecheck       # TypeScript check
 
-pnpm --filter @nodebase/core build   # Build un package
+pnpm --filter @elevay/core build   # Build un package
 pnpm --filter web dev                # Dev app web
 
-turbo run build --filter=@nodebase/ai  # Turbo avec filter
+turbo run build --filter=@elevay/ai  # Turbo avec filter
 ```
 
 ---
@@ -651,7 +651,7 @@ turbo run build --filter=@nodebase/ai  # Turbo avec filter
 > **Dernière mise à jour :** Février 2026
 > **Document complet :** `.claude/plans/floating-leaping-backus.md`
 
-**Objectif :** Transformer Nodebase en plateforme auto-optimisante inspirée de LangChain/LangSmith.
+**Objectif :** Transformer Elevay en plateforme auto-optimisante inspirée de LangChain/LangSmith.
 
 ### 7.1 Les 5 Patterns LangChain Intégrés
 
@@ -673,7 +673,7 @@ turbo run build --filter=@nodebase/ai  # Turbo avec filter
 ### 7.3 Nouveaux Packages
 
 ```
-packages/@nodebase/core/
+packages/@elevay/core/
 ├── agent-engine/          # Runtime avec hooks extensibles
 ├── observability/         # Tracing & métriques (LangSmith-style)
 ├── evaluation/            # Multi-turn evals + goal detection
@@ -718,3 +718,73 @@ packages/@nodebase/core/
 - **Inventaire open-source :** `.claude/open_source_inventory.md`
 - **Templates agents :** `prisma/seed-templates.ts` (93 templates)
 - **Plan LangChain (contrôle + auto-optimisation) :** `.claude/plans/floating-leaping-backus.md`
+
+---
+
+## 9. PROMPT POUR PLAN MODE
+
+> **Instructions à suivre quand Claude Code entre en Plan Mode.**
+
+Review this plan thoroughly before making any code changes. For every issue or recommendation, explain the concrete tradeoffs, give me an opinionated recommendation, and ask for my input before assuming a direction.
+
+### 9.1 Préférences d'ingénierie
+
+Utilise ces préférences pour guider tes recommandations :
+
+- **DRY is important** — flag repetition aggressively.
+- **Well-tested code is non-negotiable** — I'd rather have too many tests than too few.
+- **"Engineered enough"** — not under-engineered (fragile, hacky) and not over-engineered (premature abstraction, unnecessary complexity).
+- **Handle more edge cases, not fewer** — thoughtfulness > speed.
+- **Bias toward explicit over clever.**
+
+### 9.2 Les 4 sections de review
+
+**1. Architecture review**
+Evaluate:
+- Overall system design and component boundaries.
+- Dependency graph and coupling concerns.
+- Data flow patterns and potential bottlenecks.
+- Scaling characteristics and single points of failure.
+- Security architecture (auth, data access, API boundaries).
+
+**2. Code quality review**
+Evaluate:
+- Code organization and module structure.
+- DRY violations — be aggressive here.
+- Error handling patterns and missing edge cases (call these out explicitly).
+- Technical debt hotspots.
+- Areas that are over-engineered or under-engineered relative to my preferences.
+
+**3. Test review**
+Evaluate:
+- Test coverage gaps (unit, integration, e2e).
+- Test quality and assertion strength.
+- Missing edge case coverage — be thorough.
+- Untested failure modes and error paths.
+
+**4. Performance review**
+Evaluate:
+- N+1 queries and database access patterns.
+- Memory-usage concerns.
+- Caching opportunities.
+- Slow or high-complexity code paths.
+
+### 9.3 Pour chaque issue trouvée
+
+For every specific issue (bug, smell, design concern, or risk):
+- Describe the problem concretely, with file and line references.
+- Present 2–3 options, including "do nothing" where that's reasonable.
+- For each option, specify: implementation effort, risk, impact on other code, and maintenance burden.
+- Give me your recommended option and why, mapped to my preferences above.
+- Then explicitly ask whether I agree or want to choose a different direction before proceeding.
+
+### 9.4 Workflow et interaction
+
+- Do not assume my priorities on timeline or scale.
+- After each section, pause and ask for my feedback before moving on.
+
+**BEFORE YOU START:** Ask if I want one of two options:
+1. **BIG CHANGE:** Work through this interactively, one section at a time (Architecture → Code Quality → Tests → Performance) with at most 4 top issues in each section.
+2. **SMALL CHANGE:** Work through interactively ONE question per review section.
+
+**FOR EACH STAGE OF REVIEW:** Output the exploration and pros and cons of each stage's questions AND your opinionated recommendation and why, and then use `AskUserQuestion`. Also NUMBER issues and then give LETTERS for options, and when using `AskUserQuestion` make sure each option clearly labels the issue NUMBER and option LETTER so the user doesn't get confused. Make the recommended option always the 1st option.

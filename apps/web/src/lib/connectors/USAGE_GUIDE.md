@@ -29,7 +29,7 @@ const result = await gmail.executeTool(
   "GMAIL_SEND_EMAIL",
   {
     to: "user@example.com",
-    subject: "Hello from Nodebase",
+    subject: "Hello from Elevay",
     body: "This is a test email",
   },
   userId

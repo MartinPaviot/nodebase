@@ -1,0 +1,42 @@
+{
+  "name": "@elevay/core",
+  "version": "0.1.0",
+  "description": "Core agent engine with hooks, tracing, evaluation, and auto-optimization",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./agent-engine": "./dist/agent-engine/index.js",
+    "./observability": "./dist/observability/index.js",
+    "./evaluation": "./dist/evaluation/index.js",
+    "./insights": "./dist/insights/index.js",
+    "./optimization": "./dist/optimization/index.js",
+    "./meta-agent": "./dist/meta-agent/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@prisma/client": "^6.16.3",
+    "zod": "^4.1.12",
+    "nanoid": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "agents",
+    "langchain",
+    "langsmith",
+    "tracing",
+    "evaluation",
+    "optimization"
+  ],
+  "author": "Elevay",
+  "license": "MIT"
+}

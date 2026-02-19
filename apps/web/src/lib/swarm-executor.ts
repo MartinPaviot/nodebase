@@ -1,6 +1,7 @@
 import prisma from "./db";
 import Anthropic from "@anthropic-ai/sdk";
 import Handlebars from "handlebars";
+import { getPlatformApiKey } from "@/lib/config";
 
 const MAX_CONCURRENT = 10; // Max parallel executions
 
@@ -8,7 +9,7 @@ export async function executeSwarm(swarmId: string) {
   const swarm = await prisma.agentSwarm.findUnique({
     where: { id: swarmId },
     include: {
-      agent: { include: { credential: true } },
+      agent: true,
       tasks: { where: { status: "PENDING" } },
     },
   });
@@ -22,16 +23,8 @@ export async function executeSwarm(swarmId: string) {
 
   const template = Handlebars.compile(swarm.taskTemplate);
 
-  // Get API key from credential or environment
-  const apiKey = swarm.agent.credential?.value || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    await prisma.agentSwarm.update({
-      where: { id: swarmId },
-      data: { status: "FAILED" },
-    });
-    throw new Error("No API key available");
-  }
-
+  // Get platform API key
+  const apiKey = getPlatformApiKey();
   const anthropic = new Anthropic({ apiKey });
 
   // Process tasks in batches

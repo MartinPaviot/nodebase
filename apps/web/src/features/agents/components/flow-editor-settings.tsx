@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
@@ -131,15 +132,17 @@ interface FlowEditorSettingsProps {
   memories?: string[];
   model?: string;
   safeMode?: boolean;
+  autonomyTier?: string;
   onUpdate?: (data: {
     greetingMessage?: string;
     context?: string;
     model?: string;
     safeMode?: boolean;
+    autonomyTier?: string;
   }) => void;
 }
 
-// Model options matching Lindy's interface
+// Model options
 const MODEL_OPTIONS = [
   {
     category: "Recommended",
@@ -256,13 +259,13 @@ export function FlowEditorSettings({
   greetingMessage = "",
   context = "",
   model = "balanced",
-  safeMode = false,
+  autonomyTier = "review",
 }: FlowEditorSettingsProps) {
   const [localGreeting, setLocalGreeting] = useState(greetingMessage);
   const [localContext, setLocalContext] = useState(context);
   const [localMemory, setLocalMemory] = useState("");
   const [localModel, setLocalModel] = useState(model);
-  const [localSafeMode, setLocalSafeMode] = useState(safeMode);
+  const [localAutonomyTier, setLocalAutonomyTier] = useState(autonomyTier);
 
   const config = getAgentConfig(agentName);
   const IconComponent = config.icon;
@@ -320,7 +323,7 @@ export function FlowEditorSettings({
               value={localGreeting}
               onChange={(e) => setLocalGreeting(e.target.value)}
               placeholder="This is the introductory message users see on an empty task."
-              className="min-h-[120px] bg-white border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#D97706]"
+              className="min-h-[100px] max-h-40 overflow-y-auto bg-white border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#D97706]"
             />
           </div>
 
@@ -346,7 +349,7 @@ export function FlowEditorSettings({
               value={localContext}
               onChange={(e) => setLocalContext(e.target.value)}
               placeholder="You are a newsletter creation assistant with access to research and content tools. Help users by researching topics, gathering content, and drafting engaging newsletters. Be helpful, accurate, and professional throughout the process."
-              className="min-h-[160px] bg-white border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#D97706]"
+              className="min-h-[160px] max-h-48 overflow-y-auto bg-white border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#D97706]"
             />
           </div>
 
@@ -443,7 +446,7 @@ export function FlowEditorSettings({
                             </span>
                             <span className="font-medium">{m.label}</span>
                           </div>
-                          <p className="text-[12px] text-[#9CA3AF] pl-5 max-w-[400px]">
+                          <p className="text-[12px] text-[#9CA3AF] pl-5 max-w-[400px] text-justify">
                             {m.description}
                           </p>
                         </div>
@@ -455,11 +458,11 @@ export function FlowEditorSettings({
             </Select>
           </div>
 
-          {/* Safe Mode */}
+          {/* Autonomy Level */}
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-3">
               <ShieldCheck className="size-5 text-[#6B7280]" />
-              <span className="font-medium text-[15px] text-[#374151]">Safe mode</span>
+              <span className="font-medium text-[15px] text-[#374151]">Autonomy level</span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button className="text-[#9CA3AF] hover:text-[#6B7280]">
@@ -468,16 +471,44 @@ export function FlowEditorSettings({
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-[280px] p-3 bg-white border border-[#E5E7EB] shadow-lg rounded-lg">
                   <p className="text-[13px] text-[#374151]">
-                    Require this agent to ask for confirmation before performing any action with side effects.
+                    Controls how much autonomy this agent has when performing actions with side effects (sending emails, creating events, etc.).
                   </p>
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Switch
-              checked={localSafeMode}
-              onCheckedChange={setLocalSafeMode}
-              className="data-[state=checked]:bg-[#10b981]"
-            />
+            <RadioGroup
+              value={localAutonomyTier}
+              onValueChange={setLocalAutonomyTier}
+              className="space-y-2"
+            >
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-[#E5E7EB] bg-white">
+                <RadioGroupItem value="auto" id="tier-auto" className="mt-0.5" />
+                <Label htmlFor="tier-auto" className="cursor-pointer flex-1">
+                  <span className="font-medium text-sm text-[#374151]">Auto-send</span>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">
+                    Execute automatically when quality score exceeds threshold
+                  </p>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-[#E5E7EB] bg-white">
+                <RadioGroupItem value="review" id="tier-review" className="mt-0.5" />
+                <Label htmlFor="tier-review" className="cursor-pointer flex-1">
+                  <span className="font-medium text-sm text-[#374151]">Draft & Review</span>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">
+                    Always queue actions for your approval (recommended)
+                  </p>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-[#E5E7EB] bg-white">
+                <RadioGroupItem value="readonly" id="tier-readonly" className="mt-0.5" />
+                <Label htmlFor="tier-readonly" className="cursor-pointer flex-1">
+                  <span className="font-medium text-sm text-[#374151]">Read-only</span>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">
+                    Can only read and analyze, never write or send
+                  </p>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
         </div>
       </div>

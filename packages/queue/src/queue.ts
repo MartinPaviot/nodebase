@@ -5,10 +5,10 @@
  */
 
 import { Queue as BullQueue, QueueOptions } from "bullmq";
-import { getRedisConfig } from "@nodebase/config";
-import type { JobData, JobOptions } from "@nodebase/types";
+import { getRedisConfig } from "@elevay/config";
+import type { JobData, JobOptions } from "@elevay/types";
 
-export interface NodebaseQueueOptions extends Partial<QueueOptions> {
+export interface ElevayQueueOptions extends Partial<QueueOptions> {
   name: string;
   redisUrl?: string;
 }
@@ -27,7 +27,7 @@ export interface NodebaseQueueOptions extends Partial<QueueOptions> {
  * ```
  */
 export function createQueue<T extends JobData = JobData>(
-  options: NodebaseQueueOptions
+  options: ElevayQueueOptions
 ): BullQueue<T> {
   const redisUrl = options.redisUrl || getRedisConfig().url;
 

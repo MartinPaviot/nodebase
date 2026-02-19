@@ -25,7 +25,7 @@ var import_types, BaseConnector;
 var init_base = __esm({
   "src/base.ts"() {
     "use strict";
-    import_types = require("@nodebase/types");
+    import_types = require("@elevay/types");
     BaseConnector = class {
       // Actions and triggers
       actions = /* @__PURE__ */ new Map();
@@ -1632,16 +1632,21 @@ init_base();
 
 // src/composio.ts
 var import_composio_core = require("composio-core");
-var import_types2 = require("@nodebase/types");
+var import_types2 = require("@elevay/types");
 var ComposioClient = class {
   client;
+  toolSet;
+  entityId;
   config;
   constructor(config) {
     this.config = {
       ...config,
-      baseUrl: config.baseUrl ?? "https://backend.composio.dev"
+      baseUrl: config.baseUrl ?? "https://backend.composio.dev",
+      entityId: config.entityId ?? "default"
     };
+    this.entityId = this.config.entityId;
     this.client = new import_composio_core.Composio({ apiKey: this.config.apiKey });
+    this.toolSet = new import_composio_core.ComposioToolSet({ apiKey: this.config.apiKey });
   }
   /**
    * Get all available apps.
@@ -1808,22 +1813,19 @@ var ComposioClient = class {
   }
   /**
    * Execute a tool (action) on behalf of a user.
-   * Composio handles the OAuth token, API call, rate limiting, retries, etc.
+   * Uses the high-level ComposioToolSet.executeAction() which handles
+   * entity → connected account resolution automatically.
    *
-   * @param userId - The user entity ID
+   * @param userId - The user entity ID (maps to Composio entityId)
    * @param toolCall - The tool call from the LLM (name + input)
    * @returns The result of the action
    */
   async executeAction(userId, toolCall) {
     try {
-      const actionsApi = this.client.actions || this.client.tools;
-      if (!actionsApi?.execute) {
-        throw new Error("Execute API not available in this version of Composio SDK");
-      }
-      const result = await actionsApi.execute({
-        entityId: userId,
-        actionName: toolCall.name,
-        input: toolCall.input
+      const result = await this.toolSet.executeAction({
+        action: toolCall.name,
+        params: toolCall.input,
+        entityId: this.entityId
       });
       return result;
     } catch (error) {
@@ -1880,7 +1882,7 @@ function getComposio() {
 }
 
 // src/pipedream.ts
-var import_types3 = require("@nodebase/types");
+var import_types3 = require("@elevay/types");
 var PipedreamClient = class {
   config;
   constructor(config) {

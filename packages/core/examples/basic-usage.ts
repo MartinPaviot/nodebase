@@ -1,17 +1,17 @@
 /**
  * Basic Usage Example
  *
- * Demonstrates how to initialize and use the Nodebase core system.
+ * Demonstrates how to initialize and use the Elevay core system.
  */
 
-import { initNodebaseCore, getDefaultAgentHooks } from "../src/factory";
+import { initElevayCore, getDefaultAgentHooks } from "../src/factory";
 import type { AgentConfig, ExecutionContext } from "../src/agent-engine";
 
 async function main() {
-  console.log("=== Nodebase Core - Basic Usage Example ===\n");
+  console.log("=== Elevay Core - Basic Usage Example ===\n");
 
   // 1. Initialize the system with API keys
-  const { scanEngine, agentEngine, dependencies } = await initNodebaseCore({
+  const { scanEngine, agentEngine, dependencies } = await initElevayCore({
     composioApiKey: process.env.COMPOSIO_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     scanEngineConfig: {

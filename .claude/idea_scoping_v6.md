@@ -1071,7 +1071,7 @@ Julien (Support) voit : "5 tickets proches du SLA. 1 ticket premium non assigné
 | **Streaming** | ✅ Excellent | ✅ Natif |
 | **Tool use** | ✅ Via adapter | ✅ Natif, type-safe |
 | **Debugging** | 1 couche d'abstraction en plus | Direct — les erreurs sont celles de l'API |
-| **Model switching** | 1 ligne de code | Notre wrapper `@nodebase/ai/tiering.ts` (10 lignes) |
+| **Model switching** | 1 ligne de code | Notre wrapper `@elevay/ai/tiering.ts` (10 lignes) |
 
 **Verdict :** On utilise Claude exclusivement Day 1. L'abstraction Vercel AI SDK ne vaut pas le coût en debugging. Si on ajoute GPT-4o ou Gemini en Month 2-3, un thin wrapper de 50 lignes suffit. Dust fait exactement ça — SDK directs, pas de LangChain.
 
@@ -1262,25 +1262,25 @@ function redactCredentials(cred: Credential): SafeCredential {
 n8n a des types d'erreurs spécifiques avec contexte complet. Pas de `throw new Error("something went wrong")` :
 
 ```typescript
-class ScanError extends NodebaseError {
+class ScanError extends ElevayError {
   constructor(public signalId: string, public connectorId: string, message: string) {
     super(`Scan failed on signal ${signalId} via ${connectorId}: ${message}`);
   }
 }
 
-class AgentExecutionError extends NodebaseError {
+class AgentExecutionError extends ElevayError {
   constructor(public agentId: string, public stepNumber: number, message: string) {
     super(`Agent ${agentId} failed at step ${stepNumber}: ${message}`);
   }
 }
 
-class ConnectorError extends NodebaseError {
+class ConnectorError extends ElevayError {
   constructor(public connectorType: string, public endpoint: string, public statusCode: number) {
     super(`${connectorType} API error ${statusCode} on ${endpoint}`);
   }
 }
 
-class CredentialError extends NodebaseError {
+class CredentialError extends ElevayError {
   constructor(public credentialId: string, public errorType: 'expired' | 'invalid' | 'revoked') {
     super(`Credential ${credentialId} is ${errorType}`);
   }
@@ -1379,7 +1379,7 @@ process.on('SIGTERM', async () => {
 ### 5.7 Architecture cible — Monorepo
 
 ```
-nodebase/ (pnpm + Turborepo)
+elevay/ (pnpm + Turborepo)
 │
 ├── apps/
 │   └── web/                          # Next.js 14+ App Router
@@ -1388,24 +1388,24 @@ nodebase/ (pnpm + Turborepo)
 │       └── lib/                      # Hooks, API client tRPC, utils
 │
 ├── packages/
-│   ├── @nodebase/types/                 # Interfaces partagées front ↔ back
+│   ├── @elevay/types/                 # Interfaces partagées front ↔ back
 │   │   ├── agent.ts                  # AgentTemplate, AgentExecution, AgentAction
 │   │   ├── scan.ts                   # ScanResult, Signal, SignalCategory
 │   │   ├── connector.ts              # ConnectorConfig, ConnectorStatus
 │   │   ├── credential.ts             # CredentialType, EncryptedCredential
 │   │   └── errors.ts                 # ScanError, AgentError, ConnectorError, CredentialError
 │   │
-│   ├── @nodebase/db/                    # Prisma schema + generated client + Resource pattern
+│   ├── @elevay/db/                    # Prisma schema + generated client + Resource pattern
 │   │   ├── prisma/schema.prisma      # Workspace, User, Agent, Scan, Connector, Credential, AiEvent
 │   │   └── src/resources/            # ScanResource, AgentResource, ConnectorResource, etc.
 │   │
-│   ├── @nodebase/core/                  # Moteurs d'exécution
+│   ├── @elevay/core/                  # Moteurs d'exécution
 │   │   ├── scan-engine/              # Détection signaux (metadata-only, 23 signaux, 6 catégories)
 │   │   ├── agent-engine/             # Exécution agents (LLM calls, actions, maxStepsPerRun)
 │   │   ├── eval/                     # L1 assertions, L2 scoring, L3 LLM-as-Judge
 │   │   └── hooks/                    # Lifecycle hooks (before/after scan, agent, action)
 │   │
-│   ├── @nodebase/connectors/            # Connecteurs (Pipedream + notre intelligence layer)
+│   ├── @elevay/connectors/            # Connecteurs (Pipedream + notre intelligence layer)
 │   │   ├── base.ts                   # BaseConnector interface
 │   │   ├── hubspot/                  # HubSpot: deals, contacts, activities
 │   │   ├── pipedrive/                # Pipedrive: deals, contacts, activities
@@ -1414,20 +1414,20 @@ nodebase/ (pnpm + Turborepo)
 │   │   ├── gmail/                    # Gmail: emails, threads
 │   │   └── calendar/                 # Google Calendar: events, availability
 │   │
-│   ├── @nodebase/queue/                 # BullMQ workers
+│   ├── @elevay/queue/                 # BullMQ workers
 │   │   ├── scan-worker.ts            # Scheduled scans, on-demand scans
 │   │   ├── agent-worker.ts           # Agent execution (async, streaming)
 │   │   └── sync-worker.ts            # Connector data sync (incremental)
 │   │
-│   ├── @nodebase/config/                # Configuration typée (@Env() + Zod)
+│   ├── @elevay/config/                # Configuration typée (@Env() + Zod)
 │   │   ├── env.ts                    # @Env() decorator + Zod validation
 │   │   └── index.ts                  # GlobalConfig (database, queue, llm, scan, connectors)
 │   │
-│   ├── @nodebase/crypto/                # Credential encryption (AES-256)
+│   ├── @elevay/crypto/                # Credential encryption (AES-256)
 │   │   ├── encrypt.ts                # AES-256 encrypt/decrypt
 │   │   └── redact.ts                 # Redaction pour le frontend
 │   │
-│   └── @nodebase/ai/                    # LLM integration
+│   └── @elevay/ai/                    # LLM integration
 │       ├── client.ts                 # Anthropic SDK wrapper (thin)
 │       ├── events.ts                 # AI event logging (model, tokens, cost, latency)
 │       ├── style-learner.ts          # Style adaptation par user

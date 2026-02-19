@@ -4,7 +4,7 @@
  * Initializes Composio with API key from environment
  */
 
-import { initComposio, getComposio as getComposioRaw, type ComposioClient } from "@nodebase/connectors";
+import { initComposio, getComposio as getComposioRaw, type ComposioClient } from "@elevay/connectors";
 
 let _initialized = false;
 
@@ -19,7 +19,7 @@ export function getComposio(): ComposioClient {
       );
     }
 
-    initComposio({ apiKey });
+    initComposio({ apiKey, entityId: process.env.COMPOSIO_ENTITY_ID });
     _initialized = true;
   }
 

@@ -1,5 +1,5 @@
 /**
- * Error Hierarchy for Nodebase
+ * Error Hierarchy for Elevay
  * Inspired by n8n error handling patterns
  *
  * Benefits:
@@ -10,10 +10,10 @@
  */
 
 /**
- * Base error class for all Nodebase errors
+ * Base error class for all Elevay errors
  * Never throw generic Error() - always use a specific subclass
  */
-export abstract class NodebaseError extends Error {
+export abstract class ElevayError extends Error {
   constructor(
     public readonly code: string,
     public readonly context: Record<string, unknown>,
@@ -60,13 +60,13 @@ export abstract class NodebaseError extends Error {
 // AUTHENTICATION & AUTHORIZATION ERRORS
 // ============================================
 
-export class AuthenticationError extends NodebaseError {
+export class AuthenticationError extends ElevayError {
   constructor(message: string, context: Record<string, unknown> = {}) {
     super("AUTHENTICATION_ERROR", context, message, false);
   }
 }
 
-export class PermissionError extends NodebaseError {
+export class PermissionError extends ElevayError {
   constructor(resource: string, action: string, userId: string) {
     super(
       "PERMISSION_DENIED",
@@ -81,7 +81,7 @@ export class PermissionError extends NodebaseError {
 // RESOURCE ERRORS
 // ============================================
 
-export class NotFoundError extends NodebaseError {
+export class NotFoundError extends ElevayError {
   constructor(resource: string, id: string) {
     super(
       "NOT_FOUND",
@@ -92,7 +92,7 @@ export class NotFoundError extends NodebaseError {
   }
 }
 
-export class ResourceConflictError extends NodebaseError {
+export class ResourceConflictError extends ElevayError {
   constructor(resource: string, field: string, value: unknown) {
     super(
       "RESOURCE_CONFLICT",
@@ -107,7 +107,7 @@ export class ResourceConflictError extends NodebaseError {
 // CREDENTIAL & API KEY ERRORS
 // ============================================
 
-export class CredentialError extends NodebaseError {
+export class CredentialError extends ElevayError {
   constructor(
     public readonly credentialId: string,
     public readonly provider: string,
@@ -154,7 +154,7 @@ export class CredentialError extends NodebaseError {
 // TOOL EXECUTION ERRORS
 // ============================================
 
-export class ToolExecutionError extends NodebaseError {
+export class ToolExecutionError extends ElevayError {
   constructor(
     public readonly toolName: string,
     public readonly toolInput: unknown,
@@ -189,7 +189,7 @@ export class ToolExecutionError extends NodebaseError {
 // CONNECTOR ERRORS (Composio, Pipedream, etc.)
 // ============================================
 
-export class ConnectorError extends NodebaseError {
+export class ConnectorError extends ElevayError {
   constructor(
     public readonly connector: string,
     public readonly action: string,
@@ -252,7 +252,7 @@ export class ConnectorError extends NodebaseError {
 // WORKFLOW EXECUTION ERRORS
 // ============================================
 
-export class WorkflowExecutionError extends NodebaseError {
+export class WorkflowExecutionError extends ElevayError {
   constructor(
     public readonly workflowId: string,
     public readonly nodeId: string | null,
@@ -305,7 +305,7 @@ export class WorkflowExecutionError extends NodebaseError {
 // AGENT ERRORS
 // ============================================
 
-export class AgentExecutionError extends NodebaseError {
+export class AgentExecutionError extends ElevayError {
   constructor(
     public readonly agentId: string,
     public readonly conversationId: string | null,
@@ -354,7 +354,7 @@ export class AgentExecutionError extends NodebaseError {
 // LLM ERRORS
 // ============================================
 
-export class LLMError extends NodebaseError {
+export class LLMError extends ElevayError {
   constructor(
     public readonly provider: string,
     public readonly model: string,
@@ -413,7 +413,7 @@ export class LLMError extends NodebaseError {
 // VALIDATION ERRORS
 // ============================================
 
-export class ValidationError extends NodebaseError {
+export class ValidationError extends ElevayError {
   constructor(
     public readonly field: string,
     public readonly value: unknown,
@@ -432,7 +432,7 @@ export class ValidationError extends NodebaseError {
 // CONFIG ERRORS
 // ============================================
 
-export class ConfigError extends NodebaseError {
+export class ConfigError extends ElevayError {
   constructor(
     public readonly configKey: string,
     message: string
@@ -464,7 +464,7 @@ export class ConfigError extends NodebaseError {
 // SCAN ENGINE ERRORS
 // ============================================
 
-export class ScanError extends NodebaseError {
+export class ScanError extends ElevayError {
   constructor(
     public readonly signalId: string,
     public readonly connectorId: string,
@@ -489,7 +489,7 @@ export class ScanError extends NodebaseError {
  * Check if an error is retryable
  */
 export function isRetryableError(error: unknown): boolean {
-  if (error instanceof NodebaseError) {
+  if (error instanceof ElevayError) {
     return error.isRetryable;
   }
   return false;
@@ -499,7 +499,7 @@ export function isRetryableError(error: unknown): boolean {
  * Extract error message from unknown error
  */
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof NodebaseError) {
+  if (error instanceof ElevayError) {
     return error.message;
   }
   if (error instanceof Error) {
@@ -509,20 +509,20 @@ export function getErrorMessage(error: unknown): string {
 }
 
 /**
- * Convert unknown error to NodebaseError
+ * Convert unknown error to ElevayError
  */
-export function toNodebaseError(
+export function toElevayError(
   error: unknown,
   defaultMessage: string = "An unexpected error occurred"
-): NodebaseError {
-  if (error instanceof NodebaseError) {
+): ElevayError {
+  if (error instanceof ElevayError) {
     return error;
   }
 
   // If it's a generic Error, wrap it
   if (error instanceof Error) {
     const msg = error.message;
-    return new (class extends NodebaseError {
+    return new (class extends ElevayError {
       constructor() {
         super("UNKNOWN_ERROR", { originalError: msg }, msg || defaultMessage, false);
       }
@@ -530,7 +530,7 @@ export function toNodebaseError(
   }
 
   // Fallback for non-Error objects
-  return new (class extends NodebaseError {
+  return new (class extends ElevayError {
     constructor() {
       super("UNKNOWN_ERROR", { originalError: String(error) }, defaultMessage, false);
     }

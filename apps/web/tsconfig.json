@@ -22,14 +22,14 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@nodebase/types": ["../../packages/types/src"],
-      "@nodebase/db": ["../../packages/db/src"],
-      "@nodebase/ai": ["../../packages/ai/src"],
-      "@nodebase/config": ["../../packages/config/src"],
-      "@nodebase/crypto": ["../../packages/crypto/src"],
-      "@nodebase/connectors": ["../../packages/connectors/src"],
-      "@nodebase/core": ["../../packages/core/src"],
-      "@nodebase/queue": ["../../packages/queue/src"]
+      "@elevay/types": ["../../packages/types/src"],
+      "@elevay/db": ["../../packages/db/src"],
+      "@elevay/ai": ["../../packages/ai/src"],
+      "@elevay/config": ["../../packages/config/src"],
+      "@elevay/crypto": ["../../packages/crypto/src"],
+      "@elevay/connectors": ["../../packages/connectors/src"],
+      "@elevay/core": ["../../packages/core/src"],
+      "@elevay/queue": ["../../packages/queue/src"]
     }
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],

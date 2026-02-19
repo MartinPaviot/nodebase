@@ -10,6 +10,13 @@ interface ExecuteWorkflowSyncParams {
   workflowId: string;
   userId: string;
   initialData?: Record<string, unknown>;
+  /** Conversation context from the chat session (for memory persistence) */
+  conversationContext?: {
+    recentMessages: Array<{ role: string; content: string; toolName?: string }>;
+    summary?: string;
+  };
+  /** Agent memories to include in execution context */
+  agentMemories?: Array<{ key: string; value: string; category: string }>;
 }
 
 interface ExecuteWorkflowSyncResult {
@@ -68,6 +75,8 @@ export async function executeWorkflowSync({
   workflowId,
   userId,
   initialData = {},
+  conversationContext,
+  agentMemories,
 }: ExecuteWorkflowSyncParams): Promise<ExecuteWorkflowSyncResult> {
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(
@@ -78,7 +87,7 @@ export async function executeWorkflowSync({
 
   try {
     const result = await Promise.race([
-      executeWorkflowInternal({ workflowId, userId, initialData }),
+      executeWorkflowInternal({ workflowId, userId, initialData, conversationContext, agentMemories }),
       timeoutPromise,
     ]);
     return result;
@@ -94,6 +103,8 @@ async function executeWorkflowInternal({
   workflowId,
   userId,
   initialData,
+  conversationContext,
+  agentMemories,
 }: ExecuteWorkflowSyncParams): Promise<ExecuteWorkflowSyncResult> {
   // Fetch workflow with nodes and connections
   const workflow = await prisma.workflow.findUnique({
@@ -117,8 +128,12 @@ async function executeWorkflowInternal({
   // Create mock step tools for sync execution
   const step = createMockStepTools();
 
-  // Initialize context with initial data
-  let context: WorkflowContext = { ...initialData };
+  // Initialize context with initial data + conversation context for memory persistence
+  let context: WorkflowContext = {
+    ...initialData,
+    ...(conversationContext ? { _conversationContext: conversationContext } : {}),
+    ...(agentMemories?.length ? { _agentMemories: agentMemories } : {}),
+  };
 
   // Execute each node sequentially
   for (const node of sortedNodes) {

@@ -4,7 +4,7 @@
  * Central registry for all available connectors.
  */
 
-import { type ConnectorCategory, type ConnectorConfig } from "@nodebase/types";
+import { type ConnectorCategory, type ConnectorConfig } from "@elevay/types";
 import { BaseConnector } from "./base";
 
 // ============================================

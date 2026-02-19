@@ -67,7 +67,7 @@ export default function SettingsLayout({
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar */}
-                <aside className="w-56 border-r flex flex-col overflow-y-auto p-2">
+                <aside className="w-56 border-r flex-col overflow-y-auto p-2 hidden md:flex">
                     {SETTINGS_NAV.map((section, sectionIndex) => (
                         <div key={sectionIndex} className="mb-4">
                             {section.title && (

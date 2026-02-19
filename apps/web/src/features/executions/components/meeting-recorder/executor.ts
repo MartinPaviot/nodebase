@@ -70,10 +70,10 @@ export const meetingRecorderExecutor: NodeExecutor<MeetingRecorderData> = async 
   });
 
   // Create Recall.ai bot to join the meeting
-  const botName = data.botName || "Nodebase Notetaker";
+  const botName = data.botName || "Elevay Notetaker";
   const joinMessage =
     data.joinMessage ||
-    "Nodebase is recording this meeting for notes and follow-up.";
+    "Elevay is recording this meeting for notes and follow-up.";
 
   const bot = await createBot({
     meetingUrl,

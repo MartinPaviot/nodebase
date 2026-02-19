@@ -4,7 +4,7 @@
  * BullMQ Queue wrapper with type-safety and configuration.
  */
 import { Queue as BullQueue } from "bullmq";
-import { getRedisConfig } from "@nodebase/config";
+import { getRedisConfig } from "@elevay/config";
 /**
  * Create a type-safe BullMQ queue.
  *

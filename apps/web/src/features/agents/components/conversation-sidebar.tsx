@@ -155,7 +155,7 @@ export function ConversationSidebar({
               <Link href={`/agents/${agentId}`}>Overview</Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href={`/agents/${agentId}/edit`}>Settings</Link>
+              <Link href={`/agents/${agentId}`}>Settings</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -7,7 +7,7 @@
 import { Queue, Worker, Job } from "bullmq";
 import { createQueue, addJob } from "./queue";
 import { createWorker } from "./worker";
-import type { JobData, JobResult } from "@nodebase/types";
+import type { JobData, JobResult } from "@elevay/types";
 
 // ============================================
 // Types

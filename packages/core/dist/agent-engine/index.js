@@ -374,7 +374,7 @@ __export(agent_engine_exports, {
 });
 module.exports = __toCommonJS(agent_engine_exports);
 var import_nanoid2 = require("nanoid");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 
 // src/observability/index.ts
 var import_nanoid = require("nanoid");
@@ -545,11 +545,11 @@ var AgentEngine = class {
     onError: []
   };
   aiClient;
-  // AIClient from @nodebase/ai
+  // AIClient from @elevay/ai
   composioClient;
-  // ComposioClient from @nodebase/connectors
+  // ComposioClient from @elevay/connectors
   connectorRegistry;
-  // ConnectorRegistry from @nodebase/connectors
+  // ConnectorRegistry from @elevay/connectors
   constructor(dependencies) {
     this.aiClient = dependencies?.aiClient;
     this.composioClient = dependencies?.composioClient;

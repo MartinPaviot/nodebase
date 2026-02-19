@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { AGENT_MODEL_LABELS } from "../lib/models";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
@@ -65,11 +66,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
     );
   };
 
-  const modelLabels: Record<string, string> = {
-    ANTHROPIC: "Claude",
-    OPENAI: "GPT-4o",
-    GEMINI: "Gemini",
-  };
+  const modelLabels = AGENT_MODEL_LABELS;
 
   // Separate and sort conversations: pinned first, then by date
   const { pinnedConversations, regularConversations, archivedConversations } = useMemo(() => {
@@ -90,11 +87,11 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
 
   return (
     <div className="flex-1 overflow-auto bg-[#FAF9F6]">
-      {/* Agent Header - Lindy style simple */}
+      {/* Agent Header */}
       <div className="px-10 pt-10 pb-8">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-5">
-            {/* Agent Avatar - Lindy gold/amber square icon */}
+            {/* Agent Avatar */}
             <div className="size-16 rounded-2xl bg-[#FEF3C7] flex items-center justify-center shadow-sm">
               <Robot className="size-8 text-[#D97706]" strokeWidth={1.5} />
             </div>
@@ -118,7 +115,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
             </div>
           </div>
 
-          {/* Single action button - Lindy style */}
+          {/* New chat button */}
           <Button
             onClick={handleNewConversation}
             disabled={createConversation.isPending}
@@ -137,7 +134,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
       {/* Content */}
       <div className="px-10 pb-10">
         <div className="grid gap-8 lg:grid-cols-3">
-          {/* Conversations List - Lindy style with coral/peach border */}
+          {/* Conversations List */}
           <div className="lg:col-span-2 rounded-2xl border-[3px] border-[#F9A8A8] bg-white p-6">
             <div className="flex items-center justify-between mb-5">
               <h3 className="flex items-center gap-2.5 text-[16px] font-semibold text-[#1a1a1a]">
@@ -242,13 +239,13 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
             )}
           </div>
 
-          {/* Configuration Panel - Lindy style simple */}
+          {/* Configuration Panel */}
           <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6">
             <h3 className="text-[16px] font-semibold text-[#1a1a1a] mb-5">Configuration</h3>
             <div className="space-y-5">
               <div>
                 <p className="text-[13px] font-semibold text-[#374151] mb-1.5">System Prompt</p>
-                <p className="text-[13px] text-[#6B7280] leading-relaxed line-clamp-8">
+                <p className="text-[13px] text-[#6B7280] leading-relaxed max-h-40 overflow-y-auto">
                   {agent.data.systemPrompt}
                 </p>
               </div>
@@ -256,7 +253,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
               {agent.data.context && (
                 <div>
                   <p className="text-[13px] font-semibold text-[#374151] mb-1.5">Context</p>
-                  <p className="text-[13px] text-[#6B7280] whitespace-pre-wrap line-clamp-4 leading-relaxed">
+                  <p className="text-[13px] text-[#6B7280] whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
                     {agent.data.context}
                   </p>
                 </div>
@@ -294,7 +291,7 @@ export function AgentDetail({ agentId }: AgentDetailProps) {
                       >
                         <p className="font-medium text-[#374151]">{tool.name}</p>
                         {tool.description && (
-                          <p className="text-[#6B7280] text-[12px] mt-0.5">
+                          <p className="text-[#6B7280] text-[12px] mt-0.5 line-clamp-2">
                             {tool.description}
                           </p>
                         )}

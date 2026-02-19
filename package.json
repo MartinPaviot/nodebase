@@ -1,5 +1,5 @@
 {
-  "name": "nodebase-workspace",
+  "name": "elevay-workspace",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,16 +8,16 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "turbo run format",
-    "dev:web": "pnpm --filter @nodebase/web dev",
-    "build:web": "pnpm --filter @nodebase/web build",
+    "dev:web": "pnpm --filter @elevay/web dev",
+    "build:web": "pnpm --filter @elevay/web build",
     "db:push": "tsx node_modules/prisma/build/index.js db push",
     "db:generate": "tsx node_modules/prisma/build/index.js generate",
     "db:seed": "tsx prisma/seed-templates.ts",
-    "redis:start": "docker start redis-nodebase || docker run -d --name redis-nodebase -p 6379:6379 redis:7-alpine",
-    "redis:stop": "docker stop redis-nodebase",
-    "redis:restart": "docker restart redis-nodebase",
-    "redis:logs": "docker logs -f redis-nodebase",
-    "redis:cli": "docker exec -it redis-nodebase redis-cli",
+    "redis:start": "docker start redis-elevay || docker run -d --name redis-elevay -p 6379:6379 redis:7-alpine",
+    "redis:stop": "docker stop redis-elevay",
+    "redis:restart": "docker restart redis-elevay",
+    "redis:logs": "docker logs -f redis-elevay",
+    "redis:cli": "docker exec -it redis-elevay redis-cli",
     "dev:all": "dotenv -- mprocs"
   },
   "devDependencies": {

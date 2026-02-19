@@ -399,7 +399,7 @@ __export(index_exports, {
   getEvalRegistry: () => getEvalRegistry,
   getScanEngine: () => getScanEngine,
   initAgentEngine: () => initAgentEngine,
-  initNodebaseCore: () => initNodebaseCore,
+  initElevayCore: () => initElevayCore,
   initScanEngine: () => initScanEngine,
   loggingHook: () => loggingHook,
   registerL1Assertion: () => registerL1Assertion,
@@ -412,7 +412,7 @@ module.exports = __toCommonJS(index_exports);
 
 // src/scan-engine/index.ts
 var import_nanoid = require("nanoid");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 var DEFAULT_SCAN_RULES = {
   SALES: [
     {
@@ -598,9 +598,9 @@ var DEFAULT_SCAN_RULES = {
 var ScanEngine = class {
   config;
   composioClient;
-  // ComposioClient from @nodebase/connectors
+  // ComposioClient from @elevay/connectors
   connectorRegistry;
-  // ConnectorRegistry from @nodebase/connectors
+  // ConnectorRegistry from @elevay/connectors
   constructor(config = {}, dependencies) {
     this.config = {
       maxConcurrentScans: config.maxConcurrentScans ?? 5,
@@ -751,7 +751,7 @@ function getScanEngine() {
 
 // src/agent-engine/index.ts
 var import_nanoid3 = require("nanoid");
-var import_types2 = require("@nodebase/types");
+var import_types2 = require("@elevay/types");
 
 // src/observability/index.ts
 var import_nanoid2 = require("nanoid");
@@ -922,11 +922,11 @@ var AgentEngine = class {
     onError: []
   };
   aiClient;
-  // AIClient from @nodebase/ai
+  // AIClient from @elevay/ai
   composioClient;
-  // ComposioClient from @nodebase/connectors
+  // ComposioClient from @elevay/connectors
   connectorRegistry;
-  // ConnectorRegistry from @nodebase/connectors
+  // ConnectorRegistry from @elevay/connectors
   constructor(dependencies) {
     this.aiClient = dependencies?.aiClient;
     this.composioClient = dependencies?.composioClient;
@@ -1323,11 +1323,11 @@ function createAgentEngine(dependencies) {
     aiClient: dependencies.aiClient
   });
 }
-async function initNodebaseCore(config) {
+async function initElevayCore(config) {
   const dependencies = {};
   if (config.composioApiKey) {
     try {
-      const { initComposio, initConnectorRegistry } = await import("@nodebase/connectors");
+      const { initComposio, initConnectorRegistry } = await import("@elevay/connectors");
       dependencies.composioClient = initComposio({
         apiKey: config.composioApiKey
       });
@@ -1342,7 +1342,7 @@ async function initNodebaseCore(config) {
   }
   if (config.anthropicApiKey) {
     try {
-      const { AIClient } = await import("@nodebase/ai");
+      const { AIClient } = await import("@elevay/ai");
       dependencies.aiClient = new AIClient({
         apiKey: config.anthropicApiKey
       });
@@ -2358,7 +2358,7 @@ function createAgentBuilder(llmGenerate) {
   getEvalRegistry,
   getScanEngine,
   initAgentEngine,
-  initNodebaseCore,
+  initElevayCore,
   initScanEngine,
   loggingHook,
   registerL1Assertion,

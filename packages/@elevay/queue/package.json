@@ -1,0 +1,22 @@
+{
+  "name": "@elevay/queue",
+  "version": "0.1.0",
+  "description": "BullMQ queue management for Elevay",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@elevay/core": "workspace:*",
+    "@prisma/client": "^6.19.2",
+    "bullmq": "^5.34.4",
+    "ioredis": "^5.4.2",
+    "nanoid": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

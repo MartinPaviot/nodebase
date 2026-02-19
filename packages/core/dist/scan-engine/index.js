@@ -27,7 +27,7 @@ __export(scan_engine_exports, {
 });
 module.exports = __toCommonJS(scan_engine_exports);
 var import_nanoid = require("nanoid");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 var DEFAULT_SCAN_RULES = {
   SALES: [
     {
@@ -213,9 +213,9 @@ var DEFAULT_SCAN_RULES = {
 var ScanEngine = class {
   config;
   composioClient;
-  // ComposioClient from @nodebase/connectors
+  // ComposioClient from @elevay/connectors
   connectorRegistry;
-  // ConnectorRegistry from @nodebase/connectors
+  // ConnectorRegistry from @elevay/connectors
   constructor(config = {}, dependencies) {
     this.config = {
       maxConcurrentScans: config.maxConcurrentScans ?? 5,

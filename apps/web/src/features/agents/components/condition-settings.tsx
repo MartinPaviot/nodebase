@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { NODE_MODELS } from "../lib/models";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InjectDataSidebar } from "./inject-data-sidebar";
+import type { UpstreamNode } from "../lib/flow-graph-utils";
 
 interface ConditionSettingsProps {
   nodeId: string;
@@ -33,6 +36,7 @@ interface ConditionSettingsProps {
   conditions?: ConditionItem[];
   model?: string;
   forceSelectBranch?: boolean;
+  upstreamNodes?: UpstreamNode[];
   onUpdate?: (settings: ConditionSettingsData) => void;
   onDeleteCondition?: (conditionIndex: number) => void;
   onRename?: (newName: string) => void;
@@ -44,6 +48,7 @@ interface ConditionSettingsProps {
 interface ConditionItem {
   id: string;
   text: string;
+  label?: string;
 }
 
 export interface ConditionSettingsData {
@@ -53,18 +58,14 @@ export interface ConditionSettingsData {
   [key: string]: unknown;
 }
 
-const MODELS = [
-  { id: "claude-haiku", label: "Claude 4.5 Haiku", provider: "Default" },
-  { id: "claude-sonnet", label: "Claude 4.5 Sonnet", provider: "Default" },
-  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "OpenAI" },
-  { id: "gpt-4o", label: "GPT-4o", provider: "OpenAI" },
-];
+const MODELS = NODE_MODELS;
 
 export function ConditionSettings({
   nodeName = "Condition",
   conditions = [],
   model = "claude-haiku",
   forceSelectBranch = false,
+  upstreamNodes = [],
   onUpdate,
   onDeleteCondition,
   onRename,
@@ -78,6 +79,24 @@ export function ConditionSettings({
   );
   const [localModel, setLocalModel] = useState(model);
   const [localForceSelect, setLocalForceSelect] = useState(forceSelectBranch);
+
+  // Inject sidebar state
+  const [focusedConditionId, setFocusedConditionId] = useState<string | null>(null);
+
+  const handleInject = useCallback(
+    (nodeId: string, fieldId: string) => {
+      if (!focusedConditionId) return;
+      const token = `{{${nodeId}.${fieldId}}}`;
+      // Insert token into the focused contentEditable via execCommand
+      const container = document.querySelector(`[data-condition-id="${focusedConditionId}"]`);
+      const editable = container?.querySelector("[contenteditable]") as HTMLElement;
+      if (editable) {
+        editable.focus();
+        document.execCommand("insertText", false, token);
+      }
+    },
+    [focusedConditionId]
+  );
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -168,7 +187,7 @@ export function ConditionSettings({
   // Get the specific condition when in branch view
   const selectedCondition = isBranchView ? localConditions[selectedBranchIndex] : null;
 
-  // Branch view - simplified view for a single condition (like Lindy)
+  // Branch view - simplified view for a single condition
   if (isBranchView && selectedCondition) {
     return (
       <div className="h-full flex flex-col min-h-0">
@@ -224,7 +243,7 @@ export function ConditionSettings({
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           <div className="space-y-2">
             <span className="text-[14px] font-medium text-[#6B7280]">
-              Condition
+              {selectedCondition.label || "Condition"}
             </span>
             <div
               className="min-h-[80px] bg-white border border-[#E5E7EB] rounded-xl p-3 focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary cursor-text"
@@ -253,7 +272,7 @@ export function ConditionSettings({
                 data-placeholder='e.g. "the customer asks to speak to a human"'
                 className={`text-[14px] text-[#374151] outline-none whitespace-pre-wrap ${!selectedCondition.text ? "empty:before:content-[attr(data-placeholder)] empty:before:text-[#9CA3AF]" : ""}`}
               >
-                {selectedCondition.text}
+                {selectedCondition.text?.replace(/^Go down this path if\s*/i, "")}
               </span>
             </div>
           </div>
@@ -295,7 +314,15 @@ export function ConditionSettings({
 
   // Full condition node view - shows all conditions and settings
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="relative h-full overflow-visible">
+      {/* Inject data sidebar */}
+      <InjectDataSidebar
+        upstreamNodes={upstreamNodes}
+        onInject={handleInject}
+        visible={focusedConditionId !== null}
+      />
+
+      <div className="h-full flex flex-col min-h-0">
       {/* Header - fixed, never pushed */}
       <div className="px-5 py-2.5 border-b border-[#E5E7EB] shrink-0">
         <div className="flex items-center justify-between">
@@ -371,7 +398,7 @@ export function ConditionSettings({
             <Label className="text-[14px] font-medium text-[#374151]">
               Force the agent to select a branch
             </Label>
-            <p className="text-[12px] text-[#9CA3AF]">
+            <p className="text-[12px] text-[#9CA3AF] text-justify">
               If disabled, the agent will stop the task if none of the conditions are met.
             </p>
           </div>
@@ -388,7 +415,7 @@ export function ConditionSettings({
             <div key={condition.id} className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[14px] font-medium text-[#6B7280]">
-                  Condition {index + 1}
+                  {condition.label || `Condition ${index + 1}`}
                 </span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -441,9 +468,11 @@ export function ConditionSettings({
                 <span
                   contentEditable
                   suppressContentEditableWarning
+                  onFocus={() => setFocusedConditionId(condition.id)}
                   onBlur={(e) => {
                     const text = e.currentTarget.innerText || "";
                     handleConditionChange(condition.id, text);
+                    setTimeout(() => setFocusedConditionId((prev) => prev === condition.id ? null : prev), 200);
                   }}
                   onInput={(e) => {
                     const text = e.currentTarget.innerText || "";
@@ -457,7 +486,7 @@ export function ConditionSettings({
                   data-placeholder='e.g. "the customer asks to speak to a human"'
                   className={`text-[14px] text-[#374151] outline-none whitespace-pre-wrap ${!condition.text ? "empty:before:content-[attr(data-placeholder)] empty:before:text-[#9CA3AF]" : ""}`}
                 >
-                  {condition.text}
+                  {condition.text?.replace(/^Go down this path if\s*/i, "")}
                 </span>
               </div>
             </div>
@@ -465,7 +494,7 @@ export function ConditionSettings({
         </div>
 
         {/* Help text */}
-        <p className="text-[13px] text-[#9CA3AF]">
+        <p className="text-[13px] text-[#9CA3AF] text-justify">
           Please define each condition. The agent will follow the first path which condition is met. Add examples to improve performance.
         </p>
 
@@ -510,6 +539,7 @@ export function ConditionSettings({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

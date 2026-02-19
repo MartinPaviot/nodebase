@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   MagnifyingGlass,
   CaretRight,
@@ -14,11 +13,11 @@ import {
   Briefcase,
   Headset,
   Users,
-  CircleNotch,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSuspenseTemplates, useCreateAgentFromTemplate } from "@/features/templates/hooks/use-templates";
+import { useSuspenseTemplates } from "@/features/templates/hooks/use-templates";
+import { TemplateSetupWizard } from "@/features/templates/components/template-setup-wizard";
 
 const categories = [
   { id: "all", label: "Product", icon: Package, role: "PRODUCT" },
@@ -76,10 +75,24 @@ const categoryHero: Record<string, { tagline: string; illustration: string; bgCo
   },
 };
 
+interface HomeTemplate {
+  id: string;
+  name: string;
+  description: string;
+  subtitle?: string;
+  icon: string | null;
+  color: string | null;
+  category: string;
+  suggestedIntegrations: string[];
+}
+
 export function HomeTemplates() {
   const [activeCategory, setActiveCategory] = useState("all");
   const templates = useSuspenseTemplates({});
-  const createFromTemplate = useCreateAgentFromTemplate();
+
+  // Wizard state
+  const [wizardTemplate, setWizardTemplate] = useState<HomeTemplate | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Filter templates based on category
   const filteredTemplates = activeCategory === "all" || activeCategory === "popular"
@@ -159,7 +172,10 @@ export function HomeTemplates() {
             <Card
               key={template.id}
               className="group cursor-pointer hover:shadow-lg hover:border-primary/30 transition-all bg-white"
-              onClick={() => createFromTemplate.mutate({ templateId: template.id })}
+              onClick={() => {
+                setWizardTemplate(template as HomeTemplate);
+                setWizardOpen(true);
+              }}
             >
               <CardContent className="p-4">
                 <div className="flex flex-col gap-3">
@@ -189,15 +205,12 @@ export function HomeTemplates() {
         </div>
       )}
 
-      {/* Loading overlay */}
-      {createFromTemplate.isPending && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="flex flex-col items-center gap-4">
-            <CircleNotch className="size-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Creating your agent...</p>
-          </div>
-        </div>
-      )}
+      {/* Template setup wizard */}
+      <TemplateSetupWizard
+        template={wizardTemplate}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+      />
     </div>
   );
 }

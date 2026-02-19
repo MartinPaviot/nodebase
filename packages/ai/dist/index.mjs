@@ -3,8 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import {
   LLM_MODELS,
-  NodebaseError
-} from "@nodebase/types";
+  ElevayError
+} from "@elevay/types";
 var COST_PER_MILLION_TOKENS = {
   "claude-3-5-haiku-20241022": { input: 1, output: 5 },
   "claude-sonnet-4-20250514": { input: 3, output: 15 },
@@ -213,7 +213,7 @@ Respond ONLY with the JSON object, no additional text.`;
       const validated = schema.parse(parsed);
       return { data: validated, usage };
     } catch (error) {
-      throw new NodebaseError(
+      throw new ElevayError(
         `Failed to parse structured output: ${error instanceof Error ? error.message : String(error)}`,
         "STRUCTURED_OUTPUT_ERROR",
         { rawOutput: text }
@@ -293,7 +293,7 @@ function initAI(config) {
 }
 function getAI() {
   if (!_aiClient) {
-    throw new NodebaseError(
+    throw new ElevayError(
       "AI client not initialized. Call initAI() first.",
       "AI_NOT_INITIALIZED"
     );

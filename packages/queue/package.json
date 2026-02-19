@@ -1,5 +1,5 @@
 {
-  "name": "@nodebase/queue",
+  "name": "@elevay/queue",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -17,8 +17,8 @@
     "test:redis": "tsx src/test-redis.ts"
   },
   "dependencies": {
-    "@nodebase/config": "workspace:*",
-    "@nodebase/types": "workspace:*",
+    "@elevay/config": "workspace:*",
+    "@elevay/types": "workspace:*",
     "bullmq": "^5.36.0",
     "ioredis": "^5.4.2"
   },

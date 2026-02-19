@@ -7,7 +7,7 @@
  * - L3: LLM-as-Judge (slow, expensive, high accuracy)
  */
 
-import { type L1Assertion, type EvalSeverity } from "@nodebase/types";
+import { type L1Assertion, type EvalSeverity } from "@elevay/types";
 
 // ============================================
 // L1: Deterministic Assertions

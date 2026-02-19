@@ -1,18 +1,18 @@
 /**
- * Nodebase Core Initialization
+ * Elevay Core Initialization
  *
- * Singleton instance of the Nodebase core system.
+ * Singleton instance of the Elevay core system.
  * Provides access to ScanEngine and AgentEngine with proper dependency injection.
  */
 
-import { initNodebaseCore, getDefaultAgentHooks } from "@nodebase/core";
-import type { ScanEngine, AgentEngine } from "@nodebase/core";
+import { initElevayCore, getDefaultAgentHooks } from "@elevay/core";
+import type { ScanEngine, AgentEngine } from "@elevay/core";
 
 // ============================================
 // Types
 // ============================================
 
-interface NodebaseInstance {
+interface ElevayInstance {
   scanEngine: ScanEngine;
   agentEngine: AgentEngine;
   initialized: boolean;
@@ -22,14 +22,14 @@ interface NodebaseInstance {
 // Singleton Instance
 // ============================================
 
-let instance: NodebaseInstance | null = null;
-let initPromise: Promise<NodebaseInstance> | null = null;
+let instance: ElevayInstance | null = null;
+let initPromise: Promise<ElevayInstance> | null = null;
 
 /**
- * Get or initialize the Nodebase core system.
+ * Get or initialize the Elevay core system.
  * Uses environment variables for API keys.
  */
-export async function getNodebaseCore(): Promise<NodebaseInstance> {
+export async function getElevayCore(): Promise<ElevayInstance> {
   // Return existing instance if available
   if (instance) {
     return instance;
@@ -43,10 +43,10 @@ export async function getNodebaseCore(): Promise<NodebaseInstance> {
   // Initialize
   initPromise = (async () => {
     try {
-      console.log("[Nodebase] Initializing core system...");
+      console.log("[Elevay] Initializing core system...");
 
       const { scanEngine, agentEngine, dependencies } =
-        await initNodebaseCore({
+        await initElevayCore({
           composioApiKey: process.env.COMPOSIO_API_KEY,
           anthropicApiKey: process.env.ANTHROPIC_API_KEY,
           scanEngineConfig: {
@@ -66,18 +66,18 @@ export async function getNodebaseCore(): Promise<NodebaseInstance> {
       const hasComposio = !!dependencies.composioClient;
       const hasAI = !!dependencies.aiClient;
 
-      console.log("[Nodebase] Core initialized:");
+      console.log("[Elevay] Core initialized:");
       console.log(`  - Composio: ${hasComposio ? "✓" : "✗ (using mocks)"}`);
       console.log(`  - AI Client: ${hasAI ? "✓" : "✗ (using mocks)"}`);
 
       if (!hasComposio) {
         console.warn(
-          "[Nodebase] ⚠ COMPOSIO_API_KEY not set. Scan engine will use mock data."
+          "[Elevay] ⚠ COMPOSIO_API_KEY not set. Scan engine will use mock data."
         );
       }
       if (!hasAI) {
         console.warn(
-          "[Nodebase] ⚠ ANTHROPIC_API_KEY not set. Agent engine will use mock responses."
+          "[Elevay] ⚠ ANTHROPIC_API_KEY not set. Agent engine will use mock responses."
         );
       }
 
@@ -89,7 +89,7 @@ export async function getNodebaseCore(): Promise<NodebaseInstance> {
 
       return instance;
     } catch (error) {
-      console.error("[Nodebase] Failed to initialize:", error);
+      console.error("[Elevay] Failed to initialize:", error);
       initPromise = null; // Allow retry
       throw error;
     }
@@ -102,7 +102,7 @@ export async function getNodebaseCore(): Promise<NodebaseInstance> {
  * Get the ScanEngine instance.
  */
 export async function getScanEngine(): Promise<ScanEngine> {
-  const core = await getNodebaseCore();
+  const core = await getElevayCore();
   return core.scanEngine;
 }
 
@@ -110,7 +110,7 @@ export async function getScanEngine(): Promise<ScanEngine> {
  * Get the AgentEngine instance.
  */
 export async function getAgentEngine(): Promise<AgentEngine> {
-  const core = await getNodebaseCore();
+  const core = await getElevayCore();
   return core.agentEngine;
 }
 
@@ -124,7 +124,7 @@ export function isInitialized(): boolean {
 /**
  * Reset the singleton (useful for testing).
  */
-export function resetNodebaseCore(): void {
+export function resetElevayCore(): void {
   instance = null;
   initPromise = null;
 }

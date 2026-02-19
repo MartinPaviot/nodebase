@@ -48,7 +48,7 @@ Always confirm meeting details before creating events. Be proactive about identi
         {
           id: "parse-request",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Parse Meeting Request",
             prompt: "Parse the meeting request. Extract participants, preferred times, duration, and topic. Check calendar availability. Output JSON: {\"title\": \"...\", \"participants\": [...], \"duration\": N, \"suggestedTimes\": [...], \"timezone\": \"...\"}",
@@ -63,7 +63,7 @@ Always confirm meeting details before creating events. Be proactive about identi
         {
           id: "create-event",
           type: "googleCalendar",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Create Calendar Event",
             action: "create_event",
@@ -76,7 +76,7 @@ Always confirm meeting details before creating events. Be proactive about identi
         {
           id: "send-invite",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Send Invite Email",
             integration: "gmail",
@@ -136,7 +136,7 @@ When drafting emails, always ask about the recipient relationship and desired to
         {
           id: "agent",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Process Email Request",
             prompt: "Handle the user's email request. Draft clear, professional emails. Summarize threads concisely. Adapt tone to context. For drafts, output JSON: {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"}",
@@ -200,7 +200,7 @@ Include links to the full meeting recording so users can access it easily.`,
     useCase: TemplateUseCase.MEETINGS,
     icon: "🎙️",
     color: "#3B82F6",
-    suggestedTools: ["Google Calendar", "Chat with this Agent", "Form", "Gmail", "Nodebase utilities", "Enter loop", "Meeting recorder", "Slack"],
+    suggestedTools: ["Google Calendar", "Chat with this Agent", "Form", "Gmail", "Elevay utilities", "Enter loop", "Meeting recorder", "Slack"],
     suggestedIntegrations: ["google-calendar", "gmail", "slack", "meeting-recorder", "enter-loop", "chat"],
     flowData: {
       nodes: [
@@ -220,7 +220,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "virtual-meeting-check",
           type: "condition",
-          position: { x: 50, y: 220 },
+          position: { x: 50, y: 200 },
           data: {
             label: "Virtual meeting?",
             conditions: [
@@ -240,7 +240,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "adhoc-or-qa",
           type: "condition",
-          position: { x: 600, y: 220 },
+          position: { x: 600, y: 200 },
           data: {
             label: "Ad-hoc Link or Q&A?",
             model: "claude-haiku",
@@ -254,14 +254,14 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "record-meeting",
           type: "meetingRecorder",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Record meeting",
             description: "Joins, records and transcribes a Google Meet, Zoom, or Microsoft Teams meeting.",
             action: "record_and_transcribe",
             askForConfirmation: false,
             meetingUrl: "auto",
-            botName: "{{user.name}} Nodebase Notetaker",
+            botName: "{{user.name}} Elevay Notetaker",
             includeLogo: false,
             calendarEventTitle: "auto",
             outputVariable: "recording",
@@ -272,7 +272,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "get-task-url",
           type: "getTaskUrl",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Get task URL",
             description: "Returns a link to the current agent task.",
@@ -284,7 +284,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "email-user-notes",
           type: "sendEmail",
-          position: { x: 80, y: 780 },
+          position: { x: 80, y: 700 },
           data: {
             label: "Email user notes",
             integration: "gmail",
@@ -292,14 +292,14 @@ Include links to the full meeting recording so users can access it easily.`,
             to: "the user's email address only",
             subject: "{{user.name}} / {{recording.meetingTitle}} Recap",
             body: "Send the user a highly explicit break down of the action items extracted from the call.\n\nInclude all pertinent details, dates for deadlines and a 1-2 sentence overview on what the meeting was about and what needs to be completed or acted on after the meeting.\n\nBegin the email with, \"Hey {{user.name}}! Summary and actions items from your call with {{recording.attendees}} below:\"\n\n**Ensure the email is very concise. No yapping or additional remarks**\n\nConclude the email by sending them the conversation URL (hyperlinked - {{taskUrl}}) so they can easily access the meeting recording.",
-            signature: "Sent via [Nodebase](https://nodebase.app)",
+            signature: "Sent via [Elevay](https://elevay.app)",
             outputVariable: "emailSent",
           },
         },
         {
           id: "slack-dm-summary",
           type: "sendMessage",
-          position: { x: 300, y: 780 },
+          position: { x: 300, y: 700 },
           data: {
             label: "Slack DM meeting summary",
             integration: "slack",
@@ -312,7 +312,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "chat-helpful",
           type: "chatAgent",
-          position: { x: 520, y: 780 },
+          position: { x: 520, y: 700 },
           data: {
             label: "Be helpful via chat",
             variant: "send",
@@ -323,7 +323,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "answer-followup",
           type: "agentStep",
-          position: { x: 520, y: 960 },
+          position: { x: 520, y: 860 },
           data: {
             label: "Answer follow-up q's",
             prompt: "Answer any questions the user may have about their meetings.",
@@ -339,7 +339,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "get-tasks-list",
           type: "getTasksList",
-          position: { x: 900, y: 420 },
+          position: { x: 900, y: 380 },
           data: {
             label: "Get tasks list",
             description: "Get a list of the latest tasks and sub tasks for an agent",
@@ -353,7 +353,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "found-meetings-check",
           type: "condition",
-          position: { x: 900, y: 600 },
+          position: { x: 900, y: 540 },
           data: {
             label: "Condition",
             model: "claude-haiku",
@@ -366,7 +366,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "no-meetings-message",
           type: "chatAgent",
-          position: { x: 1100, y: 780 },
+          position: { x: 1100, y: 700 },
           data: {
             label: "Send message",
             variant: "send",
@@ -377,7 +377,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "meetings-loop",
           type: "enterLoop",
-          position: { x: 750, y: 780 },
+          position: { x: 750, y: 700 },
           data: {
             label: "Enter loop",
             description: "Loop over a list of items, processing each item in a parallel branch.",
@@ -390,7 +390,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "get-task-details",
           type: "getTaskDetails",
-          position: { x: 750, y: 960 },
+          position: { x: 750, y: 860 },
           data: {
             label: "Get task details",
             description: "Get the details of a task including its history",
@@ -404,7 +404,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "exit-meetings-loop",
           type: "exitLoop",
-          position: { x: 750, y: 1140 },
+          position: { x: 750, y: 1020 },
           data: {
             label: "Exit loop",
             loopNumber: 1,
@@ -413,7 +413,7 @@ Include links to the full meeting recording so users can access it easily.`,
         {
           id: "answer-meeting-question",
           type: "agentStep",
-          position: { x: 750, y: 1320 },
+          position: { x: 750, y: 1180 },
           data: {
             label: "Agent Step",
             prompt: "Help the user answer their meeting question",
@@ -495,7 +495,7 @@ Be friendly but focused. Gather information naturally without making it feel lik
         {
           id: "qualify",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Qualify Lead (BANT)",
             prompt: "Engage the prospect in conversation. Ask about Budget, Authority, Need, and Timeline. Score the lead 1-10. Output JSON: {\"score\": N, \"budget\": \"...\", \"authority\": \"...\", \"need\": \"...\", \"timeline\": \"...\", \"summary\": \"...\"}",
@@ -506,7 +506,7 @@ Be friendly but focused. Gather information naturally without making it feel lik
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Qualified?",
             description: "Check if lead score meets threshold",
@@ -519,7 +519,7 @@ Be friendly but focused. Gather information naturally without making it feel lik
         {
           id: "log-qualified",
           type: "googleSheets",
-          position: { x: 120, y: 620 },
+          position: { x: 120, y: 560 },
           data: {
             label: "Log Qualified Lead",
             action: "append_row",
@@ -530,7 +530,7 @@ Be friendly but focused. Gather information naturally without making it feel lik
         {
           id: "log-nurture",
           type: "googleSheets",
-          position: { x: 480, y: 620 },
+          position: { x: 480, y: 560 },
           data: {
             label: "Add to Nurture List",
             action: "append_row",
@@ -589,7 +589,7 @@ Always personalize messages based on previous interactions. Be persistent but no
         {
           id: "check-context",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Review Prospect Context",
             prompt: "Review the prospect's previous interactions, deal stage, and engagement history. Identify the best follow-up approach and timing. Output JSON: {\"prospect\": \"...\", \"lastContact\": \"...\", \"dealStage\": \"...\", \"approach\": \"...\"}",
@@ -600,7 +600,7 @@ Always personalize messages based on previous interactions. Be persistent but no
         {
           id: "draft-followup",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Draft Follow-up Email",
             prompt: "Based on the prospect context, write a personalized follow-up email. Reference previous conversations. Include a clear next step. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -611,7 +611,7 @@ Always personalize messages based on previous interactions. Be persistent but no
         {
           id: "send-email",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Send Follow-up",
             integration: "gmail",
@@ -624,7 +624,7 @@ Always personalize messages based on previous interactions. Be persistent but no
         {
           id: "log",
           type: "googleSheets",
-          position: { x: 300, y: 770 },
+          position: { x: 300, y: 690 },
           data: {
             label: "Log Follow-up",
             action: "append_row",
@@ -670,7 +670,7 @@ Always provide context around brand mentions and suggest actionable responses wh
     icon: "🔴",
     color: "#EF4444",
     suggestedTools: ["Web Search", "Social Media APIs", "News Feeds"],
-    suggestedIntegrations: ["web-browser", "google-forms", "lindy-utilities", "lindy-mail", "timer"],
+    suggestedIntegrations: ["web-browser", "google-forms", "elevay-utilities", "elevay-mail", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
       { type: "CHAT", label: "Message received" },
@@ -693,7 +693,7 @@ Always provide context around brand mentions and suggest actionable responses wh
         {
           id: "search",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Search Brand Mentions",
             prompt: "Search for brand mentions across web, social media, and news. Categorize by source, sentiment, and reach. Output JSON: {\"mentions\": [{\"source\": \"...\", \"text\": \"...\", \"sentiment\": \"positive|neutral|negative\", \"reach\": N}], \"totalMentions\": N}",
@@ -704,7 +704,7 @@ Always provide context around brand mentions and suggest actionable responses wh
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Analyze Sentiment & Trends",
             prompt: "Analyze the brand mentions. Calculate overall sentiment, identify key trends, and flag any PR risks or opportunities. Output JSON: {\"overallSentiment\": \"...\", \"sentimentScore\": N, \"trends\": [...], \"alerts\": [...], \"summary\": \"...\"}",
@@ -715,7 +715,7 @@ Always provide context around brand mentions and suggest actionable responses wh
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Negative Alert?",
             description: "Check if negative mentions need immediate attention",
@@ -728,7 +728,7 @@ Always provide context around brand mentions and suggest actionable responses wh
         {
           id: "send-alert",
           type: "sendEmail",
-          position: { x: 120, y: 780 },
+          position: { x: 120, y: 700 },
           data: {
             label: "Send Alert Email",
             integration: "gmail",
@@ -739,7 +739,7 @@ Always provide context around brand mentions and suggest actionable responses wh
         {
           id: "log-report",
           type: "googleSheets",
-          position: { x: 480, y: 780 },
+          position: { x: 480, y: 700 },
           data: {
             label: "Log Report",
             action: "append_row",
@@ -785,7 +785,7 @@ Always ask about target audience, newsletter goals, and key messages before draf
     icon: "📰",
     color: "#3B82F6",
     suggestedTools: ["Email Marketing", "Content CMS"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "google-docs", "lindy-utilities"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "google-docs", "elevay-utilities"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "EMAIL", label: "Email received" },
@@ -808,7 +808,7 @@ Always ask about target audience, newsletter goals, and key messages before draf
         {
           id: "research",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Research Topics",
             prompt: "Research the newsletter topic. Find relevant news, trends, and data points. Output JSON: {\"topics\": [{\"title\": \"...\", \"summary\": \"...\", \"source\": \"...\"}], \"keyStats\": [...]}",
@@ -819,7 +819,7 @@ Always ask about target audience, newsletter goals, and key messages before draf
         {
           id: "draft",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Draft Newsletter",
             prompt: "Write a compelling newsletter based on the research. Include engaging subject line, sections with headers, CTAs, and key takeaways. Output JSON: {\"subject\": \"...\", \"preheader\": \"...\", \"sections\": [{\"title\": \"...\", \"content\": \"...\"}], \"cta\": \"...\"}",
@@ -830,7 +830,7 @@ Always ask about target audience, newsletter goals, and key messages before draf
         {
           id: "export-doc",
           type: "googleDocs",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Export to Google Docs",
             action: "create_document",
@@ -874,7 +874,7 @@ Focus on emotional resonance and clear value propositions. Always align creative
     icon: "🎨",
     color: "#8B5CF6",
     suggestedTools: ["Creative Tools", "Brand Guidelines"],
-    suggestedIntegrations: ["ai", "airtable", "web-browser", "chat", "generate-media", "google-docs", "google-sheets", "lindy-utilities", "enter-loop", "video-utilities"],
+    suggestedIntegrations: ["ai", "airtable", "web-browser", "chat", "generate-media", "google-docs", "google-sheets", "elevay-utilities", "enter-loop", "video-utilities"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -902,7 +902,7 @@ Base recommendations on data and research. Provide actionable insights with clea
     useCase: TemplateUseCase.RESEARCH,
     icon: "🔬",
     suggestedTools: ["Web Search", "Analytics", "Survey Tools"],
-    suggestedIntegrations: ["web-browser", "chat", "google", "google-docs", "lindy-utilities", "enter-loop", "perplexity"],
+    suggestedIntegrations: ["web-browser", "chat", "google", "google-docs", "elevay-utilities", "enter-loop", "perplexity"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -988,7 +988,7 @@ Focus on actionable insights. Present data clearly with specific recommendations
     useCase: TemplateUseCase.RESEARCH,
     icon: "📈",
     suggestedTools: ["Analytics", "Ad Platforms", "Keyword Tools"],
-    suggestedIntegrations: ["web-browser", "chat", "google-docs", "google-sheets", "lindy-utilities", "enter-loop", "perplexity"],
+    suggestedIntegrations: ["web-browser", "chat", "google-docs", "google-sheets", "elevay-utilities", "enter-loop", "perplexity"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -1016,7 +1016,7 @@ Always research the recipient's profile and find genuine connection points.`,
     useCase: TemplateUseCase.OUTREACH,
     icon: "💼",
     suggestedTools: ["LinkedIn", "CRM"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities", "linkedin"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities", "linkedin"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -1043,7 +1043,7 @@ Present findings clearly with specific fixes and expected impact.`,
     useCase: TemplateUseCase.RESEARCH,
     icon: "🔍",
     suggestedTools: ["SEO Tools", "Analytics", "Page Speed Tools"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "lindy-utilities"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "elevay-utilities"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -1052,9 +1052,9 @@ Present findings clearly with specific fixes and expected impact.`,
   },
   {
     name: "SEO Assistant",
-    subtitle: "Nodebase uses SEO techniques to help your articles rank higher.",
+    subtitle: "Elevay uses SEO techniques to help your articles rank higher.",
     description:
-      "Show Nodebase your content and she'll suggest ways to optimize your articles for better Google search rankings.",
+      "Show Elevay your content and she'll suggest ways to optimize your articles for better Google search rankings.",
     systemPrompt: `You are an SEO writing assistant. Your responsibilities include:
 - Optimizing existing content for search engines
 - Suggesting keyword improvements and placements
@@ -1071,7 +1071,7 @@ Balance SEO optimization with natural, engaging writing.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "⭐",
     suggestedTools: ["SEO Tools", "Content CMS"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "lindy-utilities"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "elevay-utilities"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -1081,7 +1081,7 @@ Balance SEO optimization with natural, engaging writing.`,
     name: "Turn Podcasts into Blog Posts",
     subtitle: "Transform podcasts into high-quality blog posts.",
     description:
-      "Turn podcasts into written articles. Nodebase will refine and perfect the copy until you're completely satisfied with the final draft.",
+      "Turn podcasts into written articles. Elevay will refine and perfect the copy until you're completely satisfied with the final draft.",
     systemPrompt: `You are a podcast-to-blog content specialist. Your responsibilities include:
 - Converting podcast transcripts into well-structured blog posts
 - Extracting key insights and quotes from audio content
@@ -1098,7 +1098,7 @@ Focus on capturing the essence while making content scannable and engaging.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "🎙️",
     suggestedTools: ["Transcription", "Content CMS"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities", "youtube"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities", "youtube"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "WEBHOOK", label: "New podcast published" },
@@ -1126,7 +1126,7 @@ Always respect privacy and use ethical research methods.`,
     useCase: TemplateUseCase.RESEARCH,
     icon: "📇",
     suggestedTools: ["Contact Database", "LinkedIn", "Web Search"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "lindy-utilities", "people-data-labs", "perplexity", "youtube"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "elevay-utilities", "people-data-labs", "perplexity", "youtube"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -1153,7 +1153,7 @@ Focus on value alignment and mutual benefit when identifying opportunities.`,
     useCase: TemplateUseCase.OUTREACH,
     icon: "🤝",
     suggestedTools: ["Web Search", "CRM", "Email"],
-    suggestedIntegrations: ["chat", "google-forms", "google-sheets", "lindy-utilities", "perplexity"],
+    suggestedIntegrations: ["chat", "google-forms", "google-sheets", "elevay-utilities", "perplexity"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -1181,7 +1181,7 @@ Represent diverse perspectives thoughtfully and provide constructive feedback.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "👥",
     suggestedTools: ["Survey Tools", "Content CMS"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -1189,7 +1189,7 @@ Represent diverse perspectives thoughtfully and provide constructive feedback.`,
   },
   {
     name: "Case Study Drafter",
-    subtitle: "Nodebase joins your case study calls (or receives a transcript) and drafts...",
+    subtitle: "Elevay joins your case study calls (or receives a transcript) and drafts...",
     description:
       "This agent joins your case study interview (or uses a transcript), drafts a compelling case study, and edits it until you're satisfied. It's pre-configured with prompts, so all you need to do is add an example if you want a more tailored result. Once finalized, it exports the case study to Google Docs and sends it to you.",
     systemPrompt: `You are a case study writing specialist. Your responsibilities include:
@@ -1208,7 +1208,7 @@ Focus on measurable outcomes and authentic customer stories.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "📄",
     suggestedTools: ["Transcription", "Document Editor"],
-    suggestedIntegrations: ["google-calendar", "chat", "google-forms", "google-docs", "lindy-utilities", "lindy-meeting-recorder"],
+    suggestedIntegrations: ["google-calendar", "chat", "google-forms", "google-docs", "elevay-utilities", "meeting-recorder"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "WEBHOOK", label: "Calendar event started" },
@@ -1236,7 +1236,7 @@ Focus on benefits, emotional triggers, and clear calls-to-action.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "✏️",
     suggestedTools: ["Content CMS", "A/B Testing"],
-    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -1263,7 +1263,7 @@ Focus on authentic partnerships that align with brand values.`,
     useCase: TemplateUseCase.OUTREACH,
     icon: "📢",
     suggestedTools: ["Social Media", "Email", "CRM"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -1290,7 +1290,7 @@ Focus on newsworthiness and clear, factual communication.`,
     role: TemplateRole.MARKETING,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "📰",
-    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "elevay-utilities"],
     suggestedTools: ["PR Distribution", "Media Database"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
@@ -1318,7 +1318,7 @@ Transform support insights into valuable content resources.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "📬",
     suggestedTools: ["Help Desk", "Content CMS"],
-    suggestedIntegrations: ["chat", "google-forms", "gmail", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["chat", "google-forms", "gmail", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "CHAT", label: "Message received" },
@@ -1347,7 +1347,7 @@ Focus on making complex ideas accessible and shareable in tweet format.`,
     useCase: TemplateUseCase.CONTENT_CREATION,
     icon: "🐦",
     suggestedTools: ["Twitter", "Content CMS"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-docs", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-docs", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -1376,7 +1376,7 @@ Always acknowledge the customer's concern and provide clear next steps.`,
     icon: "✉️",
     color: "#10B981",
     suggestedTools: ["Email", "Help Desk", "Knowledge Base"],
-    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
@@ -1397,7 +1397,7 @@ Always acknowledge the customer's concern and provide clear next steps.`,
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Analyze Email & Search KB",
             prompt: "Analyze the customer email. Identify the issue, sentiment, and urgency. Search the knowledge base for relevant answers. Output JSON: {\"issue\": \"...\", \"sentiment\": \"...\", \"urgency\": \"low|medium|high\", \"kbAnswer\": \"...\", \"needsEscalation\": false}",
@@ -1412,7 +1412,7 @@ Always acknowledge the customer's concern and provide clear next steps.`,
         {
           id: "draft-reply",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Draft Reply",
             prompt: "Draft a professional, empathetic reply to the customer email based on the KB answer. Address their concern directly. Output JSON: {\"subject\": \"Re: ...\", \"body\": \"...\"}",
@@ -1423,7 +1423,7 @@ Always acknowledge the customer's concern and provide clear next steps.`,
         {
           id: "send-reply",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Send Reply",
             integration: "gmail",
@@ -1465,7 +1465,7 @@ Keep responses short and actionable for SMS format.`,
     icon: "💬",
     color: "#3B82F6",
     suggestedTools: ["SMS", "Help Desk"],
-    suggestedIntegrations: ["google-forms", "knowledge-base", "lindy-utilities", "twilio"],
+    suggestedIntegrations: ["google-forms", "knowledge-base", "elevay-utilities", "twilio"],
     suggestedTriggers: [
       { type: "SMS_RECEIVED", label: "SMS Received" },
     ],
@@ -1492,7 +1492,7 @@ Be conversational and helpful while resolving issues quickly.`,
     icon: "📱",
     color: "#25D366",
     suggestedTools: ["WhatsApp", "Help Desk", "CRM"],
-    suggestedIntegrations: ["google-forms", "lindy-utilities", "whatsapp"],
+    suggestedIntegrations: ["google-forms", "elevay-utilities", "whatsapp"],
     suggestedTriggers: [
       { type: "MESSAGE_RECEIVED", label: "Message received" },
     ],
@@ -1519,7 +1519,7 @@ Ensure no email falls through the cracks with smart categorization.`,
     icon: "🏷️",
     color: "#8B5CF6",
     suggestedTools: ["Email", "Help Desk"],
-    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "elevay-utilities"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
@@ -1540,7 +1540,7 @@ Ensure no email falls through the cracks with smart categorization.`,
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Analyze & Categorize Email",
             prompt: "Analyze the email content. Categorize by type (bug, feature request, billing, general), urgency (low/medium/high/critical), and sentiment. Identify VIP customers. Output JSON: {\"category\": \"...\", \"urgency\": \"...\", \"sentiment\": \"...\", \"isVIP\": false, \"labels\": [...], \"suggestedTeam\": \"...\"}",
@@ -1551,7 +1551,7 @@ Ensure no email falls through the cracks with smart categorization.`,
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Urgent?",
             conditions: [
@@ -1563,7 +1563,7 @@ Ensure no email falls through the cracks with smart categorization.`,
         {
           id: "label-email",
           type: "gmail",
-          position: { x: 480, y: 600 },
+          position: { x: 480, y: 540 },
           data: {
             label: "Apply Labels",
             action: "add_labels",
@@ -1573,7 +1573,7 @@ Ensure no email falls through the cracks with smart categorization.`,
         {
           id: "alert-urgent",
           type: "sendEmail",
-          position: { x: 120, y: 600 },
+          position: { x: 120, y: 540 },
           data: {
             label: "Alert Team",
             integration: "gmail",
@@ -1615,7 +1615,7 @@ Provide helpful, accurate responses while maintaining brand voice.`,
     icon: "📧",
     color: "#3B82F6",
     suggestedTools: ["Email", "Help Desk"],
-    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["google-forms", "gmail", "knowledge-base", "elevay-utilities"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
@@ -1641,7 +1641,7 @@ Stay calm, listen actively, and guide customers to solutions.`,
     icon: "📞",
     color: "#6366F1",
     suggestedTools: ["Phone", "Help Desk", "Knowledge Base"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "knowledge-base", "lindy-utilities", "lindy-phone", "slack"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "knowledge-base", "elevay-utilities", "elevay-phone", "slack"],
     suggestedTriggers: [
       { type: "CALL_RECEIVED", label: "Call Received" },
     ],
@@ -1650,8 +1650,8 @@ Stay calm, listen actively, and guide customers to solutions.`,
   },
   {
     name: "Website Customer Support",
-    subtitle: "Embed Nodebase on your website. Give your users instant answers.",
-    description: "Automate your website's customer service by embedding a Nodebase Chatbot. Nodebase automatically resolves user inquiries using a knowledge bases and escalates tickets when human help is required.",
+    subtitle: "Embed Elevay on your website. Give your users instant answers.",
+    description: "Automate your website's customer service by embedding a Elevay Chatbot. Elevay automatically resolves user inquiries using a knowledge bases and escalates tickets when human help is required.",
     systemPrompt: `You are a website chat support specialist. Your responsibilities include:
 - Engaging website visitors proactively
 - Answering product and service questions
@@ -1668,16 +1668,16 @@ Be friendly and helpful while driving conversions and satisfaction.`,
     icon: "🌐",
     color: "#10B981",
     suggestedTools: ["Chat Widget", "Knowledge Base", "CRM"],
-    suggestedIntegrations: ["google-forms", "knowledge-base", "lindy-utilities", "lindy-embed", "slack"],
+    suggestedIntegrations: ["google-forms", "knowledge-base", "elevay-utilities", "elevay-embed", "slack"],
     suggestedTriggers: [
-      { type: "EMBED", label: "Nodebase Embed" },
+      { type: "EMBED", label: "Elevay Embed" },
     ],
     isPublic: true,
   },
   {
     name: "Support Slackbot",
     subtitle: "Custom Slackbot to respond to team questions",
-    description: "Nodebase will answer team questions on Slack, using your custom Knowledge Base and provide instant responds.",
+    description: "Elevay will answer team questions on Slack, using your custom Knowledge Base and provide instant responds.",
     systemPrompt: `You are an internal support Slackbot. Your responsibilities include:
 - Answering team questions about products and processes
 - Providing quick access to documentation
@@ -1694,7 +1694,7 @@ Help team members find answers quickly to boost productivity.`,
     icon: "🤖",
     color: "#4A154B",
     suggestedTools: ["Slack", "Knowledge Base"],
-    suggestedIntegrations: ["google-forms", "knowledge-base", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["google-forms", "knowledge-base", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "MESSAGE_RECEIVED", label: "Message received" },
     ],
@@ -1720,7 +1720,7 @@ Be warm, professional, and efficient in every interaction.`,
     icon: "📞",
     color: "#F59E0B",
     suggestedTools: ["Phone", "Calendar", "CRM"],
-    suggestedIntegrations: ["google-calendar", "gmail", "google-sheets", "knowledge-base", "lindy-utilities", "lindy-phone"],
+    suggestedIntegrations: ["google-calendar", "gmail", "google-sheets", "knowledge-base", "elevay-utilities", "elevay-phone"],
     suggestedTriggers: [
       { type: "CALL_RECEIVED", label: "Call Received" },
     ],
@@ -1729,7 +1729,7 @@ Be warm, professional, and efficient in every interaction.`,
   {
     name: "Knowledge Retrieval",
     subtitle: "Instant answers from your documents.",
-    description: "Get instant answers from your documents by asking Nodebase.",
+    description: "Get instant answers from your documents by asking Elevay.",
     systemPrompt: `You are a knowledge retrieval specialist. Your responsibilities include:
 - Searching knowledge bases for relevant information
 - Providing accurate answers from documentation
@@ -1746,7 +1746,7 @@ Deliver accurate, sourced information quickly and efficiently.`,
     icon: "📚",
     color: "#6366F1",
     suggestedTools: ["Knowledge Base", "Document Search"],
-    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "elevay-utilities"],
     suggestedTriggers: [],
     isPublic: true,
   },
@@ -1770,7 +1770,7 @@ Be professional, empathetic, and solution-oriented.`,
     icon: "📱",
     color: "#10B981",
     suggestedTools: ["Phone", "CRM", "Help Desk"],
-    suggestedIntegrations: ["gmail", "google-sheets", "knowledge-base", "lindy-utilities", "lindy-phone", "slack"],
+    suggestedIntegrations: ["gmail", "google-sheets", "knowledge-base", "elevay-utilities", "elevay-phone", "slack"],
     suggestedTriggers: [
       { type: "CALL_RECEIVED", label: "Call Received" },
     ],
@@ -1779,7 +1779,7 @@ Be professional, empathetic, and solution-oriented.`,
   {
     name: "Telegram Bot",
     subtitle: "Easy to use, Telegram Bot.",
-    description: "Nodebase can integrate with Telegram, acting as a bot to send and receive messages. It can join group chats and complete complex workflows once a Telegram message is received.",
+    description: "Elevay can integrate with Telegram, acting as a bot to send and receive messages. It can join group chats and complete complex workflows once a Telegram message is received.",
     systemPrompt: `You are a Telegram support bot. Your responsibilities include:
 - Responding to customer queries via Telegram
 - Joining group chats and providing support
@@ -1796,7 +1796,7 @@ Be quick, helpful, and conversational.`,
     icon: "✈️",
     color: "#0088CC",
     suggestedTools: ["Telegram", "Knowledge Base"],
-    suggestedIntegrations: ["google-forms", "lindy-utilities", "telegram"],
+    suggestedIntegrations: ["google-forms", "elevay-utilities", "telegram"],
     suggestedTriggers: [
       { type: "MESSAGE_RECEIVED", label: "Message received" },
     ],
@@ -1822,7 +1822,7 @@ Turn customer insights into valuable content.`,
     icon: "✨",
     color: "#EC4899",
     suggestedTools: ["Email", "Social Media"],
-    suggestedIntegrations: ["chat", "google-forms", "gmail", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["chat", "google-forms", "gmail", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -1831,7 +1831,7 @@ Turn customer insights into valuable content.`,
   {
     name: "Query Your Files",
     subtitle: "Query any file or document and get instant answers.",
-    description: "Ask Nodebase questions about any file or document via the app, Slack, or email and get instant, accurate answers. Simplify file queries and find what you need in seconds.",
+    description: "Ask Elevay questions about any file or document via the app, Slack, or email and get instant, accurate answers. Simplify file queries and find what you need in seconds.",
     systemPrompt: `You are a document query specialist. Your responsibilities include:
 - Analyzing uploaded files and documents
 - Answering questions about document content
@@ -1848,7 +1848,7 @@ Provide accurate, sourced answers from document content.`,
     icon: "📄",
     color: "#F97316",
     suggestedTools: ["Document Parser", "Knowledge Base"],
-    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "lindy-utilities", "lindy-mail", "slack"],
+    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "elevay-utilities", "elevay-mail", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "MESSAGE_RECEIVED", label: "Message received" },
@@ -1875,7 +1875,7 @@ Help teams stay informed about support performance.`,
     icon: "📊",
     color: "#3B82F6",
     suggestedTools: ["Help Desk", "Email", "Analytics"],
-    suggestedIntegrations: ["google-forms", "gmail", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -1896,7 +1896,7 @@ Help teams stay informed about support performance.`,
         {
           id: "aggregate",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Aggregate Support Data",
             prompt: "Compile today's support metrics: total tickets, resolution rate, average response time, tickets by category, SLA compliance. Output JSON: {\"totalTickets\": N, \"resolved\": N, \"avgResponseTime\": \"...\", \"byCategory\": {...}, \"slaCompliance\": N, \"topIssues\": [...]}",
@@ -1907,7 +1907,7 @@ Help teams stay informed about support performance.`,
         {
           id: "generate-report",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Generate Report",
             prompt: "Write a concise daily support email report. Include key metrics, trends vs yesterday, top issues, and action items. Keep it scannable with headers and bullet points. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -1918,7 +1918,7 @@ Help teams stay informed about support performance.`,
         {
           id: "send-report",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Email Report",
             integration: "gmail",
@@ -1959,7 +1959,7 @@ Help teams stay informed without information overload.`,
     icon: "📋",
     color: "#4A154B",
     suggestedTools: ["Slack", "Email"],
-    suggestedIntegrations: ["google-forms", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2006,7 +2006,7 @@ Ensure critical issues get immediate attention.`,
         {
           id: "scan-tickets",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Scan for Urgent Tickets",
             prompt: "Analyze the incoming ticket/email. Detect urgency indicators: keywords (down, broken, outage, ASAP, urgent), SLA proximity, VIP customer flag, repeated contact. Output JSON: {\"isUrgent\": true|false, \"urgencyScore\": 1-10, \"indicators\": [...], \"summary\": \"...\", \"suggestedAction\": \"...\"}",
@@ -2017,7 +2017,7 @@ Ensure critical issues get immediate attention.`,
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Is Urgent?",
             conditions: [
@@ -2029,7 +2029,7 @@ Ensure critical issues get immediate attention.`,
         {
           id: "send-alert",
           type: "sendEmail",
-          position: { x: 120, y: 600 },
+          position: { x: 120, y: 540 },
           data: {
             label: "Send Urgent Alert",
             integration: "gmail",
@@ -2040,7 +2040,7 @@ Ensure critical issues get immediate attention.`,
         {
           id: "log",
           type: "googleSheets",
-          position: { x: 480, y: 600 },
+          position: { x: 480, y: 540 },
           data: {
             label: "Log Ticket",
             action: "append_row",
@@ -2082,7 +2082,7 @@ Ensure tickets reach the right people quickly.`,
     icon: "🎯",
     color: "#8B5CF6",
     suggestedTools: ["Help Desk", "Slack"],
-    suggestedIntegrations: ["google-forms", "gmail", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["google-forms", "gmail", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
@@ -2103,7 +2103,7 @@ Ensure tickets reach the right people quickly.`,
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Analyze & Classify Ticket",
             prompt: "Analyze the support ticket. Classify by department (engineering, billing, product, general), priority (P1-P4), and type (bug, question, feature, complaint). Output JSON: {\"department\": \"...\", \"priority\": \"P1|P2|P3|P4\", \"type\": \"...\", \"summary\": \"...\", \"slackChannel\": \"#support-...\"}",
@@ -2114,7 +2114,7 @@ Ensure tickets reach the right people quickly.`,
         {
           id: "dispatch",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Send to Slack Channel",
             prompt: "Create a concise Slack message for the team: ticket summary, priority, and suggested first response. Format for readability.",
@@ -2125,7 +2125,7 @@ Ensure tickets reach the right people quickly.`,
         {
           id: "log",
           type: "googleSheets",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Log Dispatch",
             action: "append_row",
@@ -2166,7 +2166,7 @@ Gather actionable insights to improve customer experience.`,
     icon: "📊",
     color: "#10B981",
     suggestedTools: ["Survey Tools", "Email", "Analytics"],
-    suggestedIntegrations: ["gmail", "google-sheets", "knowledge-base", "lindy-utilities", "lindy-phone", "slack"],
+    suggestedIntegrations: ["gmail", "google-sheets", "knowledge-base", "elevay-utilities", "elevay-phone", "slack"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
     ],
@@ -2192,7 +2192,7 @@ Turn customer feelings into actionable insights.`,
     icon: "💭",
     color: "#6366F1",
     suggestedTools: ["Analytics", "Help Desk", "CRM"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2218,7 +2218,7 @@ Turn support patterns into self-service resources.`,
     icon: "📝",
     color: "#F59E0B",
     suggestedTools: ["Knowledge Base", "Help Desk"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-docs", "knowledge-base", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-docs", "knowledge-base", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2244,9 +2244,9 @@ Balance automation with human touch for best experience.`,
     icon: "🤝",
     color: "#EC4899",
     suggestedTools: ["Chat", "Help Desk", "Knowledge Base"],
-    suggestedIntegrations: ["knowledge-base", "lindy-embed", "slack"],
+    suggestedIntegrations: ["knowledge-base", "elevay-embed", "slack"],
     suggestedTriggers: [
-      { type: "EMBED", label: "Nodebase Embed" },
+      { type: "EMBED", label: "Elevay Embed" },
     ],
     isPublic: true,
   },
@@ -2273,7 +2273,7 @@ Present findings clearly with supporting data. Recommend specific actions based 
     icon: "💬",
     color: "#3B82F6",
     suggestedTools: ["Web Search", "Document Analysis"],
-    suggestedIntegrations: ["calendar", "google-forms", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedIntegrations: ["calendar", "google-forms", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event" },
     ],
@@ -2301,7 +2301,7 @@ Provide objective analysis with actionable recommendations.`,
     icon: "🎯",
     color: "#10B981",
     suggestedTools: ["Web Search", "News Feeds"],
-    suggestedIntegrations: ["google-forms", "google-docs", "google-sheets", "lindy-utilities", "enter-loop", "perplexity", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "google-docs", "google-sheets", "elevay-utilities", "enter-loop", "perplexity", "slack", "timer"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -2330,7 +2330,7 @@ Always distinguish facts from opinions. Provide balanced perspectives.`,
     icon: "🔍",
     color: "#06B6D4",
     suggestedTools: ["Web Search", "Document Analysis"],
-    suggestedIntegrations: ["web-browser", "google-forms", "lindy-utilities"],
+    suggestedIntegrations: ["web-browser", "google-forms", "elevay-utilities"],
     suggestedTriggers: [],
     isPublic: true,
     isFeatured: true,
@@ -2356,7 +2356,7 @@ Deliver timely, relevant updates without information overload.`,
     icon: "📡",
     color: "#06B6D4",
     suggestedTools: ["Web Search", "News Feeds"],
-    suggestedIntegrations: ["web-browser", "google-forms", "google-docs", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["web-browser", "google-forms", "google-docs", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2384,7 +2384,7 @@ Focus on what matters most to the product team.`,
     icon: "📊",
     color: "#8B5CF6",
     suggestedTools: ["GitHub", "Slack"],
-    suggestedIntegrations: ["google-forms", "github", "gmail", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "github", "gmail", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2412,7 +2412,7 @@ Capture nuance and context. Highlight actionable findings.`,
     icon: "📝",
     color: "#F97316",
     suggestedTools: ["Document Analysis"],
-    suggestedIntegrations: ["calendar", "google-forms", "gmail", "google-docs", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedIntegrations: ["calendar", "google-forms", "gmail", "google-docs", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event" },
     ],
@@ -2439,7 +2439,7 @@ Focus on constructive, actionable feedback.`,
     icon: "🎨",
     color: "#EC4899",
     suggestedTools: ["Document Analysis"],
-    suggestedIntegrations: ["calendar", "google-forms", "gmail", "google-docs", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedIntegrations: ["calendar", "google-forms", "gmail", "google-docs", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event" },
     ],
@@ -2447,7 +2447,7 @@ Focus on constructive, actionable feedback.`,
   },
   {
     name: "Disseminate Meeting Insights",
-    subtitle: "Nodebase joins your meetings and disseminates key team insights.",
+    subtitle: "Elevay joins your meetings and disseminates key team insights.",
     description:
       "Automatically extract key insights, decisions, and action items from meetings and share them with the right people via Slack for seamless collaboration.",
     systemPrompt: `You are a meeting insights distributor. Your responsibilities include:
@@ -2466,7 +2466,7 @@ Ensure nothing falls through the cracks after meetings.`,
     icon: "📣",
     color: "#6366F1",
     suggestedTools: ["Slack", "Calendar"],
-    suggestedIntegrations: ["calendar", "google-forms", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedIntegrations: ["calendar", "google-forms", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event" },
     ],
@@ -2493,9 +2493,9 @@ Turn raw feedback into actionable product insights.`,
     icon: "💬",
     color: "#22C55E",
     suggestedTools: ["Web Search", "Document Analysis"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "lindy-embed"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "elevay-embed"],
     suggestedTriggers: [
-      { type: "EMBED", label: "Nodebase Embed" },
+      { type: "EMBED", label: "Elevay Embed" },
     ],
     isPublic: true,
   },
@@ -2520,7 +2520,7 @@ Write for your audience - technical for developers, clear for end users.`,
     icon: "📄",
     color: "#10B981",
     suggestedTools: ["Notion", "Slack"],
-    suggestedIntegrations: ["google-forms", "lindy-utilities", "notion", "slack"],
+    suggestedIntegrations: ["google-forms", "elevay-utilities", "notion", "slack"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
     ],
@@ -2547,7 +2547,7 @@ Focus on actionable bug reports that help developers fix issues quickly.`,
     icon: "🐛",
     color: "#EF4444",
     suggestedTools: ["Linear", "Slack"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "linear", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "linear", "slack", "timer"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -2576,7 +2576,7 @@ Make feedback digestible and actionable for busy product teams.`,
     icon: "📧",
     color: "#3B82F6",
     suggestedTools: ["Email"],
-    suggestedIntegrations: ["google-forms", "gmail", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2603,7 +2603,7 @@ Be helpful, accurate, and point users to official sources.`,
     icon: "❓",
     color: "#8B5CF6",
     suggestedTools: ["Knowledge Base"],
-    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["chat", "google-forms", "knowledge-base", "elevay-utilities"],
     suggestedTriggers: [],
     isPublic: true,
   },
@@ -2628,7 +2628,7 @@ Be empathetic and thorough. Capture both explicit and implicit feedback.`,
     icon: "📋",
     color: "#10B981",
     suggestedTools: ["Survey Tools"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "notion", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "elevay-utilities", "notion", "slack", "timer"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "NEW_ROW", label: "New row added" },
@@ -2748,7 +2748,7 @@ Provide timely, actionable intelligence. Focus on insights that impact business 
     icon: "📊",
     color: "#10B981",
     suggestedTools: ["Web Search", "News Feeds", "Slack"],
-    suggestedIntegrations: ["web-browser", "google-forms", "google-sheets", "lindy-utilities", "perplexity", "slack"],
+    suggestedIntegrations: ["web-browser", "google-forms", "google-sheets", "elevay-utilities", "perplexity", "slack"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
       { type: "CHAT", label: "Message received" },
@@ -2836,7 +2836,7 @@ Keep information current and accurate. Enable informed decision-making.`,
     icon: "📌",
     color: "#F97316",
     suggestedTools: ["Notion", "Slack", "Asana", "Jira"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "notion", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "notion", "slack", "timer"],
     suggestedTriggers: [
       { type: "CHAT", label: "Message received" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -2863,7 +2863,7 @@ Focus on actionable insights. Help improve support operations continuously.`,
     icon: "📄",
     color: "#3B82F6",
     suggestedTools: ["Help Desk", "Email", "Analytics"],
-    suggestedIntegrations: ["google-forms", "gmail", "lindy-utilities", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "elevay-utilities", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2890,7 +2890,7 @@ Create concise, actionable daily briefings. Help teams start their day informed.
     icon: "📋",
     color: "#F97316",
     suggestedTools: ["Slack", "Email", "Analytics", "Calendar"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -2911,7 +2911,7 @@ Create concise, actionable daily briefings. Help teams start their day informed.
         {
           id: "gather",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Gather Operations Data",
             prompt: "Compile key operational data: team updates from Slack, task statuses from project tools, upcoming deadlines, system health. Output JSON: {\"updates\": [...], \"deadlines\": [...], \"blockers\": [...], \"metrics\": {...}}",
@@ -2922,7 +2922,7 @@ Create concise, actionable daily briefings. Help teams start their day informed.
         {
           id: "generate",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Generate Digest",
             prompt: "Write a concise daily ops digest. Include: key metrics, important updates, upcoming deadlines, blockers, and action items. Format for quick scanning. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -2933,7 +2933,7 @@ Create concise, actionable daily briefings. Help teams start their day informed.
         {
           id: "send",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Send Digest",
             integration: "gmail",
@@ -2975,7 +2975,7 @@ Ensure meetings are productive and well-documented. Drive accountability.`,
     icon: "📝",
     color: "#3B82F6",
     suggestedTools: ["Calendar", "Notion", "Slack", "Email"],
-    suggestedIntegrations: ["google-calendar", "google-forms", "gmail", "lindy-utilities", "lindy-meeting-recorder", "slack"],
+    suggestedIntegrations: ["google-calendar", "google-forms", "gmail", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "WEBHOOK", label: "Calendar event started" },
       { type: "CHAT", label: "Message received" },
@@ -3003,7 +3003,7 @@ Prevent stockouts while minimizing overstock. Optimize inventory investment.`,
     icon: "📦",
     color: "#EC4899",
     suggestedTools: ["Inventory System", "Slack", "Email"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "SCHEDULE", label: "On recurring schedule" },
     ],
@@ -3051,7 +3051,7 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
         {
           id: "check-tasks",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Check Overdue Tasks",
             prompt: "Check project management tools for overdue tasks. List them with assignee, due date, days overdue, and priority. Output JSON: {\"overdueTasks\": [{\"title\": \"...\", \"assignee\": \"...\", \"dueDate\": \"...\", \"daysOverdue\": N, \"priority\": \"...\"}], \"totalOverdue\": N}",
@@ -3062,7 +3062,7 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Any Overdue?",
             conditions: [
@@ -3074,7 +3074,7 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
         {
           id: "send-nudges",
           type: "agentStep",
-          position: { x: 120, y: 600 },
+          position: { x: 120, y: 540 },
           data: {
             label: "Draft & Send Nudges",
             prompt: "Write friendly but clear reminder messages for each overdue task owner. Be empathetic but drive accountability. For critically overdue (>3 days), escalate to manager. Group nudges by person.",
@@ -3085,7 +3085,7 @@ Be helpful, not annoying. Drive completion while respecting workloads.`,
         {
           id: "log",
           type: "googleSheets",
-          position: { x: 480, y: 600 },
+          position: { x: 480, y: 540 },
           data: {
             label: "Log Check",
             action: "append_row",
@@ -3145,7 +3145,7 @@ You auto-record external meetings, skip internal ones, and produce sales-grade d
           id: "trigger-calendar",
           type: "CALENDAR_TRIGGER",
           name: "Calendar event started",
-          position: { x: 0, y: 200 },
+          position: { x: 0, y: 160 },
           data: {
             minutesOffset: -1,
             restrictByAttendee: "all",
@@ -3155,7 +3155,7 @@ You auto-record external meetings, skip internal ones, and produce sales-grade d
           id: "condition-external",
           type: "CONDITION",
           name: "External meeting?",
-          position: { x: 300, y: 200 },
+          position: { x: 300, y: 160 },
           data: {
             conditions: [
               {
@@ -3177,18 +3177,18 @@ You auto-record external meetings, skip internal ones, and produce sales-grade d
           id: "recorder",
           type: "MEETING_RECORDER",
           name: "Record meeting",
-          position: { x: 600, y: 100 },
+          position: { x: 600, y: 80 },
           data: {
-            botName: "Nodebase Notetaker",
+            botName: "Elevay Notetaker",
             meetingUrlSource: "calendarEvent",
-            joinMessage: "Nodebase is recording this meeting for notes and follow-up.",
+            joinMessage: "Elevay is recording this meeting for notes and follow-up.",
           },
         },
         {
           id: "condition-sales",
           type: "CONDITION",
           name: "Filter: sales meeting?",
-          position: { x: 900, y: 100 },
+          position: { x: 900, y: 80 },
           data: {
             conditions: [
               {
@@ -3271,7 +3271,7 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
     icon: "🎯",
     color: "#F59E0B",
     suggestedTools: ["LinkedIn", "Web Search", "CRM", "Contact Database"],
-    suggestedIntegrations: ["chat", "google-forms", "google-sheets", "lindy-utilities", "people-data-labs"],
+    suggestedIntegrations: ["chat", "google-forms", "google-sheets", "elevay-utilities", "people-data-labs"],
     suggestedTriggers: [],
     flowData: {
       nodes: [
@@ -3291,7 +3291,7 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
         {
           id: "search",
           type: "peopleDataLabs",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Search for Leads",
             action: "search_people",
@@ -3301,7 +3301,7 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
         {
           id: "organize",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Qualify & Organize",
             prompt: "Review the leads found. Score each on ICP fit (1-10). Organize by quality. Prepare data for spreadsheet export. Present results in a markdown table.",
@@ -3317,7 +3317,7 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
         {
           id: "export",
           type: "googleSheets",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Export to Google Sheets",
             action: "create_spreadsheet",
@@ -3341,7 +3341,7 @@ Focus on quality leads that match ICP. Enable efficient prospecting.`,
   {
     name: "Lead Outreacher",
     subtitle: "Automated sales outreach and lead engagement.",
-    description: "With Nodebase set up as your autonomous Lead Outreacher, you will streamline your outreach process, save time, and close more deals.",
+    description: "With Elevay set up as your autonomous Lead Outreacher, you will streamline your outreach process, save time, and close more deals.",
     systemPrompt: `You are a sales outreach specialist. Your responsibilities include:
 - Crafting personalized outreach messages
 - Creating multi-touch outreach sequences
@@ -3359,7 +3359,7 @@ Be personal and relevant. Stand out from generic outreach.`,
     icon: "📤",
     color: "#F97316",
     suggestedTools: ["Email", "LinkedIn", "CRM"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "slack", "timer"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "elevay-utilities", "slack", "timer"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
     ],
@@ -3381,7 +3381,7 @@ Be personal and relevant. Stand out from generic outreach.`,
         {
           id: "enrich",
           type: "peopleDataLabs",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Enrich Lead Data",
             action: "enrich_person",
@@ -3391,7 +3391,7 @@ Be personal and relevant. Stand out from generic outreach.`,
         {
           id: "craft-message",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Craft Personalized Outreach",
             prompt: "Write a personalized outreach email for {{enrichedLead.firstName}} at {{enrichedLead.company}}. Reference their role as {{enrichedLead.title}} and industry. Be concise, relevant, and include a clear CTA. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -3402,7 +3402,7 @@ Be personal and relevant. Stand out from generic outreach.`,
         {
           id: "send",
           type: "sendEmail",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Send Outreach Email",
             integration: "gmail",
@@ -3415,7 +3415,7 @@ Be personal and relevant. Stand out from generic outreach.`,
         {
           id: "log",
           type: "googleSheets",
-          position: { x: 300, y: 770 },
+          position: { x: 300, y: 690 },
           data: {
             label: "Log Outreach",
             action: "append_row",
@@ -3459,7 +3459,7 @@ Be confident and consultative. Focus on value, not features.`,
     icon: "📞",
     color: "#3B82F6",
     suggestedTools: ["Phone", "CRM", "Calendar"],
-    suggestedIntegrations: ["google-calendar", "google-forms", "lindy-utilities", "lindy-phone", "slack"],
+    suggestedIntegrations: ["google-calendar", "google-forms", "elevay-utilities", "elevay-phone", "slack"],
     suggestedTriggers: [],
     isPublic: true,
     isFeatured: true,
@@ -3485,14 +3485,14 @@ Maximize connect rates. Respect prospect time and preferences.`,
     icon: "📱",
     color: "#10B981",
     suggestedTools: ["Phone", "CRM", "Dialer"],
-    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "lindy-utilities", "enter-loop", "lindy-phone"],
+    suggestedIntegrations: ["google-forms", "gmail", "google-sheets", "elevay-utilities", "enter-loop", "elevay-phone"],
     suggestedTriggers: [],
     isPublic: true,
   },
   {
     name: "Enrich New Leads",
     subtitle: "Research and enrich new leads automatically.",
-    description: "Give Nodebase leads on a GSheet, define the headers (data you want to find), and watch the research and enrich!",
+    description: "Give Elevay leads on a GSheet, define the headers (data you want to find), and watch the research and enrich!",
     systemPrompt: `You are a sales lead enrichment specialist. Your responsibilities include:
 - Enriching lead data with company information
 - Finding decision-maker contact details
@@ -3510,7 +3510,7 @@ Provide sales-relevant insights. Enable personalized outreach.`,
     icon: "🔎",
     color: "#3B82F6",
     suggestedTools: ["Web Search", "LinkedIn", "CRM", "Contact Database"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "google-sheets", "lindy-utilities"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "google-sheets", "elevay-utilities"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
     ],
@@ -3531,7 +3531,7 @@ Provide sales-relevant insights. Enable personalized outreach.`,
         {
           id: "enrich",
           type: "peopleDataLabs",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Enrich with People Data Labs",
             action: "enrich_person",
@@ -3541,7 +3541,7 @@ Provide sales-relevant insights. Enable personalized outreach.`,
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Analyze & Score Lead",
             prompt: "Analyze enriched lead data. Calculate ICP fit score (1-10). Identify buying triggers, tech stack, and personalization angles. Output JSON: {\"score\": N, \"triggers\": [...], \"techStack\": [...], \"personalizationAngles\": [...], \"summary\": \"...\"}",
@@ -3552,7 +3552,7 @@ Provide sales-relevant insights. Enable personalized outreach.`,
         {
           id: "update-sheet",
           type: "googleSheets",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Update Spreadsheet",
             action: "append_row",
@@ -3594,7 +3594,7 @@ Always research the recipient's profile and find genuine connection points.`,
     icon: "💼",
     color: "#0A66C2",
     suggestedTools: ["LinkedIn", "CRM"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities", "linkedin"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities", "linkedin"],
     suggestedTriggers: [],
     isPublic: true,
   },
@@ -3619,7 +3619,7 @@ Be professional and helpful. Represent the company excellently.`,
     icon: "☎️",
     color: "#10B981",
     suggestedTools: ["Twilio", "CRM", "Calendar"],
-    suggestedIntegrations: ["google-forms", "lindy-utilities", "twilio"],
+    suggestedIntegrations: ["google-forms", "elevay-utilities", "twilio"],
     suggestedTriggers: [],
     isPublic: true,
   },
@@ -3640,7 +3640,7 @@ To get started, just share the company names you want to target - you can option
     icon: "🤖",
     color: "#F59E0B",
     suggestedTools: ["Email", "CRM", "Calendar", "Slack"],
-    suggestedIntegrations: ["ai", "chat", "google-forms", "gmail", "google", "lindy-utilities", "enter-loop", "linkedin", "people-data-labs", "perplexity", "youtube"],
+    suggestedIntegrations: ["ai", "chat", "google-forms", "gmail", "google", "elevay-utilities", "enter-loop", "linkedin", "people-data-labs", "perplexity", "youtube"],
     suggestedTriggers: [],
     flowData: {
       nodes: [
@@ -3663,7 +3663,7 @@ To get started, just share the company names you want to target - you can option
         {
           id: "enter-loop-company",
           type: "enterLoop",
-          position: { x: 400, y: 180 },
+          position: { x: 400, y: 140 },
           data: {
             label: "Company To Lead Converter",
             subtitle: "Enter loop \u2192 Enter loop",
@@ -3680,7 +3680,7 @@ To get started, just share the company names you want to target - you can option
         {
           id: "company-research",
           type: "action",
-          position: { x: 400, y: 340 },
+          position: { x: 400, y: 230 },
           data: {
             label: "Company Research",
             subtitle: "Perplexity \u2192 Search with Perplexity",
@@ -3699,7 +3699,7 @@ To get started, just share the company names you want to target - you can option
         {
           id: "lead-finder",
           type: "action",
-          position: { x: 400, y: 500 },
+          position: { x: 400, y: 320 },
           data: {
             label: "Lead Finder",
             subtitle: "Perplexity \u2192 Search with Perplexity",
@@ -3709,31 +3709,28 @@ To get started, just share the company names you want to target - you can option
             temperature: 0.2,
             credits: 0.5,
             returnRelatedQuestions: false,
-            prompt: `Conduct exhaustive and detailed research to precisely identify 2 key decision-makers at the company provided via Previous step. Your research must be extremely thorough, leveraging multiple sources deeply and extensively to ensure maximum depth and accuracy.
+            prompt: `Identify 2 key decision-makers at this company who are most likely to be contactable.
 
-Prioritize finding leads strictly in this order:
-1. Head of Marketing or similar position
-2. If head of marketing or any similar positions doesn't exist, then lookup for CEO as the lead to reach out to.
+Search priorities (in order):
+1. Marketing Director / VP Marketing / Head of Marketing
+2. Sales Director / VP Sales / Head of Sales
+3. Head of Growth / Growth Manager
+4. Any Director or VP with a public LinkedIn profile
+5. Founder or CEO ONLY if the company has fewer than 20 employees
 
-For each individual, gather highly detailed and verified information, including:
-1. Full Name
-2. Current Title & Role
-3. Location
-4. Locality
-5. Region
-6. LinkedIn Profile
-7. Direct Email and Phone Number (Strive for finding this rigorously)
-8. Social Profiles: Twitter, Facebook, Instagram, Reddit
-9. Concise yet detailed Bio highlighting significant achievements, current responsibilities, key contributions, major projects, and notable public mentions.
-10. Biographies, major projects, leadership roles, and notable achievements. Company affiliations, speaking engagements, and press mentions
+For each person found, provide:
+- Full Name (REQUIRED — this is the most important field)
+- Current Title & Role
+- Company name
+- LinkedIn Profile URL (if found)
+- Email address (if publicly available)
+- Location
 
-Ensure accuracy and completeness by rigorously cross-referencing multiple authoritative and reliable sources, including official company websites, professional networking platforms, press releases, credible social media profiles, industry publications, and reputable news outlets.
+Focus on people who have an active public presence (LinkedIn, company website bio, conference speakers). These are easier to find contact info for via databases.
 
-Your final output must reflect meticulous attention to detail, leaving absolutely no relevant information overlooked or unexplored. Take as much time you want, but the results must be good and exhaustive as asked. Do as many searches you'd need.
+Format each person as a clear, structured entry. Do NOT include people you cannot identify by full name.
 
-Retrieve their LinkedIn, Twitter, Facebook, Instagram, Reddit, email, phone number, and any other available social/contact details.
-
-Response from the previous step: {{companyResearch}}`,
+Company context from previous step: {{companyResearch}}`,
             model: "claude-haiku",
             outputVariable: "foundLeads",
           },
@@ -3742,7 +3739,7 @@ Response from the previous step: {{companyResearch}}`,
         {
           id: "enter-loop-lead",
           type: "enterLoop",
-          position: { x: 400, y: 660 },
+          position: { x: 400, y: 410 },
           data: {
             label: "Lead Researcher Loop",
             subtitle: "Enter loop \u2192 Enter loop",
@@ -3754,15 +3751,45 @@ Response from the previous step: {{companyResearch}}`,
             output: "We should be having the email draft links in the output together with other details if the draft is created",
           },
         },
-        // 6. LinkedIn Profile Finder (Google Search)
+        // 6. Find Person by Full Name (People Data Labs) — FIRST enrichment step
+        {
+          id: "pdl-find",
+          type: "peopleDataLabs",
+          position: { x: 400, y: 500 },
+          data: {
+            label: "Find person by full name",
+            subtitle: "People Data Labs",
+            description: "Enrich lead data via People Data Labs — most reliable source for emails and contact info",
+            actionType: "pdl-find-by-full-name",
+            limit: 4,
+            credits: 15,
+            askForConfirmation: false,
+            outputVariable: "pdlData",
+          },
+        },
+        // 7. Condition: PDL found email?
+        {
+          id: "condition-pdl-email",
+          type: "condition",
+          position: { x: 400, y: 590 },
+          data: {
+            label: "PDL found email?",
+            model: "claude-haiku",
+            conditions: [
+              { id: "condition-pdl-branch-0", text: "The People Data Labs result does NOT contain any email address (no @ symbol in the data)", label: "No" },
+              { id: "condition-pdl-branch-1", text: "The People Data Labs result contains at least one email address (an @ symbol is present in the data)", label: "Yes" },
+            ],
+          },
+        },
+        // 8. LinkedIn Profile Finder (Google Search) — fallback when PDL has no email
         {
           id: "linkedin-finder",
           type: "action",
-          position: { x: 400, y: 820 },
+          position: { x: 200, y: 690 },
           data: {
             label: "LinkedIn Profile Finder",
             subtitle: "Google \u2192 Google Search",
-            description: "Google Search to find the lead's LinkedIn profile URL",
+            description: "Google Search to find the lead's LinkedIn profile URL (fallback path)",
             icon: "google",
             maxResults: 20,
             credits: 1,
@@ -3771,14 +3798,14 @@ Response from the previous step: {{companyResearch}}`,
             outputVariable: "googleResults",
           },
         },
-        // 7. LinkedIn Profile URL Analyzer (Think Step)
+        // 9. LinkedIn Profile URL Analyzer (Think Step)
         {
           id: "linkedin-analyzer",
           type: "action",
-          position: { x: 400, y: 960 },
+          position: { x: 200, y: 770 },
           data: {
             label: "LinkedIn Profile URL Analyzer",
-            subtitle: "Lindy utilities \u2192 Think",
+            subtitle: "AI utilities \u2192 Think",
             description: "Analyze Google search results to determine the correct LinkedIn profile URL",
             icon: "ai",
             prompt: "Analyses the google search results(for linkedin profile url) with the available context about the person then decide the most appropriate linkedin url profile url for the given person(valuable lead)",
@@ -3786,11 +3813,11 @@ Response from the previous step: {{companyResearch}}`,
             outputVariable: "linkedinUrl",
           },
         },
-        // 8. LinkedIn Details Finder (LinkedIn API)
+        // 10. LinkedIn Details Finder (LinkedIn API)
         {
           id: "linkedin-details",
           type: "composioAction",
-          position: { x: 400, y: 1100 },
+          position: { x: 200, y: 850 },
           data: {
             label: "LinkedIn Details Finder",
             subtitle: "LinkedIn \u2192 LinkedIn profiles by URL",
@@ -3801,74 +3828,58 @@ Response from the previous step: {{companyResearch}}`,
             credits: 0.1,
           },
         },
-        // 9. Find Person by Full Name (People Data Labs)
-        {
-          id: "pdl-find",
-          type: "peopleDataLabs",
-          position: { x: 400, y: 1240 },
-          data: {
-            label: "Find Person by Full Name",
-            subtitle: "People Data Labs",
-            description: "Enrich lead data via People Data Labs (name, company, location, school)",
-            actionType: "pdl-find-by-full-name",
-            limit: 4,
-            credits: 15,
-            askForConfirmation: false,
-            outputVariable: "pdlData",
-          },
-        },
-        // 10. Lead Research (Perplexity Sonar Reasoning Pro)
+        // 11. Lead Research (Perplexity) — both paths converge here
         {
           id: "lead-research",
           type: "action",
-          position: { x: 400, y: 1380 },
+          position: { x: 400, y: 940 },
           data: {
-            label: "Lead Research",
+            label: "Lead research",
             subtitle: "Perplexity \u2192 Search with Perplexity",
-            description: "In-depth research with Perplexity (Sonar Reasoning Pro) — profile, achievements, podcasts",
+            description: "In-depth research with Perplexity — profile, achievements, podcasts, and missing contact info",
             icon: "perplexity",
             perplexityModel: "sonar-reasoning-pro",
             temperature: 0.2,
             credits: 0.5,
             returnRelatedQuestions: false,
-            prompt: "Research person using all available internet sources to create a concise profile summary. Include background, role, key topics they talk about, and any notable achievements. Also, search for any YouTube interviews or podcast appearances featuring them, using variations of their name, company, or role if needed.",
+            prompt: "Find comprehensive information about this person. Structure your research in these sections:\n\n1. CONTACT INFO: Find their professional email address, phone number, Twitter/X handle, and any other contact methods. Check their company website, LinkedIn, personal blog, and public directories.\n\n2. PROFESSIONAL BACKGROUND: Current role, company, career history, and areas of expertise.\n\n3. RECENT ACTIVITY: Recent articles, blog posts, talks, or public statements from the last 6 months.\n\n4. MEDIA APPEARANCES: Any podcast interviews, YouTube videos, conference talks, or webinar appearances. Include URLs when found.\n\n5. KEY TALKING POINTS: Topics they frequently discuss or are known for.\n\nBe specific — include actual email addresses, URLs, and dates when found. If you cannot find a specific piece of information, explicitly state 'NOT FOUND' for that item.",
             model: "claude-haiku",
             outputVariable: "leadResearch",
           },
         },
-        // 11. Condition: Contact email available?
+        // 12. Condition: Contact email available? (final check across ALL previous outputs)
         {
           id: "condition-email",
           type: "condition",
-          position: { x: 400, y: 1540 },
+          position: { x: 400, y: 1030 },
           data: {
             label: "Contact email available?",
             model: "claude-haiku",
             conditions: [
-              { id: "branch-0", text: "Go down this path if a contact email for the person was found in the previous steps", label: "Yes" },
-              { id: "branch-1", text: "Go down this path if no contact email for the person was found in the previous steps", label: "No" },
+              { id: "condition-email-branch-0", text: "No email address was found across ALL previous steps (People Data Labs, LinkedIn, and Perplexity research) — no @ symbol present in any of the outputs", label: "No" },
+              { id: "condition-email-branch-1", text: "At least one email address was found in any of the previous steps (People Data Labs, LinkedIn, or Perplexity research) — an @ symbol is present in the outputs", label: "Yes" },
             ],
           },
         },
-        // 12. Condition: Podcast/interview available?
+        // 13. Condition: Podcast/interview available?
         {
           id: "condition-podcast",
           type: "condition",
-          position: { x: 350, y: 1720 },
+          position: { x: 550, y: 1150 },
           data: {
             label: "Podcast/interview available?",
             model: "claude-haiku",
             conditions: [
-              { id: "branch-0", text: "Go down this path if no YouTube podcast or YouTube interview links were found in the previous research", label: "No" },
-              { id: "branch-1", text: "Go down this path if YouTube podcast or YouTube interview links were found in the previous research", label: "Yes" },
+              { id: "condition-podcast-branch-0", text: "The lead research output does NOT contain any YouTube or podcast URLs (no youtube.com or youtu.be links found)", label: "No" },
+              { id: "condition-podcast-branch-1", text: "The lead research output contains at least one YouTube or podcast URL (youtube.com or youtu.be link is present)", label: "Yes" },
             ],
           },
         },
-        // 13. Enter Loop 3: Podcast Transcription
+        // 14. Enter Loop 3: Podcast Transcription
         {
           id: "enter-loop-podcast",
           type: "enterLoop",
-          position: { x: 550, y: 1900 },
+          position: { x: 680, y: 1300 },
           data: {
             label: "Podcast Transcription",
             subtitle: "Enter loop",
@@ -3880,11 +3891,11 @@ Response from the previous step: {{companyResearch}}`,
             output: "From all the videos, create a profile and summary of the person to help draft a personalized outreach email. This information will serve as contextual personalization for the email.",
           },
         },
-        // 14. Transcribe Video (YouTube)
+        // 15. Transcribe Video (YouTube)
         {
           id: "transcribe-video",
           type: "action",
-          position: { x: 550, y: 2040 },
+          position: { x: 680, y: 1370 },
           data: {
             label: "Transcribe Video (deprecated)",
             subtitle: "YouTube",
@@ -3895,21 +3906,21 @@ Response from the previous step: {{companyResearch}}`,
             outputVariable: "transcription",
           },
         },
-        // 15. Exit Loop 3 (Podcast)
+        // 16. Exit Loop 3 (Podcast)
         {
           id: "exit-loop-podcast",
           type: "exitLoop",
-          position: { x: 550, y: 2180 },
+          position: { x: 680, y: 1440 },
           data: {
             label: "Exit loop",
             loopNumber: 3,
           },
         },
-        // 16. Email Drafter
+        // 17. Email Drafter
         {
           id: "email-drafter",
           type: "action",
-          position: { x: 350, y: 2350 },
+          position: { x: 470, y: 1510 },
           data: {
             label: "Email Drafter",
             subtitle: "AI \u2192 Write",
@@ -3922,11 +3933,11 @@ Response from the previous step: {{companyResearch}}`,
             outputVariable: "emailDraft",
           },
         },
-        // 17. Draft Email (Gmail - saves as draft, NOT send)
+        // 18. Draft Email (Gmail - saves as draft, NOT send)
         {
           id: "draft-email",
           type: "gmail",
-          position: { x: 350, y: 2500 },
+          position: { x: 470, y: 1580 },
           data: {
             label: "Draft email",
             subtitle: "Gmail",
@@ -3938,31 +3949,31 @@ Response from the previous step: {{companyResearch}}`,
             body: "{{emailDraft}}",
           },
         },
-        // 18. Exit Loop 2 (Lead Researcher)
+        // 19. Exit Loop 2 (Lead Researcher)
         {
           id: "exit-loop-lead",
           type: "exitLoop",
-          position: { x: 400, y: 2680 },
+          position: { x: 250, y: 1650 },
           data: {
             label: "Exit loop",
             loopNumber: 2,
           },
         },
-        // 19. Exit Loop 1 (Company)
+        // 20. Exit Loop 1 (Company)
         {
           id: "exit-loop-company",
           type: "exitLoop",
-          position: { x: 400, y: 2820 },
+          position: { x: 250, y: 1720 },
           data: {
             label: "Exit loop",
             loopNumber: 1,
           },
         },
-        // 20. Send Message
+        // 21. Send Message
         {
           id: "send-message",
           type: "chatAgent",
-          position: { x: 400, y: 2960 },
+          position: { x: 250, y: 1790 },
           data: {
             label: "Send message",
             subtitle: "Chat with this Agent",
@@ -3972,43 +3983,49 @@ Response from the previous step: {{companyResearch}}`,
             hasOutgoingEdge: true,
           },
         },
-        // 21. After message sent (Chat Outcome)
+        // 22. After message sent (Chat Outcome)
         {
           id: "after-sent",
           type: "chatOutcome",
-          position: { x: 320, y: 3120 },
+          position: { x: 180, y: 1890 },
           data: {
             label: "After message sent",
           },
         },
-        // 22. After reply received (Chat Outcome)
+        // 23. After reply received (Chat Outcome)
         {
           id: "after-reply",
           type: "chatOutcome",
-          position: { x: 480, y: 3120 },
+          position: { x: 350, y: 1890 },
           data: {
             label: "After reply received",
           },
         },
       ],
       edges: [
-        // Main linear chain
+        // Main chain: trigger → company loop → company research → lead finder → lead loop
         { id: "e1", source: "trigger", target: "enter-loop-company" },
         { id: "e2", source: "enter-loop-company", target: "company-research" },
         { id: "e3", source: "company-research", target: "lead-finder" },
         { id: "e4", source: "lead-finder", target: "enter-loop-lead" },
-        { id: "e5", source: "enter-loop-lead", target: "linkedin-finder" },
+        // PDL first — most reliable for finding emails
+        { id: "e5", source: "enter-loop-lead", target: "pdl-find" },
+        { id: "e5b", source: "pdl-find", target: "condition-pdl-email" },
+        // PDL found email → skip LinkedIn, go straight to Perplexity enrichment
+        { id: "e5c", source: "condition-pdl-branch-1", target: "lead-research" },
+        // PDL didn't find email → try LinkedIn + Perplexity as fallback
+        { id: "e5d", source: "condition-pdl-branch-0", target: "linkedin-finder" },
         { id: "e6", source: "linkedin-finder", target: "linkedin-analyzer" },
         { id: "e7", source: "linkedin-analyzer", target: "linkedin-details" },
-        { id: "e8", source: "linkedin-details", target: "pdl-find" },
-        { id: "e9", source: "pdl-find", target: "lead-research" },
+        { id: "e8", source: "linkedin-details", target: "lead-research" },
+        // Both paths converge at lead-research → final email check
         { id: "e10", source: "lead-research", target: "condition-email" },
-        // Condition 1: Contact email available?
-        { id: "e11", source: "condition-email", target: "condition-podcast", sourceHandle: "branch-0" },  // Yes → podcast check
-        { id: "e12", source: "condition-email", target: "exit-loop-lead", sourceHandle: "branch-1" },     // No → skip to exit loop
-        // Condition 2: Podcast/interview available?
-        { id: "e13", source: "condition-podcast", target: "email-drafter", sourceHandle: "branch-0" },       // No → draft email directly
-        { id: "e14", source: "condition-podcast", target: "enter-loop-podcast", sourceHandle: "branch-1" },  // Yes → transcribe
+        // Final condition: Contact email available? (across ALL previous outputs)
+        { id: "e11", source: "condition-email-branch-0", target: "exit-loop-lead" },           // No → skip to exit loop
+        { id: "e12", source: "condition-email-branch-1", target: "condition-podcast" },         // Yes → podcast check
+        // Condition: Podcast/interview available?
+        { id: "e13", source: "condition-podcast-branch-0", target: "email-drafter" },           // No → draft email directly
+        { id: "e14", source: "condition-podcast-branch-1", target: "enter-loop-podcast" },      // Yes → transcribe first
         // Podcast loop chain
         { id: "e15", source: "enter-loop-podcast", target: "transcribe-video" },
         { id: "e16", source: "transcribe-video", target: "exit-loop-podcast" },
@@ -4049,13 +4066,13 @@ Be thorough and accurate. Enable quick connections with the right people.`,
     icon: "🔍",
     color: "#6366F1",
     suggestedTools: ["Web Search", "Contact Database"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "lindy-utilities", "people-data-labs", "perplexity", "youtube"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "elevay-utilities", "people-data-labs", "perplexity", "youtube"],
     suggestedTriggers: [],
     isPublic: true,
   },
   {
     name: "New Lead Qualifier",
-    subtitle: "Nodebase qualifies leads and alerts your team on Slack.",
+    subtitle: "Elevay qualifies leads and alerts your team on Slack.",
     description: "This agent monitors your lead list, qualifying them based on your criteria. When a lead passes, it alerts the team on Slack with context. Just set your requirements, grant access to the sheet, and pick Slack channels for alerts.",
     systemPrompt: `You are a lead qualification specialist. Your responsibilities include:
 - Scoring incoming leads based on criteria
@@ -4074,7 +4091,7 @@ Be conversational while gathering data. Identify the best opportunities.`,
     icon: "✨",
     color: "#F97316",
     suggestedTools: ["CRM", "Slack", "Email"],
-    suggestedIntegrations: ["google-forms", "google-sheets", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["google-forms", "google-sheets", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "NEW_ROW", label: "New row added" },
     ],
@@ -4082,7 +4099,7 @@ Be conversational while gathering data. Identify the best opportunities.`,
   },
   {
     name: "Case Study Drafter",
-    subtitle: "Nodebase joins your case study calls (or receives a transcript) and drafts...",
+    subtitle: "Elevay joins your case study calls (or receives a transcript) and drafts...",
     description: "This agent joins your case study interview (or uses a transcript), drafts a compelling case study, and edits it until you're satisfied. It's pre-configured with prompts, so all you need to do is add an example if you want a more tailored result. Once finalized, it exports the case study to Google Docs and sends it to you.",
     systemPrompt: `You are a sales case study specialist. Your responsibilities include:
 - Joining customer success calls and capturing stories
@@ -4101,7 +4118,7 @@ Focus on measurable results. Make customers the hero.`,
     icon: "📄",
     color: "#8B5CF6",
     suggestedTools: ["Transcription", "Document Editor", "CRM"],
-    suggestedIntegrations: ["google-calendar", "chat", "google-forms", "google-docs", "lindy-utilities", "meeting-recorder"],
+    suggestedIntegrations: ["google-calendar", "chat", "google-forms", "google-docs", "elevay-utilities", "meeting-recorder"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
     ],
@@ -4109,8 +4126,8 @@ Focus on measurable results. Make customers the hero.`,
   },
   {
     name: "Email Finder",
-    subtitle: "Send Nodebase a name, profile URL or contact description and find their email.",
-    description: "Send Nodebase a name, profile URL or contact description and have it track down their email address. You can request to find contact emails from Slack, by sending an Email, or by messaging directly.",
+    subtitle: "Send Elevay a name, profile URL or contact description and find their email.",
+    description: "Send Elevay a name, profile URL or contact description and have it track down their email address. You can request to find contact emails from Slack, by sending an Email, or by messaging directly.",
     systemPrompt: `You are an email research specialist. Your responsibilities include:
 - Finding professional email addresses
 - Verifying email deliverability
@@ -4128,7 +4145,7 @@ Use ethical methods only. Ensure data accuracy.`,
     icon: "📬",
     color: "#F59E0B",
     suggestedTools: ["Contact Database", "LinkedIn", "Web Search"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities", "lindy-mail", "people-data-labs", "slack"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities", "elevay-mail", "people-data-labs", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "CHAT", label: "Message received" },
@@ -4156,7 +4173,7 @@ Enable sellers to walk in prepared. Maximize meeting effectiveness.`,
     icon: "📋",
     color: "#3B82F6",
     suggestedTools: ["CRM", "Web Search", "LinkedIn", "News Feeds"],
-    suggestedIntegrations: ["web-browser", "google-calendar", "google-forms", "lindy-utilities", "slack"],
+    suggestedIntegrations: ["web-browser", "google-calendar", "google-forms", "elevay-utilities", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
     ],
@@ -4183,7 +4200,7 @@ Be constructive and specific. Help sellers improve continuously.`,
     icon: "🏆",
     color: "#10B981",
     suggestedTools: ["Transcription", "CRM", "Analytics"],
-    suggestedIntegrations: ["google-calendar", "google-forms", "lindy-utilities", "lindy-mail", "meeting-recorder"],
+    suggestedIntegrations: ["google-calendar", "google-forms", "elevay-utilities", "elevay-mail", "meeting-recorder"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
     ],
@@ -4192,7 +4209,7 @@ Be constructive and specific. Help sellers improve continuously.`,
   {
     name: "HubSpot Contact Assistant",
     subtitle: "Instantly add new contacts to your HubSpot, enrich them, and collect data.",
-    description: "Slack, Email, or Message Nodebase an email address, and have it instantly create a new contact to your HubSpot and enrich the contact with desired data.",
+    description: "Slack, Email, or Message Elevay an email address, and have it instantly create a new contact to your HubSpot and enrich the contact with desired data.",
     systemPrompt: `You are a HubSpot CRM specialist. Your responsibilities include:
 - Creating and updating HubSpot contacts
 - Enriching contact data automatically
@@ -4210,7 +4227,7 @@ Keep HubSpot current and accurate. Enable data-driven selling.`,
     icon: "💼",
     color: "#F97316",
     suggestedTools: ["HubSpot", "Contact Database", "Email"],
-    suggestedIntegrations: ["web-browser", "chat", "google-forms", "hubspot", "lindy-utilities", "lindy-mail", "people-data-labs", "slack"],
+    suggestedIntegrations: ["web-browser", "chat", "google-forms", "hubspot", "elevay-utilities", "elevay-mail", "people-data-labs", "slack"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
       { type: "CHAT", label: "Message received" },
@@ -4238,7 +4255,7 @@ Be firm but fair. Protect margins while closing deals.`,
     icon: "📧",
     color: "#3B82F6",
     suggestedTools: ["Email", "CRM"],
-    suggestedIntegrations: ["chat", "google-forms", "gmail", "knowledge-base", "lindy-utilities"],
+    suggestedIntegrations: ["chat", "google-forms", "gmail", "knowledge-base", "elevay-utilities"],
     suggestedTriggers: [
       { type: "EMAIL", label: "Email received" },
     ],
@@ -4265,14 +4282,14 @@ Go beyond surface data. Find insights that create conversations.`,
     icon: "🕵️",
     color: "#3B82F6",
     suggestedTools: ["Web Search", "LinkedIn", "CRM", "News Feeds"],
-    suggestedIntegrations: ["chat", "google-forms", "lindy-utilities", "linkedin", "perplexity"],
+    suggestedIntegrations: ["chat", "google-forms", "elevay-utilities", "linkedin", "perplexity"],
     suggestedTriggers: [],
     isPublic: true,
   },
   {
     name: "Proposal Drafter",
     subtitle: "Create professional proposals in minutes.",
-    description: "Create professional business proposals in seconds with AI-powered automation. Simply provide your client's information and let Nodebase transform your existing templates into personalized, ready-to-send proposals. Review and approve the final document before sending—streamlining your proposal process while maintaining full control.",
+    description: "Create professional business proposals in seconds with AI-powered automation. Simply provide your client's information and let Elevay transform your existing templates into personalized, ready-to-send proposals. Review and approve the final document before sending—streamlining your proposal process while maintaining full control.",
     systemPrompt: `You are a sales proposal specialist. Your responsibilities include:
 - Creating customized sales proposals
 - Including relevant case studies and proof points
@@ -4290,7 +4307,7 @@ Make proposals compelling and professional. Close deals faster.`,
     icon: "📑",
     color: "#F97316",
     suggestedTools: ["Document Editor", "CRM", "E-signature"],
-    suggestedIntegrations: ["chat", "google-forms", "google-docs", "lindy-utilities", "talk-with-agents"],
+    suggestedIntegrations: ["chat", "google-forms", "google-docs", "elevay-utilities", "talk-with-agents"],
     suggestedTriggers: [
       { type: "AGENT_MESSAGE", label: "Agent message received" },
     ],
@@ -4317,9 +4334,9 @@ Be responsive and helpful. Convert interest into action.`,
     icon: "💬",
     color: "#3B82F6",
     suggestedTools: ["Chat", "CRM", "Calendar"],
-    suggestedIntegrations: ["google-calendar", "google-sheets", "knowledge-base", "lindy-utilities", "lindy-embed", "perplexity", "slack"],
+    suggestedIntegrations: ["google-calendar", "google-sheets", "knowledge-base", "elevay-utilities", "elevay-embed", "perplexity", "slack"],
     suggestedTriggers: [
-      { type: "EMBED", label: "Nodebase Embed" },
+      { type: "EMBED", label: "Elevay Embed" },
     ],
     isPublic: true,
   },
@@ -4344,7 +4361,7 @@ Turn conversations into strategic intelligence. Improve targeting.`,
     icon: "⛏️",
     color: "#F59E0B",
     suggestedTools: ["Slack", "Email", "CRM", "Analytics"],
-    suggestedIntegrations: ["google-calendar", "gmail", "lindy-utilities", "meeting-recorder", "slack", "timer"],
+    suggestedIntegrations: ["google-calendar", "gmail", "elevay-utilities", "meeting-recorder", "slack", "timer"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
       { type: "SCHEDULE", label: "On recurring schedule" },
@@ -4372,7 +4389,7 @@ Transform conversations into competitive advantage. Enable data-driven decisions
     icon: "📊",
     color: "#8B5CF6",
     suggestedTools: ["CRM", "Transcription", "Analytics"],
-    suggestedIntegrations: ["google-calendar", "google-forms", "lindy-utilities", "meeting-recorder", "slack"],
+    suggestedIntegrations: ["google-calendar", "google-forms", "elevay-utilities", "meeting-recorder", "slack"],
     suggestedTriggers: [
       { type: "CALENDAR_EVENT", label: "Calendar event started" },
     ],
@@ -4445,7 +4462,7 @@ I'll search using:
         {
           id: "agent",
           type: "agentStep",
-          position: { x: 250, y: 180 },
+          position: { x: 250, y: 160 },
           data: {
             prompt: "Handle the user's lead/candidate search requests. Search for people matching their criteria using People Data Labs, then organize the results into a Google Sheet and share it with the user. Present the results clearly in a markdown table as well.",
             model: "claude-sonnet",
@@ -4507,7 +4524,7 @@ Be objective and thorough in evaluations. Focus on relevant skills and experienc
         {
           id: "analyze",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Analyze Resume vs Job Req",
             prompt: "Analyze the resume against the job requirements. Score skills match (1-10), experience relevance (1-10), and overall fit (1-10). Identify red flags and highlights. Output JSON: {\"candidate\": \"...\", \"skillsScore\": N, \"experienceScore\": N, \"overallFit\": N, \"highlights\": [...], \"redFlags\": [...], \"recommendation\": \"proceed|maybe|pass\"}",
@@ -4518,7 +4535,7 @@ Be objective and thorough in evaluations. Focus on relevant skills and experienc
         {
           id: "condition",
           type: "condition",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Proceed?",
             conditions: [
@@ -4530,7 +4547,7 @@ Be objective and thorough in evaluations. Focus on relevant skills and experienc
         {
           id: "shortlist",
           type: "googleSheets",
-          position: { x: 120, y: 600 },
+          position: { x: 120, y: 540 },
           data: {
             label: "Add to Shortlist",
             action: "append_row",
@@ -4541,7 +4558,7 @@ Be objective and thorough in evaluations. Focus on relevant skills and experienc
         {
           id: "archive",
           type: "googleSheets",
-          position: { x: 480, y: 600 },
+          position: { x: 480, y: 540 },
           data: {
             label: "Archive for Review",
             action: "append_row",
@@ -4670,7 +4687,7 @@ Be warm, helpful, and proactive. Ensure new hires feel supported.`,
         {
           id: "prepare",
           type: "agentStep",
-          position: { x: 300, y: 220 },
+          position: { x: 300, y: 200 },
           data: {
             label: "Prepare Onboarding Plan",
             prompt: "Create a personalized onboarding plan for the new hire. Include: welcome email content, first-week schedule, required documents, tool access checklist, key contacts. Output JSON: {\"employeeName\": \"...\", \"role\": \"...\", \"welcomeEmail\": {\"subject\": \"...\", \"body\": \"...\"}, \"firstWeekTasks\": [...], \"toolAccess\": [...], \"keyContacts\": [...]}",
@@ -4681,7 +4698,7 @@ Be warm, helpful, and proactive. Ensure new hires feel supported.`,
         {
           id: "send-welcome",
           type: "sendEmail",
-          position: { x: 300, y: 420 },
+          position: { x: 300, y: 380 },
           data: {
             label: "Send Welcome Email",
             integration: "gmail",
@@ -4692,7 +4709,7 @@ Be warm, helpful, and proactive. Ensure new hires feel supported.`,
         {
           id: "create-checklist",
           type: "googleSheets",
-          position: { x: 300, y: 600 },
+          position: { x: 300, y: 540 },
           data: {
             label: "Create Onboarding Checklist",
             action: "create_spreadsheet",
@@ -5007,7 +5024,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "enrich",
           type: "peopleDataLabs",
-          position: { x: 400, y: 200 },
+          position: { x: 400, y: 180 },
           data: {
             label: "Enrich Lead",
             description: "Enrich lead with company data, title, LinkedIn",
@@ -5018,7 +5035,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "condition",
           type: "condition",
-          position: { x: 400, y: 370 },
+          position: { x: 400, y: 330 },
           data: {
             label: "Has Enough Data?",
             description: "Check if enough data for personalization",
@@ -5031,7 +5048,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "generate-personalized",
           type: "agentStep",
-          position: { x: 220, y: 550 },
+          position: { x: 220, y: 490 },
           data: {
             label: "Generate Personalized Email",
             prompt: "Write a cold email for {{enrichedLead.firstName}} at {{enrichedLead.company}}. Role: {{enrichedLead.title}}. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -5042,7 +5059,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "generate-generic",
           type: "agentStep",
-          position: { x: 580, y: 550 },
+          position: { x: 580, y: 490 },
           data: {
             label: "Generate Generic Email",
             prompt: "Write a short cold email for {{lead.firstName}}. Keep it curiosity-driven. Output JSON: {\"subject\": \"...\", \"body\": \"...\"}",
@@ -5053,7 +5070,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "send-email",
           type: "sendEmail",
-          position: { x: 400, y: 730 },
+          position: { x: 400, y: 650 },
           data: {
             label: "Send via Gmail",
             integration: "gmail",
@@ -5066,7 +5083,7 @@ The body should be plain text with line breaks, not HTML.`,
         {
           id: "log-sheets",
           type: "googleSheets",
-          position: { x: 400, y: 900 },
+          position: { x: 400, y: 800 },
           data: {
             label: "Log to Spreadsheet",
             action: "append_row",
@@ -5097,25 +5114,37 @@ The body should be plain text with line breaks, not HTML.`,
 async function main() {
   console.log("Seeding agent templates...");
 
-  // Delete all existing templates to ensure clean data
-  console.log("Deleting existing templates...");
-  await prisma.agentTemplate.deleteMany({});
-  console.log("  ✓ Deleted all existing templates");
-
-  // Create all templates fresh
+  // Upsert all templates (preserves IDs so agent references don't break)
   for (const template of templates) {
     // Use role (or category as fallback) + name for unique ID
     const rolePrefix = template.role?.toLowerCase() || template.category.toLowerCase();
     const nameSlug = template.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     const templateId = `template-${rolePrefix}-${nameSlug}`;
 
-    await prisma.agentTemplate.create({
-      data: {
+    await prisma.agentTemplate.upsert({
+      where: { id: templateId },
+      create: {
         id: templateId,
+        ...template,
+      },
+      update: {
         ...template,
       },
     });
     console.log(`  ✓ [${rolePrefix}] ${template.name}`);
+  }
+
+  // Remove templates that are no longer in the seed list
+  const seedIds = templates.map((t) => {
+    const rolePrefix = t.role?.toLowerCase() || t.category.toLowerCase();
+    const nameSlug = t.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    return `template-${rolePrefix}-${nameSlug}`;
+  });
+  const { count: deletedCount } = await prisma.agentTemplate.deleteMany({
+    where: { id: { notIn: seedIds } },
+  });
+  if (deletedCount > 0) {
+    console.log(`  ✗ Removed ${deletedCount} obsolete templates`);
   }
 
   console.log("Done seeding templates!");

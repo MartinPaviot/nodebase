@@ -8,9 +8,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAgentEngine } from "@/lib/nodebase";
+import { getAgentEngine } from "@/lib/elevay";
 import { z } from "zod";
-import type { AgentConfig, ExecutionContext } from "@nodebase/core";
+import type { AgentConfig, ExecutionContext } from "@elevay/core";
 
 // ============================================
 // Request Schema
@@ -170,7 +170,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     data: {
-      description: "Execute an agent with the Nodebase core engine",
+      description: "Execute an agent with the Elevay core engine",
       llmTiers: [
         {
           id: "fast",
@@ -181,7 +181,7 @@ export async function GET() {
         {
           id: "smart",
           name: "Smart (Sonnet)",
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-sonnet-4-5-20250929",
           pricing: { input: "$3/M", output: "$15/M" },
         },
         {

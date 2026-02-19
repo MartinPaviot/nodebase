@@ -1,5 +1,5 @@
 /**
- * @nodebase/ai
+ * @elevay/ai
  *
  * Direct Anthropic SDK integration with:
  * - Model tiering (Haiku/Sonnet/Opus)
@@ -14,8 +14,8 @@ import {
   type LLMEvent,
   type LLMUsage,
   LLM_MODELS,
-  NodebaseError,
-} from "@nodebase/types";
+  ElevayError,
+} from "@elevay/types";
 
 // ============================================
 // Types
@@ -336,7 +336,7 @@ Respond ONLY with the JSON object, no additional text.`;
 
       return { data: validated, usage };
     } catch (error) {
-      throw new NodebaseError(
+      throw new ElevayError(
         `Failed to parse structured output: ${error instanceof Error ? error.message : String(error)}`,
         "STRUCTURED_OUTPUT_ERROR",
         { rawOutput: text }
@@ -445,7 +445,7 @@ export function initAI(config: AIClientConfig): AIClient {
 
 export function getAI(): AIClient {
   if (!_aiClient) {
-    throw new NodebaseError(
+    throw new ElevayError(
       "AI client not initialized. Call initAI() first.",
       "AI_NOT_INITIALIZED"
     );

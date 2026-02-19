@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,8 +11,6 @@ import { cn } from "@/lib/utils";
 import {
   PaperPlaneTilt,
   Paperclip,
-  Microphone,
-  MicrophoneSlash,
   MagnifyingGlass,
   CaretRight,
   Globe,
@@ -46,14 +45,16 @@ import {
   type TriggerSuggestion,
 } from "@/lib/template-display";
 import { useIntegrationIcons } from "@/hooks/use-integration-icons";
+import { VoiceInputButton } from "@/components/ui/voice-input-button";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import { IntegrationIcon } from "@/components/integration-icon";
 import {
   useSuspenseTemplates,
   useCreateAgentFromTemplate,
 } from "@/features/templates/hooks/use-templates";
-import { DailyBriefingWidget } from "./daily-briefing-widget";
 
-// Template categories matching Lindy's structure
+
+// Template categories
 const CATEGORIES = [
   { id: "sales", label: "Sales", icon: TrendUp },
   { id: "marketing", label: "Marketing", icon: Megaphone },
@@ -137,7 +138,7 @@ const CATEGORY_SECTIONS: CategorySection[] = [
       { id: "sms-support", name: "SMS Support Bot", description: "Automated customer support via text", icon: ChatCircle, color: "text-cyan-500", bgColor: "bg-cyan-100" },
       { id: "whatsapp", name: "WhatsApp Support Agent", description: "Smart messaging bot for WhatsApp", icon: ChatCircle, color: "text-teal-500", bgColor: "bg-teal-100" },
       { id: "phone-support", name: "Phone Support Agent", description: "Phone support made simple", icon: Phone, color: "text-sky-500", bgColor: "bg-sky-100" },
-      { id: "website-support", name: "Website Customer Support", description: "Embed Lindy on your website. Give your users instant answers and...", icon: Globe, color: "text-blue-500", bgColor: "bg-blue-100" },
+      { id: "website-support", name: "Website Customer Support", description: "Embed on your website. Give your users instant answers and...", icon: Globe, color: "text-blue-500", bgColor: "bg-blue-100" },
     ],
   },
   {
@@ -163,7 +164,7 @@ const CATEGORY_SECTIONS: CategorySection[] = [
     illustration: "/illustrations/calendar-animate.svg",
     templates: [
       { id: "notetaker", name: "Meeting Notetaker", description: "Captures key meeting details, sends follow-ups, and answers questions...", icon: BookOpen, color: "text-purple-500", bgColor: "bg-purple-100" },
-      { id: "scheduler", name: "Meeting Scheduler", description: "CC Lindy to your emails, just like a real EA, and have her schedule...", icon: Calendar, color: "text-indigo-500", bgColor: "bg-indigo-100" },
+      { id: "scheduler", name: "Meeting Scheduler", description: "CC your agent to your emails, just like a real EA, and have it schedule...", icon: Calendar, color: "text-indigo-500", bgColor: "bg-indigo-100" },
       { id: "prep", name: "Meeting Prep Assistant", description: "Get ready for meetings in minutes", icon: Briefcase, color: "text-violet-500", bgColor: "bg-violet-100" },
       { id: "coach", name: "Meeting Coach", description: "Enhance your meeting skills effortlessly.", icon: Users, color: "text-purple-500", bgColor: "bg-purple-100" },
     ],
@@ -220,7 +221,6 @@ export function HomeContent() {
   const router = useRouter();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
@@ -251,9 +251,13 @@ export function HomeContent() {
   // File upload state
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
-  // Voice recording state
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const baseTextRef = useRef("");
+  const { isListening, isTranscribing, startListening } = useVoiceInput({
+    onTranscriptChange: (text) => setPrompt(text),
+    onListeningEnd: () => { baseTextRef.current = prompt; },
+    baseText: baseTextRef.current,
+  });
+  const handleMicClick = () => { baseTextRef.current = prompt; startListening(); };
 
   // Template preview modal state - now using DB template
   const [selectedDBTemplate, setSelectedDBTemplate] = useState<DBTemplate | null>(null);
@@ -271,9 +275,43 @@ export function HomeContent() {
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      setAttachedFiles(prev => [...prev, ...Array.from(files)]);
+    if (!files) return;
+
+    const newFiles = Array.from(files);
+    const maxFiles = 5;
+    const maxImageSize = 10 * 1024 * 1024; // 10MB
+    const maxTextSize = 5 * 1024 * 1024; // 5MB
+    const imageTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+    const docxTypes = new Set([
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+    ]);
+
+    if (attachedFiles.length + newFiles.length > maxFiles) {
+      toast.error(`Maximum ${maxFiles} files allowed`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
     }
+
+    const accepted: File[] = [];
+    for (const file of newFiles) {
+      if (docxTypes.has(file.type)) {
+        toast.warning(`${file.name}: DOCX not supported. Please convert to PDF.`);
+        continue;
+      }
+      const isImage = imageTypes.has(file.type);
+      const maxSize = isImage ? maxImageSize : maxTextSize;
+      if (file.size > maxSize) {
+        toast.error(`${file.name}: Too large (max ${isImage ? "10MB" : "5MB"})`);
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    if (accepted.length > 0) {
+      setAttachedFiles(prev => [...prev, ...accepted]);
+    }
+
     // Reset input so same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -284,89 +322,40 @@ export function HomeContent() {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Voice recording handlers
-  const transcribeAudio = useCallback(async (audioBlob: Blob) => {
-    setIsTranscribing(true);
-    try {
-      const formData = new FormData();
-      // Append audio blob directly with filename
-      formData.append("audio", audioBlob, "recording.webm");
+  const [isUploading, setIsUploading] = useState(false);
 
-      const response = await fetch("/api/speech/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Transcription failed");
-      }
-
-      if (data.text) {
-        setPrompt(prev => prev + (prev ? " " : "") + data.text);
-      }
-    } catch (error) {
-      console.error("Transcription error:", error);
-      // Fallback to placeholder if transcription fails
-      setPrompt(prev => prev + (prev ? " " : "") + "[Voice recording - transcription failed]");
-    } finally {
-      setIsTranscribing(false);
-    }
-  }, []);
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      const chunks: Blob[] = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach(track => track.stop());
-
-        const audioBlob = new Blob(chunks, { type: "audio/webm" });
-        console.log("Recording complete:", audioBlob.size, "bytes");
-
-        // Send to transcription API
-        if (audioBlob.size > 0) {
-          await transcribeAudio(audioBlob);
-        }
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error("Error accessing microphone:", error);
-      alert("Could not access microphone. Please check your permissions.");
-    }
-  }, [transcribeAudio]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  }, [isRecording]);
-
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isUploading) return;
+
+    // If files attached, upload and process them first
+    if (attachedFiles.length > 0) {
+      setIsUploading(true);
+      try {
+        const formData = new FormData();
+        attachedFiles.forEach((file) => formData.append("files", file));
+
+        const res = await fetch("/api/files/process", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          toast.error(err.errors?.[0] || err.error || "Failed to process files");
+          setIsUploading(false);
+          return;
+        }
+
+        const { files } = await res.json();
+        sessionStorage.setItem("builder-files", JSON.stringify(files));
+      } catch {
+        toast.error("Failed to upload files");
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
 
     // Redirect to the builder chat with the prompt
     const encodedPrompt = encodeURIComponent(prompt.trim());
@@ -419,8 +408,8 @@ export function HomeContent() {
 
   return (
     <div className="flex-1 overflow-auto">
-      {/* Inner wrapper - gradient positioned relative to this, which sizes to content */}
-      <div className="relative">
+      {/* Inner wrapper - gradient positioned relative to this, fills viewport */}
+      <div className="relative min-h-full">
         {/* Cool Blue/Lavender mesh gradient background - extends with content */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         {/* Base: soft blue gradient extending very far - same intensity */}
@@ -523,23 +512,25 @@ export function HomeContent() {
       <header className="flex items-center justify-between px-4 py-3 relative z-10">
         {!sidebarOpen && <SidebarTrigger />}
         {sidebarOpen && <div />}
-        <Button variant="outline" size="sm" className="gap-2" asChild>
-          <Link href="/agents/new">
-            <Plus className="size-4" />
-            New Agent
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2" asChild>
+            <Link href="/templates">
+              See templates
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" asChild>
+            <Link href="/agents/new">
+              <Plus className="size-4" />
+              New Agent
+            </Link>
+          </Button>
+        </div>
       </header>
 
       {/* Spacer for layout */}
       <div className="h-32 relative z-[1]" />
 
       <div className="max-w-4xl mx-auto px-6 -mt-32 pb-12 relative z-[1]">
-        {/* Daily Briefing Widget */}
-        <div className="mb-8">
-          <DailyBriefingWidget />
-        </div>
-
         {/* Main title - more spacing above */}
         <h1 className="text-4xl font-bold text-center mb-2 pt-4">Create. Automate. Scale.</h1>
         <p className="text-lg text-muted-foreground text-center mb-10">Describe your workflow, we'll handle the rest.</p>
@@ -586,7 +577,7 @@ export function HomeContent() {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Build an agent or perform a task"
               rows={2}
-              className="w-full bg-transparent resize-none outline-none text-base placeholder:text-muted-foreground"
+              className="w-full bg-transparent resize-none overflow-hidden outline-none text-base placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -606,32 +597,17 @@ export function HomeContent() {
                 <span className="-mt-[3px]">Add files</span>
               </Button>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "size-8",
-                    isRecording && "bg-red-100 text-red-600 hover:bg-red-200",
-                    isTranscribing && "bg-blue-100 text-blue-600"
-                  )}
-                  onClick={toggleRecording}
-                  disabled={isTranscribing}
-                  title={isTranscribing ? "Transcribing..." : isRecording ? "Stop recording" : "Start voice recording"}
-                >
-                  {isTranscribing ? (
-                    <div className="size-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                  ) : isRecording ? (
-                    <MicrophoneSlash className="size-4 animate-pulse" />
-                  ) : (
-                    <Microphone className="size-4" />
-                  )}
-                </Button>
+                <VoiceInputButton
+                  isListening={isListening}
+                  isTranscribing={isTranscribing}
+                  onClick={handleMicClick}
+                  className="size-8"
+                />
                 <Button
                   type="submit"
                   size="icon"
                   className="size-8 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700"
-                  disabled={!prompt.trim()}
+                  disabled={!prompt.trim() || isUploading}
                 >
                   <PaperPlaneTilt className="size-4" />
                 </Button>
@@ -640,7 +616,7 @@ export function HomeContent() {
           </div>
         </form>
 
-        {/* Quick suggestions - more spacing below */}
+        {/* Quick suggestions */}
         <div className="flex flex-wrap justify-center gap-2 mb-32">
           {QUICK_SUGGESTIONS.map((suggestion) => (
             <button
@@ -654,6 +630,8 @@ export function HomeContent() {
           ))}
         </div>
 
+        {/* Hidden sections - category tabs, template grid, bottom CTA */}
+        <div className="hidden">
         {/* Category tabs - card style */}
         <div className="flex items-center gap-3 mb-6 flex-wrap mt-2">
           {isSearchOpen ? (
@@ -727,7 +705,7 @@ export function HomeContent() {
           <div ref={searchResultsRef} className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{searchQuery}"
+                {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for &quot;{searchQuery}&quot;
               </h2>
               <Button
                 variant="ghost"
@@ -840,7 +818,7 @@ export function HomeContent() {
         <div className="mt-12 rounded-2xl bg-indigo-50 p-8 text-center">
           <p className="text-lg font-semibold mb-1">Do you need more?</p>
           <p className="text-muted-foreground mb-4">
-            Our Nodebase store has over 100+ templates for you.
+            Our Elevay store has over 100+ templates for you.
           </p>
           <Button variant="outline" className="rounded-full gap-1" asChild>
             <Link href="/templates">
@@ -849,6 +827,7 @@ export function HomeContent() {
             </Link>
           </Button>
         </div>
+        </div>{/* End hidden sections */}
       </div>
 
       {/* Template Preview Modal - using DB template with full info */}
@@ -893,7 +872,7 @@ const iconGradients: Record<string, string> = {
   "text-slate-500": "from-slate-400 to-slate-600",
 };
 
-// Template card component - Lindy style
+// Template card component
 function TemplateCard({
   template,
   onClick,

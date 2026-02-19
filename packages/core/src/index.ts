@@ -1,7 +1,7 @@
 /**
- * @nodebase/core
+ * @elevay/core
  *
- * Core engines for Nodebase:
+ * Core engines for Elevay:
  * - Scan Engine: Detects signals across connected services
  * - Agent Engine: Executes agents with hooks and eval
  * - Eval Layer: L1/L2/L3 evaluation of agent outputs

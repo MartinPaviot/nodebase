@@ -41,17 +41,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { type } = await request.json();
+  const { type, returnUrl } = await request.json();
 
   const scopes = GOOGLE_SCOPES[type];
   if (!scopes) {
     return NextResponse.json({ error: "Invalid integration type" }, { status: 400 });
   }
 
-  // For mailbox connections, encode the type in state so the callback can route accordingly
-  const state = type === "GMAIL_MAILBOX"
-    ? JSON.stringify({ userId: session.user.id, type: "GMAIL_MAILBOX" })
-    : session.user.id;
+  // Encode userId, type, and returnUrl in state so the callback can redirect back
+  const state = JSON.stringify({
+    userId: session.user.id,
+    ...(type === "GMAIL_MAILBOX" && { type: "GMAIL_MAILBOX" }),
+    ...(returnUrl && { returnUrl }),
+  });
 
   const url = getGoogleAuthUrl(state, scopes);
   return NextResponse.json({ url });

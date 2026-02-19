@@ -4,7 +4,7 @@
  * Provides permission-checked access to ScanResult records.
  */
 
-import { PermissionError, type ScanCategory, type ScanSignal } from "@nodebase/types";
+import { PermissionError, type ScanCategory, type ScanSignal } from "@elevay/types";
 import { prisma } from "../client";
 import {
   BaseResource,

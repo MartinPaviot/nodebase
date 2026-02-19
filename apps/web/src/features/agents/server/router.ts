@@ -146,6 +146,7 @@ const updateAgentSchema = z.object({
   avatar: z.string().url().nullish(),
   credentialId: z.string().nullish(),
   safeMode: z.boolean().optional(),
+  autonomyTier: z.enum(["auto", "review", "readonly"]).optional(),
   isEnabled: z.boolean().optional(),
 });
 
@@ -193,6 +194,7 @@ export const agentsRouter = createTRPCRouter({
           ...(data.avatar !== undefined && { avatar: data.avatar }),
           ...(data.credentialId !== undefined && { credentialId: data.credentialId }),
           ...(data.safeMode !== undefined && { safeMode: data.safeMode }),
+          ...(data.autonomyTier !== undefined && { autonomyTier: data.autonomyTier }),
           ...(data.isEnabled !== undefined && { isEnabled: data.isEnabled }),
         },
       });
@@ -2376,6 +2378,49 @@ export const agentsRouter = createTRPCRouter({
       };
     }),
 
+  updateApprovalArgs: protectedProcedure
+    .input(
+      z.object({
+        activityId: z.string(),
+        updatedArgs: z.record(z.unknown()),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const activity = await prisma.conversationActivity.findUnique({
+        where: { id: input.activityId },
+        include: { conversation: { include: { agent: true } } },
+      });
+
+      if (!activity) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Activity not found" });
+      }
+
+      if (activity.conversation.agent.userId !== ctx.auth.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not your agent" });
+      }
+
+      if (activity.confirmedAt || activity.rejectedAt) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Activity already resolved" });
+      }
+
+      const currentDetails = (activity.details as Record<string, unknown>) || {};
+      const updatedDetails = {
+        ...currentDetails,
+        actionArgs: input.updatedArgs as Record<string, string | number | boolean | null>,
+        editedByUser: true,
+        editedAt: new Date().toISOString(),
+      };
+
+      await prisma.conversationActivity.update({
+        where: { id: input.activityId },
+        data: {
+          details: updatedDetails as unknown as import("@prisma/client/runtime/library").InputJsonValue,
+        },
+      });
+
+      return { success: true };
+    }),
+
   // ==================
   // PHASE 5: ANALYTICS & INSIGHTS (LangChain-inspired)
   // ==================
@@ -2597,8 +2642,8 @@ export const agentsRouter = createTRPCRouter({
         },
       });
 
-      // Use SelfModifier from @nodebase/core
-      const { SelfModifier } = await import("@nodebase/core");
+      // Use SelfModifier from @elevay/core
+      const { SelfModifier } = await import("@elevay/core");
       const modifier = new SelfModifier();
       return await modifier.proposeModifications({
         agentId: input.agentId,
@@ -2633,8 +2678,8 @@ export const agentsRouter = createTRPCRouter({
         throw new Error("Unauthorized");
       }
 
-      // Use SelfModifier from @nodebase/core
-      const { SelfModifier } = await import("@nodebase/core");
+      // Use SelfModifier from @elevay/core
+      const { SelfModifier } = await import("@elevay/core");
       const modifier = new SelfModifier();
       await modifier.applyModification(input.proposalId, input.approved);
     }),

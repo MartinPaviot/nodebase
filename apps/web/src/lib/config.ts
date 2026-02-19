@@ -264,8 +264,8 @@ export function isTest(): boolean {
  */
 export function getModelForTier(tier: "fast" | "smart" | "deep"): string {
   const models = {
-    fast: "claude-3-haiku-20240307",
-    smart: "claude-3-5-sonnet-20241022",
+    fast: "claude-haiku-4-5-20251001",
+    smart: "claude-sonnet-4-5-20250929",
     deep: "claude-opus-4-5-20251101",
   };
   return models[tier];
@@ -286,9 +286,23 @@ export function calculateCost(
     deep: { input: 15.0, output: 75.0 },      // Opus
   };
 
-  const prices = pricing[tier];
-  const costIn = (tokensIn / 1_000_000) * prices.input;
-  const costOut = (tokensOut / 1_000_000) * prices.output;
+  const prices = pricing[tier] || pricing.smart;
+  const safeIn = Number(tokensIn) || 0;
+  const safeOut = Number(tokensOut) || 0;
+  const costIn = (safeIn / 1_000_000) * prices.input;
+  const costOut = (safeOut / 1_000_000) * prices.output;
 
   return costIn + costOut;
+}
+
+/**
+ * Get the platform-wide Anthropic API key
+ * Used for all LLM calls (agents use the platform key, not per-user credentials)
+ */
+export function getPlatformApiKey(): string {
+  const key = config.llm.anthropicApiKey;
+  if (!key) {
+    throw new Error("ANTHROPIC_API_KEY environment variable is not configured");
+  }
+  return key;
 }

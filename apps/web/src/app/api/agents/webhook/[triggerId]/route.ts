@@ -1,12 +1,11 @@
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { AgentModel } from "@prisma/client";
-import { AgentTracer } from "@nodebase/core";
-import { calculateCost } from "@/lib/config";
+import { AgentTracer } from "@elevay/core";
+import { calculateCost, getPlatformApiKey } from "@/lib/config";
 
 export const maxDuration = 60;
 
@@ -26,11 +25,7 @@ export async function POST(
     const trigger = await prisma.agentTrigger.findUnique({
       where: { id: triggerId },
       include: {
-        agent: {
-          include: {
-            credential: true,
-          },
-        },
+        agent: true,
       },
     });
 
@@ -61,15 +56,8 @@ export async function POST(
 
     const agent = trigger.agent;
 
-    // Get API key
-    let apiKey: string | undefined;
-    if (agent.credential) {
-      apiKey = decrypt(agent.credential.value);
-    }
-
-    if (!apiKey) {
-      return new Response("No API credential configured", { status: 400 });
-    }
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Create model
     const model = createModel(agent.model, apiKey);

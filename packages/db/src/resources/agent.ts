@@ -4,7 +4,7 @@
  * Provides permission-checked access to Agent records.
  */
 
-import { PermissionError } from "@nodebase/types";
+import { PermissionError } from "@elevay/types";
 import { prisma } from "../client";
 import type { AgentModel } from "@prisma/client";
 import {

@@ -22,7 +22,7 @@ import {
   type EvalRules,
   type EvalResult,
   AgentExecutionError,
-} from "@nodebase/types";
+} from "@elevay/types";
 import { createTracer } from "../observability";
 
 // ============================================
@@ -92,9 +92,9 @@ export class AgentEngine {
     after: [],
     onError: [],
   };
-  private aiClient?: any; // AIClient from @nodebase/ai
-  private composioClient?: any; // ComposioClient from @nodebase/connectors
-  private connectorRegistry?: any; // ConnectorRegistry from @nodebase/connectors
+  private aiClient?: any; // AIClient from @elevay/ai
+  private composioClient?: any; // ComposioClient from @elevay/connectors
+  private connectorRegistry?: any; // ConnectorRegistry from @elevay/connectors
 
   constructor(dependencies?: {
     aiClient?: any;
@@ -385,7 +385,7 @@ export class AgentEngine {
     tokensOut: number;
     cost: number;
   }> {
-    // Use @nodebase/ai to make the actual call
+    // Use @elevay/ai to make the actual call
     // Note: AIClient should be injected via constructor in production
     // For now, we'll use a placeholder structure
 

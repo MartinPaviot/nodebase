@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { NODE_MODELS } from "../lib/models";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,12 +47,7 @@ export interface SearchKnowledgeBaseSettingsData {
   knowledgeBases: KnowledgeBase[];
 }
 
-const MODELS = [
-  { id: "claude-haiku", label: "Claude 4.5 Haiku", provider: "Default" },
-  { id: "claude-sonnet", label: "Claude 4.5 Sonnet", provider: "Default" },
-  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "OpenAI" },
-  { id: "gpt-4o", label: "GPT-4o", provider: "OpenAI" },
-];
+const MODELS = NODE_MODELS;
 
 export function SearchKnowledgeBaseSettings({
   onUpdate,

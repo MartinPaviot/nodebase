@@ -6,9 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getScanEngine } from "@/lib/nodebase";
+import { getScanEngine } from "@/lib/elevay";
 import { z } from "zod";
-import type { ScanCategory } from "@nodebase/types";
+import type { ScanCategory } from "@elevay/types";
 
 // ============================================
 // Request Schema

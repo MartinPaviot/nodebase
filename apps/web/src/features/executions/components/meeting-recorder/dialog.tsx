@@ -119,7 +119,7 @@ export const MeetingRecorderDialog = ({
                                 <FormItem>
                                     <FormLabel>Bot Name</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Nodebase Notetaker" {...field} />
+                                        <Input placeholder="Elevay Notetaker" {...field} />
                                     </FormControl>
                                     <FormDescription>
                                         The name displayed when the bot joins the meeting
@@ -164,7 +164,7 @@ export const MeetingRecorderDialog = ({
                                     <FormLabel>Join Message</FormLabel>
                                     <FormControl>
                                         <Textarea
-                                            placeholder="Nodebase is recording this meeting for notes and follow-up."
+                                            placeholder="Elevay is recording this meeting for notes and follow-up."
                                             className="min-h-[80px]"
                                             {...field}
                                         />

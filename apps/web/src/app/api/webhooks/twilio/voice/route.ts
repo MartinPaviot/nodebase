@@ -5,8 +5,8 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
-import { decrypt } from "@/lib/encryption";
 import { AgentModel } from "@prisma/client";
+import { getPlatformApiKey } from "@/lib/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,22 +27,14 @@ export async function POST(request: NextRequest) {
       agentPhone = await prisma.agentPhoneNumber.findUnique({
         where: { agentId: agentIdParam },
         include: {
-          agent: {
-            include: {
-              credential: true,
-            },
-          },
+          agent: true,
         },
       });
     } else {
       agentPhone = await prisma.agentPhoneNumber.findUnique({
         where: { phoneNumber: to },
         include: {
-          agent: {
-            include: {
-              credential: true,
-            },
-          },
+          agent: true,
         },
       });
     }
@@ -99,17 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Process speech input with AI
-    if (!agent.credential) {
-      const twiml = generateTwiml(
-        "I apologize, but I'm not properly configured to respond right now. Please try again later.",
-        false
-      );
-      return new NextResponse(twiml, {
-        headers: { "Content-Type": "text/xml" },
-      });
-    }
-
-    const apiKey = decrypt(agent.credential.value);
+    const apiKey = getPlatformApiKey();
     const model = createModel(agent.model, apiKey);
 
     // Build system prompt for phone conversations

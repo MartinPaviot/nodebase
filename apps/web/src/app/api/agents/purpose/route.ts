@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
+import { getPlatformApiKey } from "@/lib/config";
+import { prisma } from "@/lib/db";
 
 export const maxDuration = 60;
 
@@ -22,23 +22,11 @@ export async function POST(request: Request) {
       return Response.json({ error: "Description is required" }, { status: 400 });
     }
 
-    // Get API key
-    let apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) {
-      const credential = await prisma.credential.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "ANTHROPIC",
-        },
-      });
-
-      if (credential) {
-        apiKey = decrypt(credential.value);
-      }
-    }
-
-    if (!apiKey) {
+    // Get platform API key
+    let apiKey: string;
+    try {
+      apiKey = getPlatformApiKey();
+    } catch {
       // Return a fallback purpose card without AI
       return Response.json({
         purpose: {

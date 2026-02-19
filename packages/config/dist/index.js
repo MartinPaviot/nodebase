@@ -52,7 +52,7 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 var import_zod = require("zod");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 var envMetadataMap = /* @__PURE__ */ new Map();
 function Env(keyOrOptions) {
   return (target, propertyKey) => {

@@ -1,12 +1,12 @@
 /**
- * @nodebase/config
+ * @elevay/config
  *
  * Configuration management with @Env() decorator pattern and Zod validation.
  * The app refuses to start if required config is missing or invalid.
  */
 
 import { z } from "zod";
-import { ConfigError } from "@nodebase/types";
+import { ConfigError } from "@elevay/types";
 
 // ============================================
 // Types

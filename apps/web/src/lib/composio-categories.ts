@@ -1,7 +1,7 @@
 /**
  * Catégories du modal "Add Action"
  */
-export type ActionCategory = "apps" | "chat" | "ai" | "logic" | "scrapers" | "nodebase";
+export type ActionCategory = "apps" | "chat" | "ai" | "logic" | "scrapers" | "elevay";
 
 /**
  * Map des apps Composio vers les catégories du modal
@@ -55,7 +55,7 @@ export const COMPOSIO_CATEGORY_MAP: Record<string, ActionCategory[]> = {
 
   // AI (custom actions, pas vraiment d'apps Composio pour ça)
   // Logic (idem)
-  // Nodebase (actions custom Nodebase)
+  // Elevay (actions custom Elevay)
 
   // Default fallback
   "default": ["apps"],

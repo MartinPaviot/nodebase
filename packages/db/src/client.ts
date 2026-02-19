@@ -1,8 +1,8 @@
 /**
- * @nodebase/db - Prisma Client
+ * @elevay/db - Prisma Client
  *
  * Singleton Prisma client for database access.
- * Import this from @nodebase/db/client
+ * Import this from @elevay/db/client
  */
 
 import { PrismaClient } from "@prisma/client";

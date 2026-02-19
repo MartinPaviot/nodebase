@@ -16,7 +16,7 @@
 2. Connectez-vous avec GitHub (ou créez un compte)
 3. Cliquez sur **"Create Database"**
 4. Configuration:
-   - **Name**: `nodebase-dev`
+   - **Name**: `elevay-dev`
    - **Type**: **Global Database** (10K commandes/jour gratuit)
    - **Region**: `us-east-1` (proche de votre Neon DB)
    - **Eviction**: No eviction
@@ -27,7 +27,7 @@
 
 Une fois la base créée:
 
-1. Dans le dashboard Upstash, cliquez sur votre database `nodebase-dev`
+1. Dans le dashboard Upstash, cliquez sur votre database `elevay-dev`
 2. Cherchez la section **"REST API"** ou **"Connect"**
 3. Copiez l'URL qui ressemble à:
    ```
@@ -52,7 +52,7 @@ REDIS_URL="rediss://default:VotreMdpIci@xxx.upstash.io:6379"
 Une fois l'URL configurée dans `.env`, testez la connexion:
 
 ```bash
-pnpm --filter @nodebase/queue test:redis
+pnpm --filter @elevay/queue test:redis
 ```
 
 Vous devriez voir:
@@ -71,7 +71,7 @@ Vous devriez voir:
 ✅ PING successful: PONG
 
 ⏳ Testing SET/GET...
-✅ SET/GET successful: Hello from Nodebase!
+✅ SET/GET successful: Hello from Elevay!
 
 ⏳ Getting Redis info...
 ✅ Redis version: 7.2.x
@@ -81,10 +81,10 @@ Vous devriez voir:
 
 ### 5. Utiliser Redis dans votre code
 
-Redis est maintenant disponible via le package `@nodebase/queue`:
+Redis est maintenant disponible via le package `@elevay/queue`:
 
 ```typescript
-import { createQueue } from "@nodebase/queue";
+import { createQueue } from "@elevay/queue";
 
 // Créer une queue
 const emailQueue = createQueue({ name: "emails" });
@@ -96,7 +96,7 @@ await emailQueue.add("send-welcome", {
 });
 ```
 
-## Architecture Redis dans Nodebase
+## Architecture Redis dans Elevay
 
 Redis est utilisé pour:
 
@@ -138,7 +138,7 @@ Assurez-vous d'avoir créé une base **Global** et non **Regional**.
 
 Une fois Redis configuré, vous pouvez:
 
-1. ✅ Lancer l'app avec `turbo dev --filter=@nodebase/web`
+1. ✅ Lancer l'app avec `turbo dev --filter=@elevay/web`
 2. Créer des workers BullMQ pour vos agents
 3. Implémenter le SSE pour le streaming des réponses
 

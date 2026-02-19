@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { AgentModel } from "@prisma/client";
+import { getPlatformApiKey } from "@/lib/config";
 
 export const maxDuration = 60;
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract local part from 'to' address
-    // Handle formats like: "agent-abc123@agents.nodebase.app" or "Name <agent-abc123@agents.nodebase.app>"
+    // Handle formats like: "agent-abc123@agents.elevay.app" or "Name <agent-abc123@agents.elevay.app>"
     const toMatch = emailData.to.match(/<([^@]+)@/) || emailData.to.match(/([^@\s]+)@/);
     if (!toMatch) {
       return NextResponse.json(
@@ -70,9 +70,7 @@ export async function POST(request: NextRequest) {
     const agentEmail = await prisma.agentEmailAddress.findFirst({
       where: { localPart },
       include: {
-        agent: {
-          include: { credential: true },
-        },
+        agent: true,
       },
     });
 
@@ -104,20 +102,8 @@ export async function POST(request: NextRequest) {
 
     // Generate agent response if autoReply is enabled
     if (agentEmail.autoReply) {
-      // Get API key
-      let apiKey: string | undefined;
-      if (agent.credential) {
-        apiKey = decrypt(agent.credential.value);
-      }
-
-      if (!apiKey) {
-        console.error("No API credential configured for agent:", agent.id);
-        return NextResponse.json({
-          success: true,
-          conversationId: conversation.id,
-          warning: "No API credential configured - auto-reply skipped",
-        });
-      }
+      // Get platform API key
+      const apiKey = getPlatformApiKey();
 
       // Create model
       const model = createModel(agent.model, apiKey);

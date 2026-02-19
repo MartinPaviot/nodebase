@@ -47,18 +47,30 @@ export async function getGoogleClient(userId: string, type: GoogleIntegrationTyp
 }
 
 // Gmail functions
-export async function sendEmail(userId: string, to: string, subject: string, body: string) {
+export async function sendEmail(
+  userId: string,
+  to: string,
+  subject: string,
+  body: string,
+  options?: { cc?: string; bcc?: string; fromName?: string },
+) {
   const auth = await getGoogleClient(userId, "GMAIL");
   const gmail = google.gmail({ version: "v1", auth });
 
-  const message = [
+  const headers = [
+    options?.fromName ? `From: ${options.fromName}` : "",
     `To: ${to}`,
+    options?.cc ? `Cc: ${options.cc}` : "",
+    options?.bcc ? `Bcc: ${options.bcc}` : "",
     `Subject: ${subject}`,
+    "Content-Type: text/html; charset=utf-8",
     "",
     body,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  const encodedMessage = Buffer.from(message)
+  const encodedMessage = Buffer.from(headers)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")

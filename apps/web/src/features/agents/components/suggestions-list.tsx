@@ -43,7 +43,7 @@ export function SuggestionsList({
   );
 }
 
-// Quick action buttons variant (like the ones below the input in Lindy)
+// Quick action buttons variant
 interface QuickSuggestion {
   id: string;
   label: string;

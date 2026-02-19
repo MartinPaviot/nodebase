@@ -9,7 +9,7 @@ import {
   type ConnectorCategory,
   type ConnectorConfig,
   ConnectorError,
-} from "@nodebase/types";
+} from "@elevay/types";
 
 // ============================================
 // Types

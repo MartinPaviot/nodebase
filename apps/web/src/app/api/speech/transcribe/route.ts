@@ -1,6 +1,4 @@
 import { auth } from "@/lib/auth";
-import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { headers } from "next/headers";
 import OpenAI from "openai";
 
@@ -28,26 +26,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get OpenAI API key - first try environment variable, then user's credential
-    let apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-      const credential = await prisma.credential.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "OPENAI",
-        },
-      });
-
-      if (credential) {
-        apiKey = decrypt(credential.value);
-      }
-    }
-
+    // Get OpenAI API key from environment
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return new Response(
         JSON.stringify({
-          error: "No OpenAI API key configured. Please add an OpenAI credential or set OPENAI_API_KEY environment variable.",
+          error: "OPENAI_API_KEY environment variable is not configured.",
         }),
         {
           status: 400,
@@ -59,12 +43,14 @@ export async function POST(request: Request) {
     // Initialize OpenAI client
     const openai = new OpenAI({ apiKey });
 
-    // Convert File to a format OpenAI accepts
+    // Optional language parameter — if omitted, Whisper auto-detects
+    const language = formData.get("language") as string | null;
+
     // Whisper supports webm, mp3, mp4, mpeg, mpga, m4a, wav, and webm
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-1",
-      language: "fr", // Default to French based on user's interface, can be made dynamic
+      ...(language ? { language } : {}),
       response_format: "text",
     });
 

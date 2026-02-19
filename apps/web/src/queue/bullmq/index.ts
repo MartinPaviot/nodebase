@@ -1,5 +1,5 @@
 /**
- * @nodebase/queue
+ * @elevay/queue
  *
  * BullMQ-based job queue system.
  * Replaces Inngest for workflow execution.

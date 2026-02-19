@@ -38,7 +38,7 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 var import_sdk = __toESM(require("@anthropic-ai/sdk"));
 var import_zod = require("zod");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 var COST_PER_MILLION_TOKENS = {
   "claude-3-5-haiku-20241022": { input: 1, output: 5 },
   "claude-sonnet-4-20250514": { input: 3, output: 15 },
@@ -247,7 +247,7 @@ Respond ONLY with the JSON object, no additional text.`;
       const validated = schema.parse(parsed);
       return { data: validated, usage };
     } catch (error) {
-      throw new import_types.NodebaseError(
+      throw new import_types.ElevayError(
         `Failed to parse structured output: ${error instanceof Error ? error.message : String(error)}`,
         "STRUCTURED_OUTPUT_ERROR",
         { rawOutput: text }
@@ -327,7 +327,7 @@ function initAI(config) {
 }
 function getAI() {
   if (!_aiClient) {
-    throw new import_types.NodebaseError(
+    throw new import_types.ElevayError(
       "AI client not initialized. Call initAI() first.",
       "AI_NOT_INITIALIZED"
     );

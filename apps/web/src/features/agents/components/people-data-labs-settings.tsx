@@ -162,8 +162,9 @@ const PREVIOUS_STEP_DATA: DataSource[] = [
 ];
 
 const MODELS = [
-  { id: "default", label: "Claude 4.5 Haiku", provider: "Default", isDefault: true },
+  { id: "default", label: "Claude 4.5 Haiku", provider: "Anthropic", isDefault: true },
   { id: "claude-sonnet", label: "Claude 4.5 Sonnet", provider: "Anthropic" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "Google" },
   { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "OpenAI" },
   { id: "gpt-4o", label: "GPT-4o", provider: "OpenAI" },
 ];

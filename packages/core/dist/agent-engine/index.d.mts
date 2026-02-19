@@ -1,4 +1,4 @@
-import { AgentId, UserId, WorkspaceId, RunId, EvalResult, LLMTier, AgentFetchSource, AgentAction, EvalRules } from '@nodebase/types';
+import { AgentId, UserId, WorkspaceId, RunId, EvalResult, LLMTier, AgentFetchSource, AgentAction, EvalRules } from '@elevay/types';
 
 /**
  * Agent Engine

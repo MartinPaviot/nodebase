@@ -32,6 +32,9 @@
 import { evaluateL1, type Assertion, type L1EvalResult } from "./l1-assertions";
 import { evaluateL2, type L2Config, type L2EvalResult } from "./l2-scoring";
 import { evaluateL3, type L3Config, type L3EvalResult } from "./l3-llm-judge";
+import { extractClaims, type Claim, type ClaimExtractionResult } from "./claim-extractor";
+import { verifyClaims, type GroundingSource, type GroundingResult } from "./grounding-verifier";
+import { TEXT_CONTENT_ACTIONS } from "./constants";
 import { config } from "../config";
 
 // ============================================
@@ -53,6 +56,10 @@ export interface EvalConfig {
   l2MinScore?: number;
   l2Weights?: L2Config["weights"];
 
+  // Grounding config
+  enableGrounding?: boolean;
+  sourceContext?: GroundingSource[];
+
   // L3 config
   enableL3?: boolean;
   l3Trigger?: "always" | "on_irreversible_action" | "on_l2_fail";
@@ -71,6 +78,11 @@ export interface EvalResult {
   l2?: L2EvalResult;
   l2Passed: boolean;
   l2Score: number;
+
+  // Grounding results
+  grounding?: GroundingResult;
+  groundingPassed: boolean;
+  groundingScore: number;
 
   // L3 results
   l3?: L3EvalResult;
@@ -102,6 +114,8 @@ export class EvalEngine {
       enableL2 = config.eval.enableL2,
       l2MinScore = config.eval.l2MinScore,
       l2Weights,
+      enableGrounding = false,
+      sourceContext,
       enableL3 = config.eval.enableL3,
       l3Trigger = "on_irreversible_action",
       l3AutoSendThreshold = config.eval.l3AutoSendThreshold,
@@ -112,6 +126,8 @@ export class EvalEngine {
       l1Passed: true,
       l2Passed: true,
       l2Score: 100,
+      groundingPassed: true,
+      groundingScore: 100,
       l3Triggered: false,
       l3Passed: true,
       canAutoSend: false,
@@ -167,6 +183,41 @@ export class EvalEngine {
     }
 
     // ============================================
+    // GROUNDING: Claim Extraction + Source Verification
+    // ============================================
+
+    if (enableGrounding && sourceContext && sourceContext.length > 0 && TEXT_CONTENT_ACTIONS.has(action)) {
+      try {
+        // Step 1: Extract claims from the content
+        const extraction = await extractClaims(text, action);
+
+        if (extraction.claims.length > 0) {
+          // Step 2: Verify claims against source data
+          const groundingResult = await verifyClaims(extraction.claims, sourceContext, action);
+          result.grounding = groundingResult;
+          result.groundingScore = groundingResult.groundingScore;
+          result.groundingPassed = groundingResult.groundingScore >= 70;
+
+          if (!result.groundingPassed) {
+            result.requiresApproval = true;
+            const ungrounded = groundingResult.ungroundedCount;
+            result.suggestions.push(
+              `${ungrounded} fact${ungrounded > 1 ? "s" : ""} could not be verified against sources`
+            );
+          }
+
+          // If any ungrounded claim on an irreversible action → hard flag
+          if (groundingResult.ungroundedCount > 0 && this.isIrreversibleAction(action)) {
+            result.requiresApproval = true;
+          }
+        }
+      } catch (groundingError) {
+        // Grounding failure is non-blocking — log and continue
+        console.warn("Grounding check failed, continuing without:", groundingError);
+      }
+    }
+
+    // ============================================
     // L3: LLM as Judge
     // ============================================
 
@@ -184,7 +235,7 @@ export class EvalEngine {
         {
           action,
           context,
-          tier: "fast", // Use Haiku for cost efficiency
+          tier: this.isIrreversibleAction(action) ? "smart" : "fast",
           autoSendThreshold: l3AutoSendThreshold,
         },
         userId
@@ -266,5 +317,5 @@ export const evaluateContent = EvalEngine.evaluate;
 export const quickEval = EvalEngine.quickEval;
 
 // Re-export individual evaluators
-export { evaluateL1, evaluateL2, evaluateL3 };
-export type { Assertion, L1EvalResult, L2EvalResult, L3EvalResult };
+export { evaluateL1, evaluateL2, evaluateL3, extractClaims, verifyClaims };
+export type { Assertion, L1EvalResult, L2EvalResult, L3EvalResult, Claim, GroundingSource, GroundingResult };

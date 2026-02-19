@@ -1,13 +1,13 @@
 /**
  * Test Redis connection
  *
- * Run with: pnpm --filter @nodebase/queue test:redis
+ * Run with: pnpm --filter @elevay/queue test:redis
  */
 
 import { config } from "dotenv";
 import { resolve } from "path";
 import { Redis } from "ioredis";
-import { getRedisConfig } from "@nodebase/config";
+import { getRedisConfig } from "@elevay/config";
 
 // Load .env from root directory
 config({ path: resolve(process.cwd(), "../../.env") });
@@ -41,8 +41,8 @@ async function testRedisConnection() {
 
     // Test SET/GET
     console.log("⏳ Testing SET/GET...");
-    await redis.set("test:nodebase", "Hello from Nodebase!", "EX", 60);
-    const value = await redis.get("test:nodebase");
+    await redis.set("test:elevay", "Hello from Elevay!", "EX", 60);
+    const value = await redis.get("test:elevay");
     console.log(`✅ SET/GET successful: ${value}\n`);
 
     // Test INFO
@@ -52,7 +52,7 @@ async function testRedisConnection() {
     console.log(`✅ Redis version: ${version}\n`);
 
     // Cleanup
-    await redis.del("test:nodebase");
+    await redis.del("test:elevay");
     await redis.quit();
 
     console.log("🎉 All Redis tests passed!\n");

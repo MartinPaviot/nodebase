@@ -1,625 +1,294 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  CheckCircle,
-  XCircle,
-  Edit,
-  Clock,
-  Bot,
-  Mail,
-  MessageSquare,
-  FileText,
-  Calendar,
-  Hash,
-  Search,
-  AlertTriangle,
-  TrendingUp,
-  ShieldCheck,
-  Lightbulb,
-} from "lucide-react";
 import { useTRPC } from "@/trpc/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActivityType } from "@prisma/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { CircleNotch, FunnelSimple } from "@phosphor-icons/react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ApprovalCard } from "./approval-card";
 
-// ============================================
-// Types
-// ============================================
-
-type ApprovalItem = {
-  id: string;
-  conversationId: string;
-  type: ActivityType;
-  title: string;
-  details: Record<string, unknown> | null;
-  requiresConfirmation: boolean;
-  confirmedAt: string | Date | null;
-  rejectedAt: string | Date | null;
-  createdAt: string | Date;
-  conversation: {
-    agent: {
-      id: string;
-      name: string;
-      avatar: string | null;
-    };
-  };
-};
-
-// ============================================
-// Helpers
-// ============================================
-
-const ACTION_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  EMAIL_SENT: { label: "Email", icon: Mail, color: "text-blue-500" },
-  SLACK_MESSAGE_SENT: { label: "Slack Message", icon: MessageSquare, color: "text-purple-500" },
-  CALENDAR_EVENT_CREATED: { label: "Calendar Event", icon: Calendar, color: "text-green-500" },
-  TOOL_CALLED: { label: "Tool Call", icon: Hash, color: "text-orange-500" },
-  CONFIRMATION_REQUESTED: { label: "Action", icon: FileText, color: "text-gray-500" },
-};
-
-function getTimeAgo(dateInput: string | Date): string {
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 1000 / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function getActionConfig(type: ActivityType) {
-  return ACTION_TYPE_CONFIG[type] || ACTION_TYPE_CONFIG.CONFIRMATION_REQUESTED;
-}
-
-// ============================================
-// Components
-// ============================================
-
-function ApprovalCardSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          </div>
-          <Skeleton className="h-6 w-20" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Skeleton className="h-24 w-full" />
-        <div className="flex gap-2">
-          <Skeleton className="h-9 flex-1" />
-          <Skeleton className="h-9 w-20" />
-          <Skeleton className="h-9 w-20" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ApprovalCard({
-  item,
-  onApprove,
-  onReject,
-  onEdit,
-  isApproving,
-  isRejecting,
-  showActions = true,
-}: {
-  item: ApprovalItem;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  onEdit: (item: ApprovalItem) => void;
-  isApproving?: boolean;
-  isRejecting?: boolean;
-  showActions?: boolean;
-}) {
-  const config = getActionConfig(item.type);
-  const ActionIcon = config.icon;
-  const details = item.details as (Record<string, unknown> & {
-    evalResult?: {
-      l1Passed?: boolean;
-      l2Score?: number;
-      l2Passed?: boolean;
-      l3Triggered?: boolean;
-      l3Passed?: boolean;
-      suggestions?: string[];
-      blockReason?: string;
-    };
-  }) | null;
-
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-base">{item.conversation.agent.name}</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <Clock className="h-3 w-3" />
-                {getTimeAgo(item.createdAt)}
-              </CardDescription>
-            </div>
-          </div>
-          <Badge variant="outline" className="flex items-center gap-1">
-            <ActionIcon className={`h-3 w-3 ${config.color}`} />
-            {config.label}
-          </Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Title */}
-        <div className="font-medium">{item.title}</div>
-
-        {/* Eval Results - Phase 2.3 */}
-        {details?.evalResult && (
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 space-y-3 border border-blue-200/50 dark:border-blue-800/50">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck className="h-4 w-4 text-blue-600" />
-              Quality Evaluation
-            </div>
-
-            {/* L2 Score Gauge */}
-            {typeof details.evalResult.l2Score === "number" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Quality Score</span>
-                  <span className="font-semibold">
-                    {details.evalResult.l2Score}/100
-                  </span>
-                </div>
-                <Progress
-                  value={details.evalResult.l2Score}
-                  className="h-2"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {details.evalResult.l2Score >= 85
-                    ? "Excellent quality"
-                    : details.evalResult.l2Score >= 60
-                    ? "Good quality, review recommended"
-                    : "Needs improvement"}
-                </p>
-              </div>
-            )}
-
-            {/* L3 Reason */}
-            {details.evalResult.l3Triggered && details.evalResult.blockReason && (
-              <div className="flex items-start gap-2 text-sm bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
-                <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium text-yellow-900 dark:text-yellow-100">
-                    Advanced Check Triggered
-                  </div>
-                  <div className="text-yellow-700 dark:text-yellow-300 mt-1">
-                    {details.evalResult.blockReason}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Suggestions */}
-            {Array.isArray(details.evalResult.suggestions) &&
-              details.evalResult.suggestions.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-purple-700 dark:text-purple-300">
-                    <Lightbulb className="h-4 w-4" />
-                    Suggestions
-                  </div>
-                  <ul className="space-y-1 text-sm text-muted-foreground pl-6">
-                    {details.evalResult.suggestions.map((suggestion: string, idx: number) => (
-                      <li key={idx} className="list-disc">
-                        {suggestion}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-            {/* Validation Status */}
-            <div className="flex items-center gap-3 text-xs pt-2 border-t border-blue-200/50 dark:border-blue-800/50">
-              {details.evalResult.l1Passed !== false && (
-                <div className="flex items-center gap-1 text-green-600">
-                  <CheckCircle className="h-3 w-3" />
-                  <span>Basic checks passed</span>
-                </div>
-              )}
-              {details.evalResult.l1Passed === false && (
-                <div className="flex items-center gap-1 text-red-600">
-                  <XCircle className="h-3 w-3" />
-                  <span>Basic checks failed</span>
-                </div>
-              )}
-              {details.evalResult.l3Triggered && (
-                <div className="flex items-center gap-1 text-yellow-600">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>Advanced check performed</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Details */}
-        {details && (
-          <div className="bg-muted/50 rounded-lg p-4">
-            <pre className="whitespace-pre-wrap text-sm font-mono">
-              {JSON.stringify(details, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {/* Status for history items */}
-        {item.confirmedAt && (
-          <div className="flex items-center gap-2 text-sm text-green-600">
-            <CheckCircle className="h-4 w-4" />
-            Approved {getTimeAgo(item.confirmedAt)}
-          </div>
-        )}
-        {item.rejectedAt && (
-          <div className="flex items-center gap-2 text-sm text-red-600">
-            <XCircle className="h-4 w-4" />
-            Rejected {getTimeAgo(item.rejectedAt)}
-          </div>
-        )}
-
-        {/* Actions */}
-        {showActions && !item.confirmedAt && !item.rejectedAt && (
-          <div className="flex items-center gap-2 pt-2">
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1"
-              onClick={() => onApprove(item.id)}
-              disabled={isApproving || isRejecting}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {isApproving ? "Approving..." : "Approve & Send"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEdit(item)}
-              disabled={isApproving || isRejecting}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onReject(item.id)}
-              disabled={isApproving || isRejecting}
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              {isRejecting ? "Rejecting..." : "Reject"}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function EditDialog({
-  item,
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  item: ApprovalItem | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (id: string) => void;
-}) {
-  const [editedContent, setEditedContent] = useState("");
-
-  if (!item) return null;
-
-  const details = item.details as Record<string, unknown> | null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle>Edit & Approve</DialogTitle>
-          <DialogDescription>
-            Review the action details before approving.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="font-medium">{item.title}</div>
-
-          <Textarea
-            value={editedContent || JSON.stringify(details, null, 2)}
-            onChange={(e) => setEditedContent(e.target.value)}
-            className="min-h-[300px] font-mono text-sm"
-            placeholder="Action details..."
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => onSave(item.id)}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Approve & Send
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================
-// Main Component
-// ============================================
+type Tab = "pending" | "history";
 
 export function ApprovalQueue() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [editingItem, setEditingItem] = useState<ApprovalItem | null>(null);
-  const [activeTab, setActiveTab] = useState<"pending" | "approved" | "rejected">("pending");
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [processingAction, setProcessingAction] = useState<"approve" | "reject" | null>(null);
+  const [tab, setTab] = useState<Tab>("pending");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [actionFilter, setActionFilter] = useState<string>("all");
 
-  // Queries
-  const pendingQuery = useQuery(
-    trpc.agents.getPendingApprovals.queryOptions({})
+  // Fetch pending approvals
+  const pending = useQuery(
+    trpc.agents.getPendingApprovals.queryOptions({ page: 1, pageSize: 50 }),
   );
 
-  const historyQuery = useQuery(
+  // Fetch approval history
+  const history = useQuery(
     trpc.agents.getApprovalHistory.queryOptions({
-      status: activeTab === "approved" ? "approved" : activeTab === "rejected" ? "rejected" : "all",
-    })
+      page: 1,
+      pageSize: 50,
+      status: "all",
+    }),
   );
 
-  // Mutations (using fetch to call the confirm API)
-  const handleApprove = async (activityId: string) => {
-    setProcessingId(activityId);
-    setProcessingAction("approve");
-    try {
-      const response = await fetch("/api/agents/confirm", {
+  // Approve mutation
+  const approveMutation = useMutation({
+    mutationFn: async (activityId: string) => {
+      const res = await fetch("/api/agents/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityId, confirmed: true }),
       });
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: trpc.agents.getPendingApprovals.queryKey({}) });
-        queryClient.invalidateQueries({ queryKey: trpc.agents.getApprovalHistory.queryKey({}) });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to approve");
       }
-    } finally {
-      setProcessingId(null);
-      setProcessingAction(null);
-    }
-  };
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Action approved and executed");
+      queryClient.invalidateQueries({
+        queryKey: trpc.agents.getPendingApprovals.queryKey(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.agents.getApprovalHistory.queryKey(),
+      });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
 
-  const handleReject = async (activityId: string) => {
-    setProcessingId(activityId);
-    setProcessingAction("reject");
-    try {
-      const response = await fetch("/api/agents/confirm", {
+  // Reject mutation
+  const rejectMutation = useMutation({
+    mutationFn: async (activityId: string) => {
+      const res = await fetch("/api/agents/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityId, confirmed: false }),
       });
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: trpc.agents.getPendingApprovals.queryKey({}) });
-        queryClient.invalidateQueries({ queryKey: trpc.agents.getApprovalHistory.queryKey({}) });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to reject");
       }
-    } finally {
-      setProcessingId(null);
-      setProcessingAction(null);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Action rejected");
+      queryClient.invalidateQueries({
+        queryKey: trpc.agents.getPendingApprovals.queryKey(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.agents.getApprovalHistory.queryKey(),
+      });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // Edit & Approve mutation
+  const updateArgsMutation = useMutation(
+    trpc.agents.updateApprovalArgs.mutationOptions({
+      onSuccess: () => {
+        // Args updated, now approve
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    }),
+  );
+
+  const handleApprove = (activityId: string) => {
+    approveMutation.mutate(activityId);
+  };
+
+  const handleReject = (activityId: string) => {
+    rejectMutation.mutate(activityId);
+  };
+
+  const handleEditApprove = async (
+    activityId: string,
+    updatedArgs: Record<string, unknown>,
+  ) => {
+    try {
+      await updateArgsMutation.mutateAsync({ activityId, updatedArgs });
+      approveMutation.mutate(activityId);
+    } catch {
+      // Error handled by mutation onError
     }
   };
 
-  const handleEdit = (item: ApprovalItem) => {
-    setEditingItem(item);
-  };
+  const currentData = tab === "pending" ? pending : history;
+  const items = currentData.data?.items || [];
 
-  const handleSaveEdit = (id: string) => {
-    handleApprove(id);
-    setEditingItem(null);
-  };
+  // Extract unique agents and action types for filters
+  const agents = Array.from(
+    new Map(
+      items.map((item) => [
+        item.conversation.agent.id,
+        item.conversation.agent,
+      ]),
+    ).values(),
+  );
 
-  const pendingItems = pendingQuery.data?.items ?? [];
-  const historyItems = historyQuery.data?.items ?? [];
-  const approvedItems = historyItems.filter(i => i.confirmedAt);
-  const rejectedItems = historyItems.filter(i => i.rejectedAt);
+  const actionTypes = Array.from(
+    new Set(
+      items
+        .map((item) => {
+          const details = item.details as Record<string, unknown> | null;
+          return (details?.actionType as string) || null;
+        })
+        .filter(Boolean),
+    ),
+  );
+
+  // Apply filters
+  const filteredItems = items.filter((item) => {
+    if (agentFilter !== "all" && item.conversation.agent.id !== agentFilter)
+      return false;
+    const details = item.details as Record<string, unknown> | null;
+    const actionType = (details?.actionType as string) || "";
+    if (actionFilter !== "all" && actionType !== actionFilter) return false;
+    return true;
+  });
+
+  const isMutating =
+    approveMutation.isPending ||
+    rejectMutation.isPending ||
+    updateArgsMutation.isPending;
 
   return (
-    <div className="h-full">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
-        <h1 className="text-lg font-semibold">Approvals</h1>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search" className="pl-9 h-9 w-48" />
+    <div className="px-6 py-8 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Approval Queue</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Review and approve agent actions before they execute
+          </p>
+        </div>
+        {pending.data && pending.data.total > 0 && (
+          <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-full text-sm font-medium">
+            <span className="size-2 bg-amber-500 rounded-full animate-pulse" />
+            {pending.data.total} pending
+          </div>
+        )}
+      </div>
+
+      {/* Tabs + Filters */}
+      <div className="flex items-center justify-between mb-4 gap-4">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as Tab)}
+          className="w-auto"
+        >
+          <TabsList>
+            <TabsTrigger value="pending" className="gap-1.5">
+              Pending
+              {pending.data && pending.data.total > 0 && (
+                <span className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
+                  {pending.data.total}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="flex items-center gap-2">
+          <FunnelSimple className="size-4 text-muted-foreground" />
+          <Select value={agentFilter} onValueChange={setAgentFilter}>
+            <SelectTrigger className="w-[140px] h-8 text-xs">
+              <SelectValue placeholder="All agents" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All agents</SelectItem>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger className="w-[140px] h-8 text-xs">
+              <SelectValue placeholder="All actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All actions</SelectItem>
+              {actionTypes.map((type) => (
+                <SelectItem key={type} value={type!}>
+                  {type!.replace(/_/g, " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-6 space-y-6">
-        {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold">
-                  {pendingQuery.isLoading ? "-" : pendingQuery.data?.total ?? 0}
-                </p>
-              </div>
-              <Clock className="h-8 w-8 text-yellow-500" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Approved</p>
-                <p className="text-2xl font-bold">
-                  {historyQuery.isLoading ? "-" : approvedItems.length}
-                </p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Rejected</p>
-                <p className="text-2xl font-bold">
-                  {historyQuery.isLoading ? "-" : rejectedItems.length}
-                </p>
-              </div>
-              <XCircle className="h-8 w-8 text-red-500" />
-            </CardContent>
-          </Card>
+      {currentData.isLoading ? (
+        <div className="flex items-center justify-center h-48">
+          <CircleNotch className="size-8 animate-spin text-muted-foreground" />
         </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList>
-            <TabsTrigger value="pending">
-              Pending ({pendingQuery.data?.total ?? 0})
-            </TabsTrigger>
-            <TabsTrigger value="approved">
-              Approved ({approvedItems.length})
-            </TabsTrigger>
-            <TabsTrigger value="rejected">
-              Rejected ({rejectedItems.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="pending" className="mt-4">
-            {pendingQuery.isLoading ? (
-              <div className="space-y-4">
-                <ApprovalCardSkeleton />
-                <ApprovalCardSkeleton />
-              </div>
-            ) : pendingItems.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="p-12 text-center">
-                  <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                  <h3 className="font-semibold mb-2">All caught up!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    No pending approvals at the moment
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <ScrollArea className="h-[calc(100vh-380px)]">
-                <div className="space-y-4">
-                  {pendingItems.map((item) => (
-                    <ApprovalCard
-                      key={item.id}
-                      item={item as ApprovalItem}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onEdit={handleEdit}
-                      isApproving={processingId === item.id && processingAction === "approve"}
-                      isRejecting={processingId === item.id && processingAction === "reject"}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
-
-          <TabsContent value="approved" className="mt-4">
-            {historyQuery.isLoading ? (
-              <div className="space-y-4">
-                <ApprovalCardSkeleton />
-              </div>
-            ) : approvedItems.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="p-12 text-center text-muted-foreground">
-                  No approved items yet
-                </CardContent>
-              </Card>
-            ) : (
-              <ScrollArea className="h-[calc(100vh-380px)]">
-                <div className="space-y-4">
-                  {approvedItems.map((item) => (
-                    <ApprovalCard
-                      key={item.id}
-                      item={item as ApprovalItem}
-                      onApprove={() => {}}
-                      onReject={() => {}}
-                      onEdit={() => {}}
-                      showActions={false}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
-
-          <TabsContent value="rejected" className="mt-4">
-            {historyQuery.isLoading ? (
-              <div className="space-y-4">
-                <ApprovalCardSkeleton />
-              </div>
-            ) : rejectedItems.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="p-12 text-center text-muted-foreground">
-                  No rejected items yet
-                </CardContent>
-              </Card>
-            ) : (
-              <ScrollArea className="h-[calc(100vh-380px)]">
-                <div className="space-y-4">
-                  {rejectedItems.map((item) => (
-                    <ApprovalCard
-                      key={item.id}
-                      item={item as ApprovalItem}
-                      onApprove={() => {}}
-                      onReject={() => {}}
-                      onEdit={() => {}}
-                      showActions={false}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* Edit Dialog */}
-      <EditDialog
-        item={editingItem}
-        open={!!editingItem}
-        onOpenChange={(open) => !open && setEditingItem(null)}
-        onSave={handleSaveEdit}
-      />
+      ) : filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-48 text-center">
+          <p className="text-sm text-muted-foreground">
+            {tab === "pending"
+              ? "No pending approvals. Your agents are all caught up!"
+              : "No approval history yet."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredItems.map((item) => (
+            <ApprovalCard
+              key={item.id}
+              activity={{
+                id: item.id,
+                title: item.title,
+                createdAt: item.createdAt,
+                details: item.details as {
+                  actionType: string;
+                  actionArgs: Record<string, unknown>;
+                  evalResult?: {
+                    l1Passed?: boolean;
+                    l2Score?: number;
+                    l2Passed?: boolean;
+                    groundingScore?: number;
+                    groundingPassed?: boolean;
+                    claims?: Array<{
+                      text: string;
+                      type: "factual" | "temporal" | "quantitative" | "relational";
+                      grounded: boolean;
+                      evidence?: string;
+                    }>;
+                    l3Triggered?: boolean;
+                    l3Passed?: boolean;
+                    suggestions?: string[];
+                    blockReason?: string;
+                  };
+                } | null,
+                conversation: {
+                  agent: item.conversation.agent,
+                },
+              }}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onEditApprove={handleEditApprove}
+              isLoading={isMutating}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

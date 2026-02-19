@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ConnectorCategory, ConnectorConfig } from '@nodebase/types';
+import { ConnectorCategory, ConnectorConfig } from '@elevay/types';
 import { Composio } from 'composio-core';
 
 /**
@@ -120,6 +120,7 @@ declare abstract class BaseConnector {
 interface ComposioConfig {
     apiKey: string;
     baseUrl?: string;
+    entityId?: string;
 }
 interface ComposioApp {
     key: string;
@@ -151,6 +152,8 @@ interface ComposioToolDefinition {
 }
 declare class ComposioClient {
     private client;
+    private toolSet;
+    private entityId;
     private config;
     constructor(config: ComposioConfig);
     /**
@@ -205,9 +208,10 @@ declare class ComposioClient {
     }): Promise<ComposioToolDefinition[]>;
     /**
      * Execute a tool (action) on behalf of a user.
-     * Composio handles the OAuth token, API call, rate limiting, retries, etc.
+     * Uses the high-level ComposioToolSet.executeAction() which handles
+     * entity → connected account resolution automatically.
      *
-     * @param userId - The user entity ID
+     * @param userId - The user entity ID (maps to Composio entityId)
      * @param toolCall - The tool call from the LLM (name + input)
      * @returns The result of the action
      */

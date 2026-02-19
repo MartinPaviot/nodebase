@@ -1,5 +1,5 @@
 {
-  "name": "@nodebase/config",
+  "name": "@elevay/config",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "@nodebase/types": "workspace:*",
+    "@elevay/types": "workspace:*",
     "zod": "^3.24.0"
   }
 }

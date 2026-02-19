@@ -7,7 +7,7 @@
  * 3. Handle soft deletes and workspace scoping
  */
 
-import { PermissionError, type WorkspaceId, type UserId } from "@nodebase/types";
+import { PermissionError, type WorkspaceId, type UserId } from "@elevay/types";
 import { prisma } from "../client";
 
 // ============================================

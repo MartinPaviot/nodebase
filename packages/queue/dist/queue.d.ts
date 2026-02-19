@@ -4,8 +4,8 @@
  * BullMQ Queue wrapper with type-safety and configuration.
  */
 import { Queue as BullQueue, QueueOptions } from "bullmq";
-import type { JobData, JobOptions } from "@nodebase/types";
-export interface NodebaseQueueOptions extends Partial<QueueOptions> {
+import type { JobData, JobOptions } from "@elevay/types";
+export interface ElevayQueueOptions extends Partial<QueueOptions> {
     name: string;
     redisUrl?: string;
 }
@@ -22,7 +22,7 @@ export interface NodebaseQueueOptions extends Partial<QueueOptions> {
  * });
  * ```
  */
-export declare function createQueue<T extends JobData = JobData>(options: NodebaseQueueOptions): BullQueue<T>;
+export declare function createQueue<T extends JobData = JobData>(options: ElevayQueueOptions): BullQueue<T>;
 /**
  * Add a job to the queue with retry logic.
  *

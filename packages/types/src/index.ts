@@ -1,7 +1,7 @@
 /**
- * @nodebase/types
+ * @elevay/types
  *
- * Shared TypeScript interfaces and types for the Nodebase monorepo.
+ * Shared TypeScript interfaces and types for the Elevay monorepo.
  * All packages import types from here to ensure consistency.
  */
 
@@ -352,18 +352,18 @@ export interface ConnectorTrigger {
 // Error Types
 // ============================================
 
-export class NodebaseError extends Error {
+export class ElevayError extends Error {
   constructor(
     message: string,
     public code: string,
     public context?: Record<string, unknown>
   ) {
     super(message);
-    this.name = "NodebaseError";
+    this.name = "ElevayError";
   }
 }
 
-export class ScanError extends NodebaseError {
+export class ScanError extends ElevayError {
   constructor(
     public signalId: string,
     public connectorId: string,
@@ -377,7 +377,7 @@ export class ScanError extends NodebaseError {
   }
 }
 
-export class AgentExecutionError extends NodebaseError {
+export class AgentExecutionError extends ElevayError {
   constructor(
     public agentId: string,
     public runId: string,
@@ -391,7 +391,7 @@ export class AgentExecutionError extends NodebaseError {
   }
 }
 
-export class ConnectorError extends NodebaseError {
+export class ConnectorError extends ElevayError {
   constructor(
     public connectorId: string,
     public action: string,
@@ -405,7 +405,7 @@ export class ConnectorError extends NodebaseError {
   }
 }
 
-export class CredentialError extends NodebaseError {
+export class CredentialError extends ElevayError {
   constructor(
     public credentialId: string,
     message: string
@@ -417,7 +417,7 @@ export class CredentialError extends NodebaseError {
   }
 }
 
-export class PermissionError extends NodebaseError {
+export class PermissionError extends ElevayError {
   constructor(
     public userId: string,
     public resource: string,
@@ -432,7 +432,7 @@ export class PermissionError extends NodebaseError {
   }
 }
 
-export class ConfigError extends NodebaseError {
+export class ConfigError extends ElevayError {
   constructor(
     public envVar: string,
     message: string
@@ -533,7 +533,7 @@ export const AgentTriggerSchema = z.object({
  * AgentTemplate - Template d'agent pré-configuré (inspiré de Dust AgentConfigurationType)
  *
  * Contrairement à Dust où l'user crée ses agents from scratch,
- * Nodebase propose des templates pré-configurés prêts à l'emploi pour les PME.
+ * Elevay propose des templates pré-configurés prêts à l'emploi pour les PME.
  */
 export interface AgentTemplate {
   id: string;                      // nanoid, ex: "tmpl_kx7Gh2p"

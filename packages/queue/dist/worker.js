@@ -4,7 +4,7 @@
  * BullMQ Worker wrapper with graceful shutdown and error handling.
  */
 import { Worker as BullWorker } from "bullmq";
-import { getRedisConfig } from "@nodebase/config";
+import { getRedisConfig } from "@elevay/config";
 /**
  * Create a BullMQ worker with graceful shutdown.
  *

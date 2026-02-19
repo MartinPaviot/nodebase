@@ -298,7 +298,7 @@ export function FlowNodePanel({
           </div>
 
           {/* Description */}
-          <p className="text-[11px] text-[#9CA3AF] mb-5">
+          <p className="text-[11px] text-[#9CA3AF] mb-5 text-justify">
             Let AI decide what to do, until an exit condition is met.
           </p>
 
@@ -333,8 +333,8 @@ export function FlowNodePanel({
               <SelectContent>
                 <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                 <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                <SelectItem value="claude-3-5-haiku">Claude 3.5 Haiku</SelectItem>
+                <SelectItem value="claude-4-5-sonnet">Claude 4.5 Sonnet</SelectItem>
+                <SelectItem value="claude-4-5-haiku">Claude 4.5 Haiku</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -348,7 +348,7 @@ export function FlowNodePanel({
               <Info className="size-3.5 text-[#9CA3AF]" />
               <span className="text-[#9CA3AF] text-[13px] font-normal">(required)</span>
             </div>
-            <p className="text-[12px] text-[#9CA3AF] mb-2">
+            <p className="text-[12px] text-[#9CA3AF] mb-2 text-justify">
               Require this agent step to ask for confirmation before using any skills with side effects
             </p>
             <Select value={localConfirmation} onValueChange={(v) => {
@@ -374,7 +374,7 @@ export function FlowNodePanel({
                 <Plus className="size-3.5 text-white" weight="bold" />
               </button>
             </div>
-            <p className="text-[12px] text-[#9CA3AF] mb-3">
+            <p className="text-[12px] text-[#9CA3AF] mb-3 text-justify">
               Add actions for this agent to access when needed.
             </p>
 
@@ -608,7 +608,7 @@ export function FlowNodePanel({
 
             <div className="p-5">
               {/* Description */}
-              <p className="text-[12px] text-[#9CA3AF] mb-5">{description}</p>
+              <p className="text-[12px] text-[#9CA3AF] mb-5 text-justify">{description}</p>
 
               {/* Model Selection */}
               <div className="mb-5">
@@ -627,8 +627,8 @@ export function FlowNodePanel({
                   <SelectContent>
                     <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                     <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                    <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                    <SelectItem value="claude-3-5-haiku">Claude 3.5 Haiku</SelectItem>
+                    <SelectItem value="claude-4-5-sonnet">Claude 4.5 Sonnet</SelectItem>
+                    <SelectItem value="claude-4-5-haiku">Claude 4.5 Haiku</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -812,7 +812,7 @@ export function FlowNodePanel({
 
         <div className="p-5">
           {/* Description */}
-          <p className="text-[12px] text-[#9CA3AF] mb-5">{description}</p>
+          <p className="text-[12px] text-[#9CA3AF] mb-5 text-justify">{description}</p>
 
           {/* Model Selection */}
           <div className="mb-5">
@@ -830,8 +830,8 @@ export function FlowNodePanel({
               <SelectContent>
                 <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                 <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                <SelectItem value="claude-3-5-haiku">Claude 3.5 Haiku</SelectItem>
+                <SelectItem value="claude-4-5-sonnet">Claude 4.5 Sonnet</SelectItem>
+                <SelectItem value="claude-4-5-haiku">Claude 4.5 Haiku</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -936,7 +936,7 @@ export function FlowNodePanel({
           {/* Greeting Message */}
           <div className="mb-6">
             <h3 className="font-medium text-[14px] text-[#374151] mb-2">Greeting message</h3>
-            <p className="text-[13px] text-[#9CA3AF] mb-3">
+            <p className="text-[13px] text-[#9CA3AF] mb-3 text-justify">
               This is the introductory message users see when they create a new task.
             </p>
             <Textarea
@@ -946,14 +946,14 @@ export function FlowNodePanel({
                 onUpdate?.({ greetingMessage: e.target.value });
               }}
               placeholder="Hello! How can I help you today?"
-              className="min-h-[100px] bg-[#FAFAFA] border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#22D3EE]"
+              className="min-h-[100px] max-h-40 overflow-y-auto bg-[#FAFAFA] border-[#E5E7EB] rounded-xl text-[14px] text-[#374151] placeholder:text-[#9CA3AF] resize-none focus-visible:ring-1 focus-visible:ring-[#22D3EE]"
             />
           </div>
 
           {/* Conversation Starters */}
           <div>
             <h3 className="font-medium text-[14px] text-[#374151] mb-2">Conversation starters</h3>
-            <p className="text-[13px] text-[#9CA3AF] mb-3">
+            <p className="text-[13px] text-[#9CA3AF] mb-3 text-justify">
               These are pre-set prompts that users can click to start a conversation.
             </p>
 

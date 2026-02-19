@@ -1,7 +1,7 @@
 // src/index.ts
 import { randomBytes, createCipheriv, createDecipheriv, scrypt } from "crypto";
 import { promisify } from "util";
-import { CredentialError } from "@nodebase/types";
+import { CredentialError } from "@elevay/types";
 import { createHash } from "crypto";
 var scryptAsync = promisify(scrypt);
 var ALGORITHM = "aes-256-gcm";

@@ -1,31 +1,36 @@
 import {
   GmailConnector
-} from "./chunk-ASEUMWZE.mjs";
+} from "./chunk-Y47G26IU.mjs";
 import {
   HubSpotConnector
-} from "./chunk-N4MRZOY6.mjs";
+} from "./chunk-XHKSXX34.mjs";
 import {
   SlackConnector
-} from "./chunk-DQTKI5XK.mjs";
+} from "./chunk-WZ5AQKJD.mjs";
 import {
   CalendarConnector
-} from "./chunk-N3KW7VBM.mjs";
+} from "./chunk-Q2GTCJNZ.mjs";
 import {
   BaseConnector
-} from "./chunk-WX3K3UJC.mjs";
+} from "./chunk-QE6XZSXR.mjs";
 
 // src/composio.ts
-import { Composio } from "composio-core";
-import { ConnectorError } from "@nodebase/types";
+import { Composio, ComposioToolSet } from "composio-core";
+import { ConnectorError } from "@elevay/types";
 var ComposioClient = class {
   client;
+  toolSet;
+  entityId;
   config;
   constructor(config) {
     this.config = {
       ...config,
-      baseUrl: config.baseUrl ?? "https://backend.composio.dev"
+      baseUrl: config.baseUrl ?? "https://backend.composio.dev",
+      entityId: config.entityId ?? "default"
     };
+    this.entityId = this.config.entityId;
     this.client = new Composio({ apiKey: this.config.apiKey });
+    this.toolSet = new ComposioToolSet({ apiKey: this.config.apiKey });
   }
   /**
    * Get all available apps.
@@ -192,22 +197,19 @@ var ComposioClient = class {
   }
   /**
    * Execute a tool (action) on behalf of a user.
-   * Composio handles the OAuth token, API call, rate limiting, retries, etc.
+   * Uses the high-level ComposioToolSet.executeAction() which handles
+   * entity → connected account resolution automatically.
    *
-   * @param userId - The user entity ID
+   * @param userId - The user entity ID (maps to Composio entityId)
    * @param toolCall - The tool call from the LLM (name + input)
    * @returns The result of the action
    */
   async executeAction(userId, toolCall) {
     try {
-      const actionsApi = this.client.actions || this.client.tools;
-      if (!actionsApi?.execute) {
-        throw new Error("Execute API not available in this version of Composio SDK");
-      }
-      const result = await actionsApi.execute({
-        entityId: userId,
-        actionName: toolCall.name,
-        input: toolCall.input
+      const result = await this.toolSet.executeAction({
+        action: toolCall.name,
+        params: toolCall.input,
+        entityId: this.entityId
       });
       return result;
     } catch (error) {
@@ -264,7 +266,7 @@ function getComposio() {
 }
 
 // src/pipedream.ts
-import { ConnectorError as ConnectorError2 } from "@nodebase/types";
+import { ConnectorError as ConnectorError2 } from "@elevay/types";
 var PipedreamClient = class {
   config;
   constructor(config) {
@@ -473,16 +475,16 @@ function getConnectorRegistry() {
 }
 function initConnectorRegistry() {
   const registry = getConnectorRegistry();
-  import("./gmail-CCWZUI4H.mjs").then(({ GmailConnector: GmailConnector2 }) => {
+  import("./gmail-LG4TUZKC.mjs").then(({ GmailConnector: GmailConnector2 }) => {
     registry.register(new GmailConnector2());
   });
-  import("./hubspot-EGUMKRFW.mjs").then(({ HubSpotConnector: HubSpotConnector2 }) => {
+  import("./hubspot-VQU66VNE.mjs").then(({ HubSpotConnector: HubSpotConnector2 }) => {
     registry.register(new HubSpotConnector2());
   });
-  import("./slack-D6ADI33P.mjs").then(({ SlackConnector: SlackConnector2 }) => {
+  import("./slack-GDFKRC47.mjs").then(({ SlackConnector: SlackConnector2 }) => {
     registry.register(new SlackConnector2());
   });
-  import("./calendar-3DVLLQAA.mjs").then(({ CalendarConnector: CalendarConnector2 }) => {
+  import("./calendar-FGZ6B5JR.mjs").then(({ CalendarConnector: CalendarConnector2 }) => {
     registry.register(new CalendarConnector2());
   });
   return registry;

@@ -1,5 +1,5 @@
 /**
- * @nodebase/connectors
+ * @elevay/connectors
  *
  * BaseConnector interface + Composio wrapper for 800+ APIs (free tier).
  * All integrations go through this layer.

@@ -389,7 +389,7 @@ export function AgentPhone({ agentId }: AgentPhoneProps) {
               {phoneNumber.data.voiceGreeting && (
                 <div className="p-3 rounded-lg border">
                   <p className="text-sm font-medium mb-1">Voice Greeting:</p>
-                  <p className="text-sm text-muted-foreground italic">
+                  <p className="text-sm text-muted-foreground italic max-h-40 overflow-y-auto">
                     "{phoneNumber.data.voiceGreeting}"
                   </p>
                 </div>

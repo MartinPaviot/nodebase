@@ -7,7 +7,7 @@
  * - Rate limiting
  */
 
-import { ConnectorError } from "@nodebase/types";
+import { ConnectorError } from "@elevay/types";
 
 // ============================================
 // Types

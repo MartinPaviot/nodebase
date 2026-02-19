@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { sendSlackMessage, getSlackIntegrationByTeamId } from "@/lib/integrations/slack";
-import { decrypt } from "@/lib/encryption";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { AgentModel } from "@prisma/client";
+import { getPlatformApiKey } from "@/lib/config";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -59,11 +59,7 @@ async function processSlackMention(
         enabled: true,
       },
       include: {
-        agent: {
-          include: {
-            credential: true,
-          },
-        },
+        agent: true,
       },
     });
 
@@ -74,13 +70,8 @@ async function processSlackMention(
 
     const agent = trigger.agent;
 
-    // Get API key
-    if (!agent.credential) {
-      console.error("Agent has no credential configured");
-      return;
-    }
-
-    const apiKey = decrypt(agent.credential.value);
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Create model
     const model = createModel(agent.model, apiKey);

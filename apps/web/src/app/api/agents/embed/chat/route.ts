@@ -1,10 +1,10 @@
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type CoreMessage } from "ai";
 import { AgentModel, MessageRole } from "@prisma/client";
+import { getPlatformApiKey } from "@/lib/config";
 
 export const maxDuration = 60;
 
@@ -24,11 +24,7 @@ export async function POST(request: Request) {
     const embed = await prisma.agentEmbed.findUnique({
       where: { agentId },
       include: {
-        agent: {
-          include: {
-            credential: true,
-          },
-        },
+        agent: true,
       },
     });
 
@@ -61,18 +57,8 @@ export async function POST(request: Request) {
 
     const agent = embed.agent;
 
-    // Get API key
-    let apiKey: string | undefined;
-    if (agent.credential) {
-      apiKey = decrypt(agent.credential.value);
-    }
-
-    if (!apiKey) {
-      return Response.json(
-        { error: "No API credential configured" },
-        { status: 400 }
-      );
-    }
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Get or create conversation
     let conversation;

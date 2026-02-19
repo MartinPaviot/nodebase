@@ -1,5 +1,5 @@
 {
-  "name": "@nodebase/core",
+  "name": "@elevay/core",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -39,12 +39,12 @@
     "vitest": "^2.1.0"
   },
   "dependencies": {
-    "@nodebase/types": "workspace:*",
-    "@nodebase/config": "workspace:*",
-    "@nodebase/db": "workspace:*",
-    "@nodebase/ai": "workspace:*",
-    "@nodebase/connectors": "workspace:*",
-    "@nodebase/queue": "workspace:*",
+    "@elevay/types": "workspace:*",
+    "@elevay/config": "workspace:*",
+    "@elevay/db": "workspace:*",
+    "@elevay/ai": "workspace:*",
+    "@elevay/connectors": "workspace:*",
+    "@elevay/queue": "workspace:*",
     "zod": "^3.24.0",
     "nanoid": "^5.0.9",
     "luxon": "^3.5.0"

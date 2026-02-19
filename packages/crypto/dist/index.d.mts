@@ -1,5 +1,5 @@
 /**
- * @nodebase/crypto
+ * @elevay/crypto
  *
  * AES-256-GCM encryption with key rotation support.
  * All credentials MUST be encrypted before storage.

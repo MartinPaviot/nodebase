@@ -44,7 +44,7 @@ export async function GET(
     }
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://nodebase.app";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://elevay.app";
 
   // Build config with all customization options
   const config = {
@@ -111,7 +111,7 @@ export async function GET(
 
   // Styles
   var styles = \`
-    .nodebase-chat {
+    .elevay-chat {
       position: fixed;
       ${getPositionStyles(embed.position)}
       z-index: 999999;
@@ -377,7 +377,7 @@ export async function GET(
 
   // Create widget
   var widget = document.createElement('div');
-  widget.className = 'nodebase-chat';
+  widget.className = 'elevay-chat';
 
   var starters = Array.isArray(CONFIG.conversationStarters) ? CONFIG.conversationStarters : [];
   var showEmailForm = CONFIG.collectEmail;
@@ -417,7 +417,7 @@ export async function GET(
             <button type="submit">Send</button>
           </div>
         \`}
-        \${CONFIG.showBranding ? '<div class="nb-branding"><a href="https://nodebase.app" target="_blank" rel="noopener">Powered by Nodebase</a></div>' : ''}
+        \${CONFIG.showBranding ? '<div class="nb-branding"><a href="https://elevay.app" target="_blank" rel="noopener">Powered by Elevay</a></div>' : ''}
       </div>
     \`;
     attachEventListeners();

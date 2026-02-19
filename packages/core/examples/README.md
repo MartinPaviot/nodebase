@@ -1,6 +1,6 @@
-# @nodebase/core - Examples
+# @elevay/core - Examples
 
-This directory contains examples demonstrating how to use the Nodebase core system.
+This directory contains examples demonstrating how to use the Elevay core system.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ Demonstrates the complete initialization and usage of both ScanEngine and AgentE
 **Run:**
 ```bash
 # From the monorepo root
-pnpm --filter @nodebase/core tsx examples/basic-usage.ts
+pnpm --filter @elevay/core tsx examples/basic-usage.ts
 ```
 
 **What it does:**
@@ -36,7 +36,7 @@ pnpm --filter @nodebase/core tsx examples/basic-usage.ts
 
 **Expected output:**
 ```
-=== Nodebase Core - Basic Usage Example ===
+=== Elevay Core - Basic Usage Example ===
 
 ✓ Composio initialized
 ✓ AIClient initialized
@@ -80,7 +80,7 @@ pnpm --filter @nodebase/core tsx examples/basic-usage.ts
 │  (Next.js, Express, CLI, etc.)                          │
 └─────────────────────────────────────────────────────────┘
                           │
-                          ├─── initNodebaseCore()
+                          ├─── initElevayCore()
                           │
          ┌────────────────┴────────────────┐
          │                                 │
@@ -100,9 +100,9 @@ The system uses constructor-based dependency injection:
 
 ```typescript
 // Manual initialization (for advanced use cases)
-import { ScanEngine, AgentEngine } from "@nodebase/core";
-import { initComposio, getConnectorRegistry } from "@nodebase/connectors";
-import { AIClient } from "@nodebase/ai";
+import { ScanEngine, AgentEngine } from "@elevay/core";
+import { initComposio, getConnectorRegistry } from "@elevay/connectors";
+import { AIClient } from "@elevay/ai";
 
 const composio = initComposio({ apiKey: "..." });
 const registry = getConnectorRegistry();
@@ -124,9 +124,9 @@ Or use the convenience factory:
 
 ```typescript
 // Simple initialization (recommended)
-import { initNodebaseCore } from "@nodebase/core";
+import { initElevayCore } from "@elevay/core";
 
-const { scanEngine, agentEngine } = await initNodebaseCore({
+const { scanEngine, agentEngine } = await initElevayCore({
   composioApiKey: process.env.COMPOSIO_API_KEY,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -138,7 +138,7 @@ If you don't have API keys yet, the system will fall back to mock implementation
 
 ```typescript
 // Initialize without API keys (uses mocks)
-const { scanEngine, agentEngine } = await initNodebaseCore({});
+const { scanEngine, agentEngine } = await initElevayCore({});
 
 // Engines will work but return mock data
 const result = await scanEngine.scan("SALES", context);
@@ -163,7 +163,7 @@ const agentResult = await agentEngine.execute(config, context);
 **Issue:** "AIClient not initialized"
 - **Solution:** Make sure `ANTHROPIC_API_KEY` is set in `.env`
 
-**Issue:** "Module not found: @nodebase/connectors"
+**Issue:** "Module not found: @elevay/connectors"
 - **Solution:** Run `pnpm install` from the monorepo root
 
 **Issue:** "Permission denied" errors
@@ -173,4 +173,4 @@ const agentResult = await agentEngine.execute(config, context);
 
 - [Composio Docs](https://docs.composio.dev)
 - [Anthropic API Docs](https://docs.anthropic.com)
-- [Nodebase Architecture](.claude/integration_improvements.md)
+- [Elevay Architecture](.claude/integration_improvements.md)

@@ -8,8 +8,8 @@
  * - Token management and refresh (automatic)
  */
 
-import { Composio } from "composio-core";
-import { ConnectorError } from "@nodebase/types";
+import { Composio, ComposioToolSet } from "composio-core";
+import { ConnectorError } from "@elevay/types";
 
 // ============================================
 // Types
@@ -18,6 +18,7 @@ import { ConnectorError } from "@nodebase/types";
 export interface ComposioConfig {
   apiKey: string;
   baseUrl?: string;
+  entityId?: string;
 }
 
 export interface ComposioApp {
@@ -57,14 +58,19 @@ export interface ComposioToolDefinition {
 
 export class ComposioClient {
   private client: Composio;
-  private config: Required<ComposioConfig>;
+  private toolSet: ComposioToolSet;
+  private entityId: string;
+  private config: Required<Omit<ComposioConfig, "entityId">> & { entityId: string };
 
   constructor(config: ComposioConfig) {
     this.config = {
       ...config,
       baseUrl: config.baseUrl ?? "https://backend.composio.dev",
+      entityId: config.entityId ?? "default",
     };
+    this.entityId = this.config.entityId;
     this.client = new Composio({ apiKey: this.config.apiKey });
+    this.toolSet = new ComposioToolSet({ apiKey: this.config.apiKey });
   }
 
   /**
@@ -264,9 +270,10 @@ export class ComposioClient {
 
   /**
    * Execute a tool (action) on behalf of a user.
-   * Composio handles the OAuth token, API call, rate limiting, retries, etc.
+   * Uses the high-level ComposioToolSet.executeAction() which handles
+   * entity → connected account resolution automatically.
    *
-   * @param userId - The user entity ID
+   * @param userId - The user entity ID (maps to Composio entityId)
    * @param toolCall - The tool call from the LLM (name + input)
    * @returns The result of the action
    */
@@ -278,16 +285,10 @@ export class ComposioClient {
     }
   ): Promise<T> {
     try {
-      // Composio SDK v0.5.39 may have different API for execution
-      const actionsApi = (this.client as any).actions || (this.client as any).tools;
-      if (!actionsApi?.execute) {
-        throw new Error("Execute API not available in this version of Composio SDK");
-      }
-
-      const result: any = await actionsApi.execute({
-        entityId: userId,
-        actionName: toolCall.name,
-        input: toolCall.input,
+      const result: any = await this.toolSet.executeAction({
+        action: toolCall.name,
+        params: toolCall.input,
+        entityId: this.entityId,
       });
 
       return result as T;

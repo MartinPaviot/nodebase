@@ -1,5 +1,5 @@
 /**
- * @nodebase/db
+ * @elevay/db
  *
  * Database access layer with Resource pattern for permission-checked queries.
  * NEVER expose raw Prisma models - always use Resource classes.

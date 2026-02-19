@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * @nodebase/types
+ * @elevay/types
  *
- * Shared TypeScript interfaces and types for the Nodebase monorepo.
+ * Shared TypeScript interfaces and types for the Elevay monorepo.
  * All packages import types from here to ensure consistency.
  */
 
@@ -216,37 +216,37 @@ interface ConnectorTrigger {
     description: string;
     outputSchema: z.ZodType;
 }
-declare class NodebaseError extends Error {
+declare class ElevayError extends Error {
     code: string;
     context?: Record<string, unknown> | undefined;
     constructor(message: string, code: string, context?: Record<string, unknown> | undefined);
 }
-declare class ScanError extends NodebaseError {
+declare class ScanError extends ElevayError {
     signalId: string;
     connectorId: string;
     constructor(signalId: string, connectorId: string, message: string);
 }
-declare class AgentExecutionError extends NodebaseError {
+declare class AgentExecutionError extends ElevayError {
     agentId: string;
     runId: string;
     constructor(agentId: string, runId: string, message: string);
 }
-declare class ConnectorError extends NodebaseError {
+declare class ConnectorError extends ElevayError {
     connectorId: string;
     action: string;
     constructor(connectorId: string, action: string, message: string);
 }
-declare class CredentialError extends NodebaseError {
+declare class CredentialError extends ElevayError {
     credentialId: string;
     constructor(credentialId: string, message: string);
 }
-declare class PermissionError extends NodebaseError {
+declare class PermissionError extends ElevayError {
     userId: string;
     resource: string;
     action: string;
     constructor(userId: string, resource: string, action: string);
 }
-declare class ConfigError extends NodebaseError {
+declare class ConfigError extends ElevayError {
     envVar: string;
     constructor(envVar: string, message: string);
 }
@@ -453,7 +453,7 @@ declare const AgentTriggerSchema: z.ZodObject<{
  * AgentTemplate - Template d'agent pré-configuré (inspiré de Dust AgentConfigurationType)
  *
  * Contrairement à Dust où l'user crée ses agents from scratch,
- * Nodebase propose des templates pré-configurés prêts à l'emploi pour les PME.
+ * Elevay propose des templates pré-configurés prêts à l'emploi pour les PME.
  */
 interface AgentTemplate {
     id: string;
@@ -1009,4 +1009,4 @@ interface JobOptions {
     timeout?: number;
 }
 
-export { AGENT_TRIGGER_TYPES, type AgentAction, AgentActionSchema, type AgentActionType, type AgentCategory, AgentCategorySchema, type AgentDraft, type AgentEvalRules, AgentEvalRulesSchema, type AgentExecution, AgentExecutionError, type AgentExecutionStatus, type AgentFetchSource, AgentFetchSourceSchema, type AgentId, type AgentRun, type AgentRunInput, type AgentRunOutput, type AgentTemplate, type AgentTemplateAction, AgentTemplateActionSchema, AgentTemplateSchema, type AgentTemplateV6, type AgentTrigger, AgentTriggerSchema, type AgentTriggerType, AgentTriggerTypeSchema, type AiEvent, type AiEventAction, type Authenticator, CONNECTOR_CATEGORIES, ConfigError, type Connector, type ConnectorAction, type ConnectorCategory, ConnectorCategorySchema, type ConnectorConfig, type ConnectorCredentials, ConnectorError, type ConnectorId, type ConnectorStatus, type ConnectorTrigger, type ConnectorType, type ConversationId, CredentialError, type CredentialId, EVAL_SEVERITIES, type EncryptedCredential, type EvalAssertion, EvalAssertionSchema, type EvalResult, type EvalRules, EvalRulesSchema, type EvalSeverity, EvalSeveritySchema, type ExecutionError, type FetchStep, FetchStepSchema, type JobData, type JobOptions, type JobResult, type L1Assertion, L1AssertionSchema, type L2Criteria, type L3Trigger, type LLMEvent, type LLMTier, LLMTierSchema, type LLMUsage, LLM_MODELS, LLM_TIERS, type MessageId, NodebaseError, PermissionError, type RunId, SCAN_CATEGORIES, type ScanCategory, ScanCategorySchema, ScanError, type ScanId, type ScanResult, type ScanSignal, ScanSignalSchema, type Signal, type SignalCategory, SignalSchema, type SignalSeverity, TEMPLATE_CATEGORIES, TEMPLATE_ROLES, TEMPLATE_USE_CASES, type TemplateCategory, TemplateCategorySchema, type TemplateId, type TemplateRole, TemplateRoleSchema, type TemplateUseCase, TemplateUseCaseSchema, type TriggerConfig, TriggerConfigSchema, type UserId, type UserRole, type Workspace, type WorkspaceId, type WorkspacePlan, type WorkspaceUser };
+export { AGENT_TRIGGER_TYPES, type AgentAction, AgentActionSchema, type AgentActionType, type AgentCategory, AgentCategorySchema, type AgentDraft, type AgentEvalRules, AgentEvalRulesSchema, type AgentExecution, AgentExecutionError, type AgentExecutionStatus, type AgentFetchSource, AgentFetchSourceSchema, type AgentId, type AgentRun, type AgentRunInput, type AgentRunOutput, type AgentTemplate, type AgentTemplateAction, AgentTemplateActionSchema, AgentTemplateSchema, type AgentTemplateV6, type AgentTrigger, AgentTriggerSchema, type AgentTriggerType, AgentTriggerTypeSchema, type AiEvent, type AiEventAction, type Authenticator, CONNECTOR_CATEGORIES, ConfigError, type Connector, type ConnectorAction, type ConnectorCategory, ConnectorCategorySchema, type ConnectorConfig, type ConnectorCredentials, ConnectorError, type ConnectorId, type ConnectorStatus, type ConnectorTrigger, type ConnectorType, type ConversationId, CredentialError, type CredentialId, EVAL_SEVERITIES, ElevayError, type EncryptedCredential, type EvalAssertion, EvalAssertionSchema, type EvalResult, type EvalRules, EvalRulesSchema, type EvalSeverity, EvalSeveritySchema, type ExecutionError, type FetchStep, FetchStepSchema, type JobData, type JobOptions, type JobResult, type L1Assertion, L1AssertionSchema, type L2Criteria, type L3Trigger, type LLMEvent, type LLMTier, LLMTierSchema, type LLMUsage, LLM_MODELS, LLM_TIERS, type MessageId, PermissionError, type RunId, SCAN_CATEGORIES, type ScanCategory, ScanCategorySchema, ScanError, type ScanId, type ScanResult, type ScanSignal, ScanSignalSchema, type Signal, type SignalCategory, SignalSchema, type SignalSeverity, TEMPLATE_CATEGORIES, TEMPLATE_ROLES, TEMPLATE_USE_CASES, type TemplateCategory, TemplateCategorySchema, type TemplateId, type TemplateRole, TemplateRoleSchema, type TemplateUseCase, TemplateUseCaseSchema, type TriggerConfig, TriggerConfigSchema, type UserId, type UserRole, type Workspace, type WorkspaceId, type WorkspacePlan, type WorkspaceUser };

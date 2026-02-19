@@ -47,7 +47,7 @@ export default function WorkspaceSettingsPage() {
                 <div className="space-y-2">
                     <Label htmlFor="workspace-url">Workspace URL</Label>
                     <div className="flex items-center gap-2 max-w-md">
-                        <span className="text-muted-foreground text-sm">nodebase.app/</span>
+                        <span className="text-muted-foreground text-sm">elevay.app/</span>
                         <Input
                             id="workspace-url"
                             defaultValue="martins-workspace"

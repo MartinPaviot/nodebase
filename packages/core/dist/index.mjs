@@ -1,12 +1,4 @@
 import {
-  getEvalRegistry,
-  registerL1Assertion,
-  registerL2Criterion,
-  runL1Eval,
-  runL2Eval,
-  runL3Eval
-} from "./chunk-XWVGOFKV.mjs";
-import {
   AgentEngine,
   AgentTracer,
   costTrackingHook,
@@ -15,13 +7,21 @@ import {
   getAgentEngine,
   initAgentEngine,
   loggingHook
-} from "./chunk-CD4LBWGT.mjs";
+} from "./chunk-7DJ5KVIK.mjs";
+import {
+  getEvalRegistry,
+  registerL1Assertion,
+  registerL2Criterion,
+  runL1Eval,
+  runL2Eval,
+  runL3Eval
+} from "./chunk-XWVGOFKV.mjs";
 import {
   DEFAULT_SCAN_RULES,
   ScanEngine,
   getScanEngine,
   initScanEngine
-} from "./chunk-IZ2BQDLD.mjs";
+} from "./chunk-SRWXAKTH.mjs";
 
 // src/factory.ts
 function createScanEngine(dependencies, config) {
@@ -37,11 +37,11 @@ function createAgentEngine(dependencies) {
     aiClient: dependencies.aiClient
   });
 }
-async function initNodebaseCore(config) {
+async function initElevayCore(config) {
   const dependencies = {};
   if (config.composioApiKey) {
     try {
-      const { initComposio, initConnectorRegistry } = await import("@nodebase/connectors");
+      const { initComposio, initConnectorRegistry } = await import("@elevay/connectors");
       dependencies.composioClient = initComposio({
         apiKey: config.composioApiKey
       });
@@ -56,7 +56,7 @@ async function initNodebaseCore(config) {
   }
   if (config.anthropicApiKey) {
     try {
-      const { AIClient } = await import("@nodebase/ai");
+      const { AIClient } = await import("@elevay/ai");
       dependencies.aiClient = new AIClient({
         apiKey: config.anthropicApiKey
       });
@@ -1071,7 +1071,7 @@ export {
   getEvalRegistry,
   getScanEngine,
   initAgentEngine,
-  initNodebaseCore,
+  initElevayCore,
   initScanEngine,
   loggingHook,
   registerL1Assertion,

@@ -3,16 +3,16 @@ export { DEFAULT_SCAN_RULES, ScanConfig, ScanContext, ScanRule, getScanEngine, i
 import { AgentEngine } from './agent-engine/index.js';
 export { AfterHook, AgentConfig, BeforeHook, ErrorHook, ExecutionContext, ExecutionResult, LifecycleHooks, costTrackingHook, errorLoggingHook, getAgentEngine, initAgentEngine, loggingHook } from './agent-engine/index.js';
 export { EvalRegistry, L1Result, L2Result, L3Result, getEvalRegistry, registerL1Assertion, registerL2Criterion, runL1Eval, runL2Eval, runL3Eval } from './eval/index.js';
-import '@nodebase/types';
+import '@elevay/types';
 
 /**
  * Factory Functions
  *
  * Initialize engines with proper dependency injection.
  * This wires together all the packages:
- * - @nodebase/connectors (Composio, ConnectorRegistry)
- * - @nodebase/ai (AIClient)
- * - @nodebase/core (ScanEngine, AgentEngine)
+ * - @elevay/connectors (Composio, ConnectorRegistry)
+ * - @elevay/ai (AIClient)
+ * - @elevay/core (ScanEngine, AgentEngine)
  */
 
 interface CoreDependencies {
@@ -25,8 +25,8 @@ interface CoreDependencies {
  *
  * @example
  * ```typescript
- * import { initComposio, getConnectorRegistry } from "@nodebase/connectors";
- * import { createScanEngine } from "@nodebase/core";
+ * import { initComposio, getConnectorRegistry } from "@elevay/connectors";
+ * import { createScanEngine } from "@elevay/core";
  *
  * const composio = initComposio({ apiKey: process.env.COMPOSIO_API_KEY });
  * const registry = getConnectorRegistry();
@@ -43,9 +43,9 @@ declare function createScanEngine(dependencies: CoreDependencies, config?: ScanE
  *
  * @example
  * ```typescript
- * import { initComposio, getConnectorRegistry } from "@nodebase/connectors";
- * import { AIClient } from "@nodebase/ai";
- * import { createAgentEngine } from "@nodebase/core";
+ * import { initComposio, getConnectorRegistry } from "@elevay/connectors";
+ * import { AIClient } from "@elevay/ai";
+ * import { createAgentEngine } from "@elevay/core";
  *
  * const composio = initComposio({ apiKey: process.env.COMPOSIO_API_KEY });
  * const registry = getConnectorRegistry();
@@ -60,20 +60,20 @@ declare function createScanEngine(dependencies: CoreDependencies, config?: ScanE
  */
 declare function createAgentEngine(dependencies: CoreDependencies): AgentEngine;
 /**
- * Initialize the entire Nodebase core system.
+ * Initialize the entire Elevay core system.
  * This is a convenience function that sets up everything with proper dependencies.
  *
  * @example
  * ```typescript
- * import { initNodebaseCore } from "@nodebase/core";
+ * import { initElevayCore } from "@elevay/core";
  *
- * const { scanEngine, agentEngine } = await initNodebaseCore({
+ * const { scanEngine, agentEngine } = await initElevayCore({
  *   composioApiKey: process.env.COMPOSIO_API_KEY,
  *   anthropicApiKey: process.env.ANTHROPIC_API_KEY
  * });
  * ```
  */
-declare function initNodebaseCore(config: {
+declare function initElevayCore(config: {
     composioApiKey?: string;
     anthropicApiKey?: string;
     scanEngineConfig?: ScanEngineConfig;
@@ -644,4 +644,4 @@ declare class AgentBuilder {
 declare function createSelfModifier(llmGenerate?: (prompt: string) => Promise<string>): SelfModifier;
 declare function createAgentBuilder(llmGenerate?: (prompt: string) => Promise<string>): AgentBuilder;
 
-export { type ABTest, type AgentBuildRequest, AgentBuilder, AgentEngine, AgentOptimizer, AgentTracer, type BuildAgentResult, ConversationEvaluator, type ConversationTurn, type CoreDependencies, type CreateTraceInput, type DataPoint, type EvaluationCriteria, type EvaluationResult, type FeedbackInput, type Insight, type InsightInput, InsightsAnalyzer, type ModificationProposal, type OptimizationConfig, type OptimizationGoal, type OptimizationRun, type Pattern, ScanEngine, ScanEngineConfig, SelfModifier, type TraceMetrics, type TraceStep, type TraceUpdateInput, createAgentBuilder, createAgentEngine, createEvaluator, createInsightsAnalyzer, createOptimizer, createScanEngine, createSelfModifier, createTracer, getDefaultAgentHooks, initNodebaseCore };
+export { type ABTest, type AgentBuildRequest, AgentBuilder, AgentEngine, AgentOptimizer, AgentTracer, type BuildAgentResult, ConversationEvaluator, type ConversationTurn, type CoreDependencies, type CreateTraceInput, type DataPoint, type EvaluationCriteria, type EvaluationResult, type FeedbackInput, type Insight, type InsightInput, InsightsAnalyzer, type ModificationProposal, type OptimizationConfig, type OptimizationGoal, type OptimizationRun, type Pattern, ScanEngine, ScanEngineConfig, SelfModifier, type TraceMetrics, type TraceStep, type TraceUpdateInput, createAgentBuilder, createAgentEngine, createEvaluator, createInsightsAnalyzer, createOptimizer, createScanEngine, createSelfModifier, createTracer, getDefaultAgentHooks, initElevayCore };

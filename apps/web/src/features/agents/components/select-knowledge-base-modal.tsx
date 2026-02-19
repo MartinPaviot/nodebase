@@ -176,7 +176,7 @@ export function SelectKnowledgeBaseModal({
               <ShieldCheck className="size-4 text-cyan-500" weight="fill" />
               <span>
                 Your data is secure. You can remove and manage connected accounts{" "}
-                <a href="/settings/integrations" className="text-gray-700 underline hover:text-gray-900">
+                <a href="/settings/connections" className="text-gray-700 underline hover:text-gray-900">
                   here
                 </a>
                 .

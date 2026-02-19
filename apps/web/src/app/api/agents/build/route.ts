@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/db";
 import { generateSlug } from "random-word-slugs";
-import { decrypt } from "@/lib/encryption";
+import { getPlatformApiKey } from "@/lib/config";
+import type { ProcessedFile } from "@/lib/file-processor";
 
 export const maxDuration = 120;
 
@@ -90,32 +91,15 @@ export async function POST(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const { message, history = [], agentContext } = await request.json() as {
+    const { message, history = [], agentContext, files } = await request.json() as {
       message: string;
       history?: ClientMessage[];
       agentContext?: { id: string; name: string };
+      files?: ProcessedFile[];
     };
 
-    // Get API key - first try environment variable, then user's credential
-    let apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) {
-      const credential = await prisma.credential.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "ANTHROPIC",
-        },
-      });
-
-      if (credential) {
-        apiKey = decrypt(credential.value);
-      }
-    }
-
-    if (!apiKey) {
-      return new Response("No Anthropic API key configured. Please set ANTHROPIC_API_KEY in .env or add one in Settings > Credentials.", { status: 400 });
-    }
-
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
     const anthropic = new Anthropic({ apiKey });
 
     // Convert client history to Anthropic message format
@@ -164,8 +148,33 @@ export async function POST(request: Request) {
       }
     }
 
-    // Add the current message
-    messages.push({ role: "user", content: message });
+    // Add the current message (with files as multi-content-block if present)
+    if (files && files.length > 0) {
+      const contentBlocks: ContentBlockParam[] = [];
+
+      for (const file of files) {
+        if (file.type === "image" && file.base64Data) {
+          contentBlocks.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: file.mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+              data: file.base64Data,
+            },
+          });
+        } else if (file.type === "text" && file.textContent) {
+          contentBlocks.push({
+            type: "text",
+            text: `[Attached file: ${file.name}]\n${file.textContent}`,
+          });
+        }
+      }
+
+      contentBlocks.push({ type: "text", text: message });
+      messages.push({ role: "user", content: contentBlocks });
+    } else {
+      messages.push({ role: "user", content: message });
+    }
 
     // Build system prompt with context
     let systemPrompt = `You are an AI agent builder assistant. Your job is to help users create and configure AI agents by understanding their requirements.
@@ -178,7 +187,9 @@ When a user describes what kind of agent they want, use the create_agent tool to
 
 After using a tool, provide a brief summary and suggest 2-3 follow-up actions as a numbered list.
 
-Be conversational and helpful. Remember the context of our conversation.`;
+Be conversational and helpful. Remember the context of our conversation.
+
+The user may attach files (images, PDFs, text files). When files are attached, reference their content to better understand the user's requirements and build a more relevant agent.`;
 
     if (agentContext) {
       systemPrompt += `\n\nContext: We have already created an agent named "${agentContext.name}" with ID "${agentContext.id}". You can update this agent using the update_agent tool if the user wants to make changes.`;

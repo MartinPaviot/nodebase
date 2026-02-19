@@ -7,7 +7,7 @@ import {
   ArrowUUpRight,
   MagicWand,
   Scan,
-  ChatCircle,
+  Eraser,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +17,9 @@ interface FlowEditorToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onAutoLayout: () => void;
-  onSettings: () => void;
-  onChat?: () => void;
-  isChatOpen?: boolean;
+  onFitView: () => void;
+  onClearLastRun?: () => void;
+  hasLastRun?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
 }
@@ -30,14 +30,14 @@ export function FlowEditorToolbar({
   onUndo,
   onRedo,
   onAutoLayout,
-  onSettings,
-  onChat,
-  isChatOpen = false,
+  onFitView,
+  onClearLastRun,
+  hasLastRun = false,
   canUndo = false,
   canRedo = false,
 }: FlowEditorToolbarProps) {
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-2rem)]">
       <div className="flex items-center gap-1 bg-white border border-[#E5E7EB] rounded-2xl px-2 py-1.5 shadow-lg">
         {/* Ask button - Brand blue */}
         <button
@@ -50,20 +50,15 @@ export function FlowEditorToolbar({
 
         <Divider />
 
-        {/* Chat toggle */}
-        {onChat && (
+        {/* Clear last run */}
+        {hasLastRun && onClearLastRun && (
           <>
             <button
-              onClick={onChat}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors",
-                isChatOpen
-                  ? "text-primary bg-primary/10"
-                  : "text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151]"
-              )}
+              onClick={onClearLastRun}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors"
             >
-              <ChatCircle className="size-4" weight={isChatOpen ? "fill" : "regular"} />
-              <span className="text-sm font-medium">Chat</span>
+              <Eraser className="size-4" />
+              <span className="text-xs font-medium">Clear run</span>
             </button>
             <Divider />
           </>
@@ -91,8 +86,8 @@ export function FlowEditorToolbar({
           <MagicWand className="size-4" />
         </ToolbarButton>
 
-        {/* Fit view / Scan */}
-        <ToolbarButton onClick={onSettings}>
+        {/* Fit view */}
+        <ToolbarButton onClick={onFitView}>
           <Scan className="size-4" />
         </ToolbarButton>
       </div>

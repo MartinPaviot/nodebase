@@ -23,8 +23,8 @@ function getIntegrationTypeFromScopes(scopes: string[]): IntegrationType | null 
   return null;
 }
 
-// Parse state: either plain userId (legacy) or JSON { userId, type }
-function parseState(state: string): { userId: string; type?: string } {
+// Parse state: either plain userId (legacy) or JSON { userId, type, returnUrl }
+function parseState(state: string): { userId: string; type?: string; returnUrl?: string } {
   try {
     const parsed = JSON.parse(state);
     if (parsed && typeof parsed.userId === "string") return parsed;
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/integrations?error=missing_params", request.url));
   }
 
-  const { userId, type: stateType } = parseState(stateParam);
+  const { userId, type: stateType, returnUrl } = parseState(stateParam);
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
@@ -143,13 +143,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.redirect(new URL("/integrations?success=true", request.url));
+    const successRedirect = returnUrl
+      ? `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}integration_success=true`
+      : "/integrations?success=true";
+    return NextResponse.redirect(new URL(successRedirect, request.url));
   } catch (error) {
     console.error("OAuth callback error:", error);
     // Redirect based on the flow that failed
     const errorRedirect = stateType === "GMAIL_MAILBOX"
       ? "/settings/mailboxes?error=auth_failed"
-      : "/integrations?error=auth_failed";
+      : returnUrl
+        ? `${returnUrl}${returnUrl.includes("?") ? "&" : "?"}integration_error=auth_failed`
+        : "/integrations?error=auth_failed";
     return NextResponse.redirect(new URL(errorRedirect, request.url));
   }
 }

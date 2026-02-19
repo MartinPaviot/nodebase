@@ -41,7 +41,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // src/resources/base.ts
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 function canRead(auth, resourceWorkspaceId) {
   return auth.workspaceId === resourceWorkspaceId;
 }
@@ -128,7 +128,7 @@ function workspaceScope(auth) {
 }
 
 // src/resources/agent.ts
-var import_types2 = require("@nodebase/types");
+var import_types2 = require("@elevay/types");
 var AgentResource = class _AgentResource extends BaseResource {
   // ============================================
   // Static Factory Methods
@@ -299,7 +299,7 @@ var AgentResource = class _AgentResource extends BaseResource {
 };
 
 // src/resources/scan.ts
-var import_types3 = require("@nodebase/types");
+var import_types3 = require("@elevay/types");
 function toScanResultData(scan) {
   return {
     id: scan.id,
@@ -429,7 +429,7 @@ var ScanResource = class _ScanResource extends BaseResource {
 };
 
 // src/resources/credential.ts
-var import_types4 = require("@nodebase/types");
+var import_types4 = require("@elevay/types");
 var CredentialResource = class _CredentialResource extends BaseResource {
   // ============================================
   // Static Factory Methods
@@ -577,7 +577,7 @@ var CredentialResource = class _CredentialResource extends BaseResource {
 };
 
 // src/resources/agent-run.ts
-var import_types5 = require("@nodebase/types");
+var import_types5 = require("@elevay/types");
 var AgentRunResource = class _AgentRunResource extends BaseResource {
   // ============================================
   // Static Factory Methods

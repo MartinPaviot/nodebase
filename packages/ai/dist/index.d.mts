@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { LLMEvent, LLMTier, LLMUsage } from '@nodebase/types';
-export { LLMEvent, LLMTier, LLMUsage } from '@nodebase/types';
+import { LLMEvent, LLMTier, LLMUsage } from '@elevay/types';
+export { LLMEvent, LLMTier, LLMUsage } from '@elevay/types';
 
 /**
- * @nodebase/ai
+ * @elevay/ai
  *
  * Direct Anthropic SDK integration with:
  * - Model tiering (Haiku/Sonnet/Opus)

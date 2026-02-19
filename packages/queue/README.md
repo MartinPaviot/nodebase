@@ -1,6 +1,6 @@
-# @nodebase/queue
+# @elevay/queue
 
-BullMQ-based job queue system for Nodebase (replaces Inngest).
+BullMQ-based job queue system for Elevay (replaces Inngest).
 
 ## Features
 
@@ -14,7 +14,7 @@ BullMQ-based job queue system for Nodebase (replaces Inngest).
 ## Installation
 
 ```bash
-pnpm add @nodebase/queue
+pnpm add @elevay/queue
 ```
 
 ## Usage
@@ -22,7 +22,7 @@ pnpm add @nodebase/queue
 ### Creating a Queue
 
 ```typescript
-import { createQueue, addJob } from "@nodebase/queue";
+import { createQueue, addJob } from "@elevay/queue";
 
 const emailQueue = createQueue({ name: "emails" });
 
@@ -41,7 +41,7 @@ await addJob(emailQueue, "send-welcome", {
 ### Creating a Worker
 
 ```typescript
-import { createWorker } from "@nodebase/queue";
+import { createWorker } from "@elevay/queue";
 
 const worker = createWorker("emails", async (job) => {
   const { to, template } = job.data;
@@ -55,7 +55,7 @@ const worker = createWorker("emails", async (job) => {
 ### Workflow Queue
 
 ```typescript
-import { executeWorkflow, startWorkflowWorker } from "@nodebase/queue";
+import { executeWorkflow, startWorkflowWorker } from "@elevay/queue";
 
 // Add a workflow to the queue
 await executeWorkflow({
@@ -111,7 +111,7 @@ export const executeWorkflow = inngest.createFunction(
 ### After (BullMQ)
 
 ```typescript
-import { executeWorkflow, startWorkflowWorker } from "@nodebase/queue";
+import { executeWorkflow, startWorkflowWorker } from "@elevay/queue";
 
 // Add job to queue
 await executeWorkflow({
@@ -136,7 +136,7 @@ startWorkflowWorker(async (job) => {
 Workers automatically handle SIGTERM and SIGINT signals with a 30-second timeout:
 
 ```typescript
-import { gracefulShutdown } from "@nodebase/queue";
+import { gracefulShutdown } from "@elevay/queue";
 
 const workers = [emailWorker, workflowWorker];
 
@@ -154,4 +154,4 @@ REDIS_URL="redis://localhost:6379"
 REDIS_MAX_RETRIES=3
 ```
 
-See `@nodebase/config` for configuration details.
+See `@elevay/config` for configuration details.

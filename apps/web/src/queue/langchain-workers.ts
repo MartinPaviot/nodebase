@@ -16,7 +16,7 @@ import {
   createOptimizer,
   createSelfModifier,
   type DataPoint,
-} from "@nodebase/core";
+} from "@elevay/core";
 
 // ============================================
 // Daily Insights Generation Worker

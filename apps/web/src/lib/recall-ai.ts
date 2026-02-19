@@ -58,8 +58,8 @@ export interface CreateBotParams {
 
 export async function createBot({
   meetingUrl,
-  botName = "Nodebase Notetaker",
-  joinMessage = "Nodebase is recording this meeting for notes and follow-up.",
+  botName = "Elevay Notetaker",
+  joinMessage = "Elevay is recording this meeting for notes and follow-up.",
   metadata = {},
 }: CreateBotParams): Promise<RecallBot> {
   const response = await fetch(`${RECALL_API_BASE}/bot/`, {

@@ -3,9 +3,9 @@
  *
  * Initialize engines with proper dependency injection.
  * This wires together all the packages:
- * - @nodebase/connectors (Composio, ConnectorRegistry)
- * - @nodebase/ai (AIClient)
- * - @nodebase/core (ScanEngine, AgentEngine)
+ * - @elevay/connectors (Composio, ConnectorRegistry)
+ * - @elevay/ai (AIClient)
+ * - @elevay/core (ScanEngine, AgentEngine)
  */
 
 import { ScanEngine, type ScanEngineConfig } from "./scan-engine";
@@ -16,9 +16,9 @@ import { AgentEngine } from "./agent-engine";
 // ============================================
 
 export interface CoreDependencies {
-  composioClient?: any; // ComposioClient from @nodebase/connectors
-  connectorRegistry?: any; // ConnectorRegistry from @nodebase/connectors
-  aiClient?: any; // AIClient from @nodebase/ai
+  composioClient?: any; // ComposioClient from @elevay/connectors
+  connectorRegistry?: any; // ConnectorRegistry from @elevay/connectors
+  aiClient?: any; // AIClient from @elevay/ai
 }
 
 // ============================================
@@ -30,8 +30,8 @@ export interface CoreDependencies {
  *
  * @example
  * ```typescript
- * import { initComposio, getConnectorRegistry } from "@nodebase/connectors";
- * import { createScanEngine } from "@nodebase/core";
+ * import { initComposio, getConnectorRegistry } from "@elevay/connectors";
+ * import { createScanEngine } from "@elevay/core";
  *
  * const composio = initComposio({ apiKey: process.env.COMPOSIO_API_KEY });
  * const registry = getConnectorRegistry();
@@ -57,9 +57,9 @@ export function createScanEngine(
  *
  * @example
  * ```typescript
- * import { initComposio, getConnectorRegistry } from "@nodebase/connectors";
- * import { AIClient } from "@nodebase/ai";
- * import { createAgentEngine } from "@nodebase/core";
+ * import { initComposio, getConnectorRegistry } from "@elevay/connectors";
+ * import { AIClient } from "@elevay/ai";
+ * import { createAgentEngine } from "@elevay/core";
  *
  * const composio = initComposio({ apiKey: process.env.COMPOSIO_API_KEY });
  * const registry = getConnectorRegistry();
@@ -81,20 +81,20 @@ export function createAgentEngine(dependencies: CoreDependencies): AgentEngine {
 }
 
 /**
- * Initialize the entire Nodebase core system.
+ * Initialize the entire Elevay core system.
  * This is a convenience function that sets up everything with proper dependencies.
  *
  * @example
  * ```typescript
- * import { initNodebaseCore } from "@nodebase/core";
+ * import { initElevayCore } from "@elevay/core";
  *
- * const { scanEngine, agentEngine } = await initNodebaseCore({
+ * const { scanEngine, agentEngine } = await initElevayCore({
  *   composioApiKey: process.env.COMPOSIO_API_KEY,
  *   anthropicApiKey: process.env.ANTHROPIC_API_KEY
  * });
  * ```
  */
-export async function initNodebaseCore(config: {
+export async function initElevayCore(config: {
   composioApiKey?: string;
   anthropicApiKey?: string;
   scanEngineConfig?: ScanEngineConfig;
@@ -110,7 +110,7 @@ export async function initNodebaseCore(config: {
     try {
       // Dynamically import to avoid circular dependencies
       const { initComposio, initConnectorRegistry } = await import(
-        "@nodebase/connectors"
+        "@elevay/connectors"
       );
 
       dependencies.composioClient = initComposio({
@@ -131,7 +131,7 @@ export async function initNodebaseCore(config: {
   if (config.anthropicApiKey) {
     try {
       // Dynamically import to avoid circular dependencies
-      const { AIClient } = await import("@nodebase/ai");
+      const { AIClient } = await import("@elevay/ai");
 
       dependencies.aiClient = new AIClient({
         apiKey: config.anthropicApiKey,

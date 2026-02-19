@@ -1,5 +1,5 @@
 // @ts-nocheck
-// TODO: Uses planned @nodebase/core exports (ABTestManager, AutoOptimizer) not yet implemented
+// TODO: Uses planned @elevay/core exports (ABTestManager, AutoOptimizer) not yet implemented
 import prisma from "@/lib/db";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { z } from "zod";
@@ -61,8 +61,8 @@ export const optimizationRouter = createTRPCRouter({
         throw new Error("Unauthorized");
       }
 
-      // Use ABTestManager from @nodebase/core
-      const { ABTestManager } = await import("@nodebase/core");
+      // Use ABTestManager from @elevay/core
+      const { ABTestManager } = await import("@elevay/core");
       const manager = new ABTestManager();
       await manager.selectWinner(input.testId, input.variant);
     }),

@@ -1,6 +1,6 @@
 # Integration Tests
 
-Scripts pour tester l'intégration Nodebase Core dans l'app Next.js.
+Scripts pour tester l'intégration Elevay Core dans l'app Next.js.
 
 ## Prérequis
 
@@ -19,7 +19,7 @@ Teste l'initialisation et l'exécution basique du système.
 **Exécuter:**
 ```bash
 # Depuis la racine du monorepo
-pnpm --filter @nodebase/web tsx scripts/test-integration.ts
+pnpm --filter @elevay/web tsx scripts/test-integration.ts
 ```
 
 **Ce qu'il teste:**
@@ -30,11 +30,11 @@ pnpm --filter @nodebase/web tsx scripts/test-integration.ts
 
 **Output attendu:**
 ```
-=== Nodebase Integration Test ===
+=== Elevay Integration Test ===
 
-[Test 1] Initializing Nodebase core...
-[Nodebase] Initializing core system...
-[Nodebase] Core initialized:
+[Test 1] Initializing Elevay core...
+[Elevay] Initializing core system...
+[Elevay] Core initialized:
   - Composio: ✓ (or ✗ using mocks)
   - AI Client: ✓ (or ✗ using mocks)
 ✓ Core initialized successfully
@@ -220,10 +220,10 @@ Retourne les infos sur l'API (tiers LLM, eval layers).
 ## Troubleshooting
 
 **"Core initialization failed"**
-- Vérifie que les packages `@nodebase/*` sont installés: `pnpm install`
+- Vérifie que les packages `@elevay/*` sont installés: `pnpm install`
 - Vérifie que le build des packages est à jour: `pnpm build`
 
-**"Module not found: @nodebase/core"**
+**"Module not found: @elevay/core"**
 - Run `pnpm install` depuis la racine du monorepo
 - Run `turbo run build` pour builder tous les packages
 
@@ -253,6 +253,6 @@ Retourne les infos sur l'API (tiers LLM, eval layers).
    - Affichage des résultats + eval
 
 4. **Setup Cron Jobs**
-   - Utiliser Vercel Cron ou `@nodebase/queue`
+   - Utiliser Vercel Cron ou `@elevay/queue`
    - Exécuter scans quotidiens
    - Exécuter agents programmés

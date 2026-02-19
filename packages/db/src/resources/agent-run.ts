@@ -4,7 +4,7 @@
  * Provides permission-checked access to agent execution records.
  */
 
-import { PermissionError, type LLMUsage } from "@nodebase/types";
+import { PermissionError, type LLMUsage } from "@elevay/types";
 import { prisma } from "../client";
 import type { Prisma } from "@prisma/client";
 import {

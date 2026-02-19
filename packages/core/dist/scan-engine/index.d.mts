@@ -1,4 +1,4 @@
-import { ScanCategory, ScanSignal, WorkspaceId, ScanResult } from '@nodebase/types';
+import { ScanCategory, ScanSignal, WorkspaceId, ScanResult } from '@elevay/types';
 
 /**
  * Scan Engine

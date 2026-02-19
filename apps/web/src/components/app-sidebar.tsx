@@ -35,15 +35,14 @@ import {
     UsersThree,
     Handshake,
     Globe,
-    Binoculars,
     ChartBar,
     Kanban,
     ListChecks,
-    CheckSquare,
     Receipt,
     Files,
     Database,
     Lightning,
+    ShieldCheck,
     type Icon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -196,6 +195,38 @@ function getAgentConfig(agentName: string): AgentConfig {
     }
 
     return { icon, gradient };
+}
+
+// Approvals sidebar item with pending count badge
+function ApprovalsMenuItem() {
+    const trpc = useTRPC();
+    const pathname = usePathname();
+    const pendingCount = useQuery({
+        ...trpc.agents.getPendingApprovals.queryOptions({ page: 1, pageSize: 1 }),
+        select: (data) => data.total,
+        refetchInterval: 30_000,
+    });
+
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                tooltip="Approvals"
+                isActive={pathname === "/approvals"}
+                asChild
+                className="gap-x-3 h-9 px-3 rounded-lg"
+            >
+                <Link href="/approvals" prefetch>
+                    <ShieldCheck className="size-4" />
+                    <span className="flex-1">Approvals</span>
+                    {pendingCount.data != null && pendingCount.data > 0 && (
+                        <span className="bg-amber-500 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none">
+                            {pendingCount.data}
+                        </span>
+                    )}
+                </Link>
+            </SidebarMenuButton>
+        </SidebarMenuItem>
+    );
 }
 
 // Recent agents component with data fetching
@@ -500,32 +531,6 @@ export const AppSidebar = () => {
                             </SidebarMenuItem>
                             <SidebarMenuItem>
                                 <SidebarMenuButton
-                                    tooltip="Scan"
-                                    isActive={pathname === "/scan"}
-                                    asChild
-                                    className="gap-x-3 h-9 px-3 rounded-lg"
-                                >
-                                    <Link href="/scan" prefetch>
-                                        <Binoculars className="size-4" />
-                                        <span>Scan</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
-                                    tooltip="Approvals"
-                                    isActive={pathname === "/approvals"}
-                                    asChild
-                                    className="gap-x-3 h-9 px-3 rounded-lg"
-                                >
-                                    <Link href="/approvals" prefetch>
-                                        <CheckSquare className="size-4" />
-                                        <span>Approvals</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
                                     tooltip="Automations"
                                     isActive={pathname === "/automations"}
                                     asChild
@@ -537,6 +542,7 @@ export const AppSidebar = () => {
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
+                            <ApprovalsMenuItem />
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

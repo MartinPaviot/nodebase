@@ -1,4 +1,4 @@
-import { L1Assertion } from '@nodebase/types';
+import { L1Assertion } from '@elevay/types';
 
 /**
  * Eval Layer

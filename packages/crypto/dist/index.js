@@ -35,7 +35,7 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 var import_crypto = require("crypto");
 var import_util = require("util");
-var import_types = require("@nodebase/types");
+var import_types = require("@elevay/types");
 var import_crypto2 = require("crypto");
 var scryptAsync = (0, import_util.promisify)(import_crypto.scrypt);
 var ALGORITHM = "aes-256-gcm";

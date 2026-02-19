@@ -3,7 +3,7 @@
  * Creates fake traces, evaluations, feedback, insights for testing dashboards
  */
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
 
 const prisma = new PrismaClient();
@@ -31,7 +31,7 @@ async function main() {
 
   // Find or create a test workspace and user
   let testUser = await prisma.user.findFirst({
-    where: { email: 'test@nodebase.ai' }
+    where: { email: 'test@elevay.ai' }
   });
 
   if (!testUser) {
@@ -39,7 +39,7 @@ async function main() {
     testUser = await prisma.user.create({
       data: {
         id: nanoid(),
-        email: 'test@nodebase.ai',
+        email: 'test@elevay.ai',
         name: 'Test User',
         emailVerified: true,
       }
@@ -63,7 +63,6 @@ async function main() {
         systemPrompt: 'You are a helpful assistant for testing analytics.',
         model: 'ANTHROPIC',
         temperature: 0.7,
-        maxTokens: 1000,
         userId: testUser.id,
         workspaceId: testUser.id, // Using userId as workspaceId for simplicity
         isEnabled: true,
@@ -107,7 +106,6 @@ async function main() {
       data: {
         id: nanoid(),
         agentId: testAgent.id,
-        userId: testUser.id,
         source: 'CHAT',
         title: `Test Conversation ${i + 1}`,
       }
@@ -141,7 +139,7 @@ async function main() {
         toolSuccesses,
         toolFailures,
         l1Passed,
-        l1Failures: l1Passed ? null : ['contains_recipient_name', 'no_placeholders'],
+        l1Failures: l1Passed ? Prisma.JsonNull : ['contains_recipient_name', 'no_placeholders'],
         l2Score,
         l2Breakdown: {
           relevance: randomFloat(0.6, 1),
@@ -169,6 +167,7 @@ async function main() {
           userId: testUser.id,
           workspaceId: testUser.id,
           model: 'claude-sonnet-4',
+          tier: 'sonnet',
           tokensIn: Math.floor(tokensIn / totalSteps),
           tokensOut: Math.floor(tokensOut / totalSteps),
           cost: totalCost / totalSteps,
@@ -176,8 +175,8 @@ async function main() {
           stepNumber: step + 1,
           action: step === 0 ? 'reasoning' : (step === totalSteps - 1 ? 'response' : 'tool_call'),
           toolName: step > 0 && step < totalSteps - 1 ? 'search' : null,
-          toolInput: step > 0 && step < totalSteps - 1 ? { query: 'test query' } : null,
-          toolOutput: step > 0 && step < totalSteps - 1 ? { results: ['result 1'] } : null,
+          toolInput: step > 0 && step < totalSteps - 1 ? { query: 'test query' } : Prisma.JsonNull,
+          toolOutput: step > 0 && step < totalSteps - 1 ? { results: ['result 1'] } : Prisma.JsonNull,
           timestamp: new Date(startedAt.getTime() + (step * latencyMs / totalSteps)),
         }
       });

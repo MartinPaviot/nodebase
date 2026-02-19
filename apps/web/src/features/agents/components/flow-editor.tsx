@@ -6,18 +6,26 @@ import { FlowEditorCanvas, type FlowEditorCanvasRef, type FlowExecutionState } f
 import { FlowEditorSidebar } from "./flow-editor-sidebar";
 import { FlowEditorToolbar } from "./flow-editor-toolbar";
 import { FlowEditorSettings } from "./flow-editor-settings";
-import { AgentPurposeCard } from "./agent-purpose-card";
+// AgentPurposeCard removed — builder now modifies flow directly via FlowCommands
 import { FlowNodePanel } from "./flow-node-panel";
 import { SearchKnowledgeBaseSettings } from "./search-knowledge-base-settings";
 import { EnterLoopSettings } from "./enter-loop-settings";
+import { ExitLoopSettings } from "./exit-loop-settings";
 import { ConditionSettings } from "./condition-settings";
 import { PeopleDataLabsSettings } from "./people-data-labs-settings";
 import { IntegrationActionPanel } from "./integration-action-panel";
+import { ActionNodeSettings } from "./action-node-settings";
 import { AddActionModal } from "./add-action-modal";
 import { ChatInterface } from "./chat-interface";
-import { X } from "@phosphor-icons/react";
+import { AgentChatTab } from "./agent-chat-tab";
+import { X, ArrowLeft, ChatCircle, Chats, Robot, GitBranch, MagnifyingGlass, ArrowsClockwise, Sparkle } from "@phosphor-icons/react";
+import { Icon } from "@iconify/react";
 import { useRouter } from "next/navigation";
 import { useConversations, useCreateConversation, useSaveFlowData } from "../hooks/use-agents";
+import type { FlowCommand } from "../types/flow-builder-types";
+import { getNodeIconConfig, type NodeIconResult } from "@/features/agents/lib/node-icons";
+import { getUpstreamNodes, type UpstreamNode } from "../lib/flow-graph-utils";
+import { useUserIntegrations } from "@/hooks/use-integrations";
 
 interface Agent {
   id: string;
@@ -63,27 +71,35 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
 
   // Track if there are unsaved changes
   const [hasChanges, setHasChanges] = useState(false);
+  // Track whether the flow is empty (only trigger node) for sidebar suggestions
+  const [flowNodeCount, setFlowNodeCount] = useState(templateFlowData?.nodes?.length ?? 0);
 
   const [activeTab, setActiveTab] = useState<"settings" | "flow" | "tasks">("flow");
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
 
-  // Chat split view state
+  // Chat split view state (Test panel)
   const [showChat, setShowChat] = useState(false);
   const [chatConversationId, setChatConversationId] = useState<string | null>(null);
+
+  // Agent chat tab state (independent from test panel)
+  const [agentChatConversationId, setAgentChatConversationId] = useState<string | null>(null);
   const [flowExecutionState, setFlowExecutionState] = useState<FlowExecutionState | null>(null);
+  const [retryFromFailedFn, setRetryFromFailedFn] = useState<(() => void) | null>(null);
   const [sidebarMessages, setSidebarMessages] = useState<
     { id: string; role: "user" | "assistant"; content: string }[]
   >([]);
   const [sidebarInput, setSidebarInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingToolName, setStreamingToolName] = useState<string | null>(null);
 
-  // AI-generated purpose card state
-  const [purposeCard, setPurposeCard] = useState<{
-    description: string;
-    trigger: string;
-    tools: string[];
-    features: string[];
-  } | null>(null);
+  // Connected integrations for sidebar suggestions
+  const integrationsQuery = useUserIntegrations();
+  const connectedIntegrationTypes = useMemo(
+    () => (integrationsQuery.data || []).map((i) => i.type),
+    [integrationsQuery.data]
+  );
+
+  // Purpose card removed — builder modifies flow directly via FlowCommands
 
   // Selected node state for right panel
   const [selectedNode, setSelectedNode] = useState<{
@@ -291,8 +307,10 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
   };
 
   const handleTest = () => {
-    // Navigate to chat with this agent
-    router.push(`/agents/${agent.id}/chat`);
+    // Open the chat split panel (don't navigate — the /chat route has no page.tsx)
+    if (!showChat) {
+      handleToggleChat();
+    }
   };
 
   const handleShare = () => {
@@ -305,22 +323,22 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
   };
 
   const handleNewConversation = () => {
-    createConversation.mutate(
-      { agentId: agent.id },
-      {
-        onSuccess: (conversation) => {
-          router.push(`/agents/${agent.id}/chat/${conversation.id}`);
-        },
-      }
-    );
+    // Reset the builder sidebar (new conversation)
+    setSidebarMessages([]);
+    setBuilderConversationId(null);
+    setSidebarInput("");
   };
 
   // Toggle chat split view
   const handleToggleChat = useCallback(() => {
     if (showChat) {
       setShowChat(false);
-      setFlowExecutionState(null);
+      // Keep execution state visible on canvas after closing chat
       return;
+    }
+    // On narrow screens, close settings panel to avoid double overlay
+    if (typeof window !== "undefined" && window.innerWidth < 1280) {
+      setSelectedNode(null);
     }
     // Open chat - create a conversation if none exists
     if (chatConversationId) {
@@ -338,6 +356,66 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
     }
   }, [showChat, chatConversationId, createConversation, agent.id]);
 
+  // Handle flow commands from the Smart Builder Chat
+  const handleFlowCommand = useCallback((command: FlowCommand) => {
+    if (!canvasRef.current) return;
+    switch (command.type) {
+      case "add_node":
+        canvasRef.current.addNode(command.nodeType, command.afterNodeId, { label: command.label, ...command.data });
+        break;
+      case "delete_node":
+        canvasRef.current.deleteNode(command.nodeId);
+        break;
+      case "update_node":
+        if (command.updates.label) {
+          canvasRef.current.updateNodeLabel(command.nodeId, command.updates.label as string);
+        }
+        canvasRef.current.updateNodeData(command.nodeId, command.updates);
+        break;
+      case "connect_nodes":
+        canvasRef.current.connectNodes(command.sourceId, command.targetId, command.sourceHandle);
+        break;
+      case "replace_node": {
+        const newNodeId = canvasRef.current.replaceNode(command.nodeId, command.newType, command.newData);
+        setFlowNodesData((prev) => {
+          const updated = { ...prev };
+          delete updated[command.nodeId];
+          updated[newNodeId] = command.newData;
+          return updated;
+        });
+        break;
+      }
+      case "add_condition":
+        canvasRef.current.addNode("condition", command.afterNodeId, {
+          label: "Condition",
+          conditions: command.branches.map((b, i) => ({
+            id: `branch-${Date.now()}-${i}`,
+            text: b.text,
+          })),
+        });
+        break;
+    }
+    setHasChanges(true);
+    // Update node count so sidebar can hide suggestions when flow is no longer empty
+    const snapshot = canvasRef.current.getFlowStateSnapshot();
+    setFlowNodeCount(snapshot.nodes.length);
+    // Auto-fit view after builder modifies the flow (wait for React Flow to render)
+    if (command.type === "add_node" || command.type === "add_condition") {
+      setTimeout(() => canvasRef.current?.fitView(), 200);
+    }
+  }, []);
+
+  // Get flow state snapshot for the Smart Builder Chat
+  const getFlowStateSnapshot = useCallback(() => {
+    return canvasRef.current?.getFlowStateSnapshot() ?? { nodes: [], edges: [], summary: "Empty flow" };
+  }, []);
+
+  // Get live flow data from canvas for flow execution
+  const getFlowData = useCallback(() => {
+    if (!canvasRef.current) return undefined;
+    return canvasRef.current.getFlowData();
+  }, []);
+
   // Build flow nodes list for chat execution tracking
   const flowNodesList = useMemo(() => {
     if (!templateFlowData?.nodes) return undefined;
@@ -348,13 +426,54 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
     }));
   }, [templateFlowData]);
 
-  const handleSelectConversation = (conversationId: string) => {
-    router.push(`/agents/${agent.id}/chat/${conversationId}`);
+  // Build flow edges list for flow execution mode
+  const flowEdgesList = useMemo(() => {
+    if (!templateFlowData?.edges) return undefined;
+    return templateFlowData.edges;
+  }, [templateFlowData]);
+
+  // Extract greeting message and conversation starters from "messageReceived" node
+  // Uses flowNodesData (editable state) so edits to the greeting are reflected in chat
+  const messageReceivedData = useMemo(() => {
+    if (!templateFlowData?.nodes) return { greeting: "", starters: [] as Array<{ id: string; text: string; enabled: boolean }> };
+    const triggerNode = templateFlowData.nodes.find((n) => n.type === "messageReceived");
+    if (!triggerNode) return { greeting: "", starters: [] as Array<{ id: string; text: string; enabled: boolean }> };
+    // Prefer live node data from flowNodesData (user may have edited the greeting)
+    const data = flowNodesData[triggerNode.id] || triggerNode.data || {};
+    return {
+      greeting: (data.greetingMessage as string) || "",
+      starters: ((data.conversationStarters as Array<{ id: string; text: string; enabled: boolean }>) || []).filter((s) => s.enabled),
+    };
+  }, [templateFlowData, flowNodesData]);
+
+  // Compute the current node label + icon for the chat header
+  const currentNodeLabel = useMemo(() => {
+    if (!flowExecutionState?.isRunning || !flowExecutionState.currentNodeId) return null;
+    const node = flowNodesList?.find((n) => n.id === flowExecutionState.currentNodeId);
+    return node?.data?.label || null;
+  }, [flowExecutionState, flowNodesList]);
+
+  const currentNodeIconConfig = useMemo<NodeIconResult | null>(() => {
+    if (!flowExecutionState?.currentNodeId) {
+      // Default: messageReceived icon
+      return { type: "phosphor", phosphorIcon: "Chats", bgColor: "bg-blue-500" };
+    }
+    const node = flowNodesList?.find((n) => n.id === flowExecutionState.currentNodeId);
+    if (!node) return { type: "phosphor", phosphorIcon: "Chats", bgColor: "bg-blue-500" };
+    return getNodeIconConfig(node.type, node.data as { icon?: string } | undefined);
+  }, [flowExecutionState, flowNodesList]);
+
+  const handleSelectConversation = (_conversationId: string) => {
+    // No-op for now — builder sidebar doesn't expose conversation switching
   };
 
   const handleNodeSelect = useCallback((nodeId: string | null, nodeType: string | null, initialData?: Record<string, unknown>) => {
     if (nodeId && nodeType) {
       setSelectedNode({ id: nodeId, type: nodeType });
+      // On narrow screens, close chat panel to avoid double overlay
+      if (typeof window !== "undefined" && window.innerWidth < 1280) {
+        setShowChat(false);
+      }
       // Always store initial data if provided - this ensures variant and other properties are available
       if (initialData) {
         setFlowNodesData((prev) => ({
@@ -614,74 +733,172 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
     }>;
   }, [flowNodesData]);
 
-  const handleSidebarSubmit = async () => {
-    if (!sidebarInput.trim()) return;
+  // Compute upstream nodes for the selected node (used by inject sidebar)
+  const selectedUpstreamNodes = useMemo((): UpstreamNode[] => {
+    if (!selectedNode || !canvasRef.current) return [];
+    const flowData = canvasRef.current.getFlowData();
+    if (!flowData?.nodes?.length || !flowData?.edges?.length) return [];
+
+    return getUpstreamNodes(
+      selectedNode.id,
+      flowData.nodes.map((n) => ({
+        id: n.id,
+        type: n.type || "",
+        data: (flowNodesData[n.id] || {}) as Record<string, unknown>,
+      })),
+      flowData.edges.map((e) => ({ source: e.source, target: e.target })),
+    );
+  }, [selectedNode, flowNodesData]);
+
+  // Builder conversation ID — persists across messages within a session
+  const [builderConversationId, setBuilderConversationId] = useState<string | null>(null);
+
+  const handleSidebarSubmit = async (promptOverride?: string) => {
+    const inputText = promptOverride || sidebarInput;
+    if (!inputText.trim()) return;
 
     const userMessage = {
       id: Date.now().toString(),
       role: "user" as const,
-      content: sidebarInput,
+      content: inputText,
     };
 
     setSidebarMessages((prev) => [...prev, userMessage]);
-    const userInput = sidebarInput;
     setSidebarInput("");
     setIsLoading(true);
 
     try {
-      // Call the purpose API to generate AI-based purpose card
-      const response = await fetch("/api/agents/purpose", {
+      // Create a conversation on first message
+      let convId = builderConversationId;
+      if (!convId) {
+        const conv = await createConversation.mutateAsync({
+          agentId: agent.id,
+          title: `Builder: ${inputText.slice(0, 50)}`,
+        });
+        convId = conv.id;
+        setBuilderConversationId(convId);
+      }
+
+      // Build flow state snapshot from canvas
+      const flowState = canvasRef.current?.getFlowStateSnapshot() ?? {
+        nodes: [],
+        edges: [],
+        summary: "Empty flow — no nodes configured yet.",
+      };
+
+      // Build message history for context
+      const messageHistory = sidebarMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      messageHistory.push({ role: "user", content: inputText });
+
+      // Call the flow-builder API with SSE streaming
+      const response = await fetch("/api/agents/flow-builder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description: userInput,
+          conversationId: convId,
+          messages: messageHistory,
           agentId: agent.id,
+          flowState,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate purpose");
+        throw new Error(`Builder API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Process SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
 
-      // Set the AI-generated purpose card
-      if (data.purpose) {
-        setPurposeCard({
-          description: data.purpose.description || userInput,
-          trigger: data.purpose.trigger || "Conversation (direct chat)",
-          tools: data.purpose.tools || [],
-          features: data.purpose.features || [],
-        });
+      const decoder = new TextDecoder();
+      let assistantContent = "";
+      const assistantMessageId = (Date.now() + 1).toString();
+
+      // Add empty assistant message that we'll fill via streaming
+      setSidebarMessages((prev) => [
+        ...prev,
+        { id: assistantMessageId, role: "assistant" as const, content: "" },
+      ]);
+
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+
+            if (event.type === "text-delta" && event.delta) {
+              setStreamingToolName(null); // Clear tool indicator when text resumes
+              assistantContent += event.delta;
+              setSidebarMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: assistantContent }
+                    : m
+                )
+              );
+            } else if (event.type === "tool-input-start") {
+              // Show tool indicator in sidebar
+              setStreamingToolName(event.toolName ?? null);
+            } else if (event.type === "tool-output-available") {
+              setStreamingToolName(null);
+            } else if (event.type === "flow-command" && event.command) {
+              handleFlowCommand(event.command as FlowCommand);
+            } else if (event.type === "error") {
+              console.error("Builder stream error:", event.message);
+              // Surface the error in the assistant message
+              const errorText = event.message || "An error occurred";
+              assistantContent += `\n\n**Error:** ${errorText}`;
+              setSidebarMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: assistantContent }
+                    : m
+                )
+              );
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
       }
 
-      // Add assistant message
-      const assistantMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant" as const,
-        content: `J'ai analysé votre demande et configuré l'agent. Voici ce que votre agent va faire :\n\n• **But** : ${data.purpose?.description || userInput}\n• **Déclencheur** : ${data.purpose?.trigger || "Conversation"}\n\nVous pouvez voir le résumé sur le canvas. Voulez-vous modifier quelque chose ?`,
-      };
-
-      setSidebarMessages((prev) => [...prev, assistantMessage]);
+      // If no text was streamed, add a default message
+      if (!assistantContent.trim()) {
+        setSidebarMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: "Done! I've updated the flow." }
+              : m
+          )
+        );
+      }
     } catch (error) {
-      console.error("Error:", error);
-      // Fallback: show a basic card
-      setPurposeCard({
-        description: userInput,
-        trigger: "Conversation (direct chat)",
-        tools: ["Web Search", "Browser"],
-        features: ["Responds to user messages"],
-      });
-
-      const assistantMessage = {
+      console.error("Builder error:", error);
+      const errorMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant" as const,
-        content: "J'ai créé une configuration de base pour votre agent. Vous pouvez l'affiner davantage.",
+        content: "Désolé, une erreur est survenue. Veuillez réessayer.",
       };
-
-      setSidebarMessages((prev) => [...prev, assistantMessage]);
+      setSidebarMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setStreamingToolName(null);
     }
   };
 
@@ -711,6 +928,9 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
             messages={sidebarMessages}
             input={sidebarInput}
             isLoading={isLoading}
+            isFlowEmpty={flowNodeCount <= 1}
+            streamingToolName={streamingToolName}
+            connectedIntegrations={connectedIntegrationTypes}
             onInputChange={setSidebarInput}
             onSubmit={handleSidebarSubmit}
             onClose={() => setShowSidebar(false)}
@@ -720,23 +940,11 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
         )}
 
         {/* Main content area */}
-        <div className={`flex-1 relative min-h-0 ${activeTab === "flow" ? "overflow-visible" : "overflow-auto"}`}>
+        <div className={`flex-1 relative min-h-0 ${activeTab === "flow" ? "overflow-visible" : activeTab === "tasks" ? "overflow-hidden" : "overflow-auto"}`}>
           {activeTab === "flow" && (
-            <div className="flex h-full overflow-visible min-h-0">
+            <div className="flex h-full overflow-visible min-h-0 relative">
               {/* Canvas area */}
               <div className="flex-1 relative">
-                {/* AI-generated purpose card - positioned as overlay */}
-                {purposeCard && (
-                  <div className="absolute top-6 left-6 z-10">
-                    <AgentPurposeCard
-                      description={purposeCard.description}
-                      trigger={purposeCard.trigger}
-                      tools={purposeCard.tools}
-                      features={purposeCard.features}
-                    />
-                  </div>
-                )}
-
                 <FlowEditorCanvas
                   ref={canvasRef}
                   agentId={agent.id}
@@ -745,7 +953,11 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                   systemPrompt={agent.systemPrompt}
                   onAddNode={() => console.log("Add node")}
                   onNodeSelect={handleNodeSelect}
-                  onFlowChange={() => setHasChanges(true)}
+                  onFlowChange={() => {
+                    setHasChanges(true);
+                    const snapshot = canvasRef.current?.getFlowStateSnapshot();
+                    if (snapshot) setFlowNodeCount(snapshot.nodes.length);
+                  }}
                   onConditionAdded={handleConditionAdded}
                   onOpenReplaceModal={handleOpenReplaceModal}
                   initialFlowData={templateFlowData}
@@ -757,31 +969,108 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                   onUndo={() => console.log("Undo")}
                   onRedo={() => console.log("Redo")}
                   onAutoLayout={() => console.log("Auto layout")}
-                  onSettings={() => setActiveTab("settings")}
-                  onChat={handleToggleChat}
-                  isChatOpen={showChat}
+                  onFitView={() => canvasRef.current?.fitView()}
+                  onClearLastRun={() => setFlowExecutionState(null)}
+                  hasLastRun={flowExecutionState !== null && !flowExecutionState.isRunning}
                 />
               </div>
 
               {/* Chat split panel */}
               {showChat && chatConversationId && (
-                <div className="w-[420px] border-l border-[#E5E7EB] bg-white h-full flex flex-col min-h-0">
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-[#E5E7EB]">
-                    <span className="text-sm font-medium text-[#374151]">Chat with {agent.name}</span>
-                    <button
-                      onClick={() => { setShowChat(false); setFlowExecutionState(null); }}
-                      className="size-7 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors"
-                    >
-                      <X className="size-4" />
-                    </button>
+                <div className="absolute right-0 top-0 h-full w-[420px] border-l border-[#E5E7EB] bg-white flex flex-col min-h-0 z-20 shadow-lg xl:relative xl:shadow-none xl:z-auto overflow-hidden">
+                  {/* Header: shows current node or "Message Received" */}
+                  <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#E5E7EB]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setShowChat(false); }}
+                        className="size-7 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors"
+                      >
+                        <ArrowLeft className="size-4" />
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {currentNodeIconConfig && (
+                          <div className={`size-[22px] rounded-[5px] ${currentNodeIconConfig.bgColor} flex items-center justify-center`}>
+                            {currentNodeIconConfig.type === "phosphor" ? (
+                              (() => {
+                                const PHOSPHOR_MAP: Record<string, typeof Chats> = {
+                                  Chats, Robot, GitBranch, MagnifyingGlass, ArrowsClockwise, Sparkle, ChatCircle,
+                                };
+                                const PhIcon = PHOSPHOR_MAP[currentNodeIconConfig.phosphorIcon] || Chats;
+                                return <PhIcon className="size-3 text-white" weight="fill" />;
+                              })()
+                            ) : (
+                              <Icon icon={currentNodeIconConfig.icon} className={`size-3 ${currentNodeIconConfig.icon.startsWith("logos:") ? "" : "text-white"}`} />
+                            )}
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-[#374151]">
+                          {currentNodeLabel || "Message Received"}
+                        </span>
+                      </div>
+                    </div>
+                    {flowExecutionState?.errorNodeIds?.length && !flowExecutionState.isRunning && retryFromFailedFn ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => retryFromFailedFn()}
+                          className="text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors px-2 py-1 rounded-lg hover:bg-orange-50"
+                        >
+                          Retry from failed
+                        </button>
+                        <button
+                          onClick={() => {
+                            setChatConversationId(null);
+                            setFlowExecutionState(null);
+                            setRetryFromFailedFn(null);
+                            createConversation.mutate(
+                              { agentId: agent.id },
+                              {
+                                onSuccess: (conversation) => {
+                                  setChatConversationId(conversation.id);
+                                },
+                              }
+                            );
+                          }}
+                          className="text-sm font-medium text-[#374151] hover:text-[#111827] transition-colors px-2 py-1 rounded-lg hover:bg-[#F3F4F6]"
+                        >
+                          Restart
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setChatConversationId(null);
+                          setFlowExecutionState(null);
+                          setRetryFromFailedFn(null);
+                          createConversation.mutate(
+                            { agentId: agent.id },
+                            {
+                              onSuccess: (conversation) => {
+                                setChatConversationId(conversation.id);
+                              },
+                            }
+                          );
+                        }}
+                        className="text-sm font-medium text-[#374151] hover:text-[#111827] transition-colors px-2 py-1 rounded-lg hover:bg-[#F3F4F6]"
+                      >
+                        Retry
+                      </button>
+                    )}
                   </div>
                   <div className="flex-1 min-h-0">
                     <ChatInterface
+                      key={chatConversationId}
                       conversationId={chatConversationId}
+                      agentId={agent.id}
                       agentName={agent.name}
                       agentAvatar={agent.avatar}
                       flowNodes={flowNodesList}
+                      flowEdges={flowEdgesList}
                       onExecutionStateChange={setFlowExecutionState}
+                      onRetryFromFailed={(fn) => setRetryFromFailedFn(() => fn)}
+                      mode="chat"
+                      getFlowData={getFlowData}
+                      initialGreeting={messageReceivedData.greeting}
+                      conversationStarters={messageReceivedData.starters}
                     />
                   </div>
                 </div>
@@ -789,7 +1078,7 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
 
               {/* Right panel for selected node - don't show for addNode or chatOutcome */}
               {selectedNode && selectedNode.type !== "addNode" && selectedNode.type !== "chatOutcome" && (
-                <div className="w-[340px] border-l border-[#E5E7EB] bg-white h-full overflow-visible flex flex-col min-h-0">
+                <div className="absolute right-0 top-0 h-full w-[340px] border-l border-[#E5E7EB] bg-white overflow-visible flex flex-col min-h-0 z-20 shadow-lg xl:relative xl:shadow-none xl:z-auto">
                   {selectedNode.type === "searchKnowledgeBase" ? (
                     <SearchKnowledgeBaseSettings
                       nodeId={selectedNode.id}
@@ -798,7 +1087,26 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                   ) : selectedNode.type === "enterLoop" ? (
                     <EnterLoopSettings
                       nodeId={selectedNode.id}
-                      onUpdate={(settings) => console.log("Loop settings:", settings)}
+                      nodeName={(selectedNodeData?.label as string) || undefined}
+                      items={(selectedNodeData?.items as string) || undefined}
+                      maxCycles={(selectedNodeData?.maxCycles as number) || undefined}
+                      maxCyclesPrompt={(selectedNodeData?.maxCyclesPrompt as string) || undefined}
+                      output={(selectedNodeData?.output as string) || undefined}
+                      model={(selectedNodeData?.model as string) || undefined}
+                      onUpdate={(settings) => updateNodeData(selectedNode.id, settings as unknown as Record<string, unknown>)}
+                      onDelete={() => handleDeleteNode(selectedNode.id)}
+                      onRename={(newName) => handleRenameNode(selectedNode.id, newName)}
+                      onReplace={() => handleOpenReplaceModal(selectedNode.id)}
+                    />
+                  ) : selectedNode.type === "exitLoop" ? (
+                    <ExitLoopSettings
+                      nodeId={selectedNode.id}
+                      nodeName={(selectedNodeData?.label as string) || undefined}
+                      output={(selectedNodeData?.output as string) || undefined}
+                      onUpdate={(settings) => updateNodeData(selectedNode.id, settings as unknown as Record<string, unknown>)}
+                      onDelete={() => handleDeleteNode(selectedNode.id)}
+                      onRename={(newName) => handleRenameNode(selectedNode.id, newName)}
+                      onReplace={() => handleOpenReplaceModal(selectedNode.id)}
                     />
                   ) : selectedNode.type === "condition" || selectedNode.type === "conditionBranch" ? (
                     (() => {
@@ -813,9 +1121,10 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                         <ConditionSettings
                           nodeId={selectedNode.id}
                           nodeName={(parentData?.label as string) || "Condition"}
-                          conditions={(parentData?.conditions as Array<{id: string; text: string}>) || []}
+                          conditions={(parentData?.conditions as Array<{id: string; text: string; label?: string}>) || []}
                           model={(parentData?.model as string) || "claude-haiku"}
                           forceSelectBranch={(parentData?.forceSelectBranch as boolean) || false}
+                          upstreamNodes={selectedUpstreamNodes}
                           onUpdate={handleConditionUpdate}
                           onDeleteCondition={handleDeleteCondition}
                           onRename={(newName) => handleRenameNode(conditionNodeId, newName)}
@@ -836,9 +1145,10 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                     />
                   ) : ["googleSheets", "googleDrive", "googleDocs", "googleCalendar", "gmail", "outlook", "outlookCalendar", "microsoftTeams", "slack", "notion"].includes(selectedNode.type) ? (
                     <IntegrationActionPanel
-                      actionId={(selectedNodeData?.actionId as string) || selectedNode.type.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')}
+                      actionId={selectedNode.type.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')}
                       nodeId={selectedNode.id}
                       nodeName={(selectedNodeData?.label as string) || undefined}
+                      nodeData={selectedNodeData as Record<string, unknown> | undefined}
                       onDelete={() => handleDeleteNode(selectedNode.id)}
                       onRename={(newName) => handleRenameNode(selectedNode.id, newName)}
                       onReplace={() => handleOpenReplaceModal(selectedNode.id)}
@@ -854,6 +1164,17 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
                       message={(selectedNodeData?.message as string) || ""}
                       previousSteps={getPreviousSteps(selectedNode.id, "chatAgent")}
                       onClose={() => setSelectedNode(null)}
+                      onUpdate={(data) => updateNodeData(selectedNode.id, data)}
+                      onDelete={() => handleDeleteNode(selectedNode.id)}
+                      onRename={(newName) => handleRenameNode(selectedNode.id, newName)}
+                      onReplace={() => handleOpenReplaceModal(selectedNode.id)}
+                    />
+                  ) : selectedNode.type === "action" || selectedNode.type === "composioAction" ? (
+                    <ActionNodeSettings
+                      nodeId={selectedNode.id}
+                      nodeName={(selectedNodeData?.label as string) || undefined}
+                      nodeData={selectedNodeData || {}}
+                      upstreamNodes={selectedUpstreamNodes}
                       onUpdate={(data) => updateNodeData(selectedNode.id, data)}
                       onDelete={() => handleDeleteNode(selectedNode.id)}
                       onRename={(newName) => handleRenameNode(selectedNode.id, newName)}
@@ -894,20 +1215,17 @@ export function FlowEditor({ agent, onUpdate, templateFlowData }: FlowEditorProp
           )}
 
           {activeTab === "tasks" && (
-            <div className="flex-1 overflow-auto bg-[#FAF9F6] p-8">
-              <div className="max-w-3xl mx-auto">
-                <h2 className="text-[24px] font-semibold text-[#1a1a1a] mb-6">Tasks</h2>
-                <div className="bg-white rounded-2xl border border-[#E5E7EB] p-8 text-center">
-                  <div className="size-16 rounded-2xl bg-[#F3F4F6] flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">📋</span>
-                  </div>
-                  <p className="text-[#6B7280] text-[15px]">No tasks yet</p>
-                  <p className="text-[#9CA3AF] text-[13px] mt-1">
-                    Tasks will appear here when your agent runs scheduled jobs
-                  </p>
-                </div>
-              </div>
-            </div>
+            <AgentChatTab
+              agentId={agent.id}
+              agentName={agent.name}
+              agentAvatar={agent.avatar}
+              conversationId={agentChatConversationId}
+              onConversationChange={setAgentChatConversationId}
+              flowNodes={flowNodesList}
+              flowEdges={flowEdgesList}
+              initialGreeting={messageReceivedData.greeting}
+              conversationStarters={messageReceivedData.starters}
+            />
           )}
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,7 +27,6 @@ import {
   PaperPlaneTilt,
   CircleNotch,
   Paperclip,
-  Microphone,
   Sparkle,
   Check,
   ArrowRight,
@@ -35,8 +35,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isToday, isYesterday, format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { VoiceInputButton } from "@/components/ui/voice-input-button";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import { useTRPC } from "@/trpc/client";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Source icons mapping
 const sourceIcons: Record<string, typeof ChatCircle> = {
@@ -49,7 +51,7 @@ const sourceIcons: Record<string, typeof ChatCircle> = {
   SCHEDULE: Clock,
 };
 
-// Lindy-style color palette
+// Color palette for agents
 const AGENT_COLORS = [
   "#E6C147",
   "#7C3AED",
@@ -105,7 +107,7 @@ export function GlobalChat() {
   const [showNewChat, setShowNewChat] = useState(false);
 
   const conversationsQuery = trpc.agents.getAllConversations.queryOptions({ page: 1, pageSize: 50 });
-  const conversations = useSuspenseQuery(conversationsQuery);
+  const conversations = useQuery(conversationsQuery);
 
   // Refresh conversations list
   const refreshConversations = useCallback(() => {
@@ -114,6 +116,8 @@ export function GlobalChat() {
 
   // Group conversations by date
   const groupedConversations = useMemo(() => {
+    if (!conversations.data) return {};
+
     let filtered = conversations.data.items;
 
     // Apply search filter
@@ -152,12 +156,35 @@ export function GlobalChat() {
     });
 
     return groups;
-  }, [conversations.data.items, search, filter]);
+  }, [conversations.data, search, filter]);
 
   const hasConversations = Object.keys(groupedConversations).length > 0;
 
   // If no conversations or user clicks new chat, show the integrated chat
   const shouldShowNewChat = showNewChat || !hasConversations;
+
+  // Loading state
+  if (conversations.isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <CircleNotch className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (conversations.isError) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-sm text-destructive">Failed to load conversations</p>
+          <Button variant="outline" size="sm" onClick={() => conversations.refetch()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -289,6 +316,14 @@ function EmptyChatState({ onNewChat }: { onNewChat: () => void }) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const baseTextRef = useRef("");
+  const { isListening, isTranscribing, startListening } = useVoiceInput({
+    onTranscriptChange: (text) => setInput(text),
+    onListeningEnd: () => { baseTextRef.current = input; },
+    baseText: baseTextRef.current,
+  });
+  const handleMicClick = () => { baseTextRef.current = input; startListening(); };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim()) {
@@ -327,14 +362,12 @@ function EmptyChatState({ onNewChat }: { onNewChat: () => void }) {
                 }
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-            >
-              <Microphone className="size-4" />
-            </Button>
+            <VoiceInputButton
+              isListening={isListening}
+              isTranscribing={isTranscribing}
+              onClick={handleMicClick}
+              className="size-8"
+            />
             <Button
               type="submit"
               size="icon"
@@ -365,6 +398,14 @@ function IntegratedBuilderChat({ onAgentCreated, onCancel }: IntegratedBuilderCh
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [agentContext, setAgentContext] = useState<{ id: string; name: string; conversationId?: string } | null>(null);
+
+  const baseTextRef2 = useRef("");
+  const { isListening, isTranscribing, startListening } = useVoiceInput({
+    onTranscriptChange: (text) => setInput(text),
+    onListeningEnd: () => { baseTextRef2.current = input; },
+    baseText: baseTextRef2.current,
+  });
+  const handleMicClick = () => { baseTextRef2.current = input; startListening(); };
 
   // Current response state
   const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
@@ -672,14 +713,7 @@ function IntegratedBuilderChat({ onAgentCreated, onCancel }: IntegratedBuilderCh
 
                 {/* Text content */}
                 {contentWithoutSuggestions && (
-                  <div className="text-sm prose prose-sm max-w-none">
-                    {contentWithoutSuggestions
-                      .split("\n")
-                      .map(
-                        (paragraph: string, i: number) =>
-                          paragraph.trim() && <p key={i}>{paragraph}</p>
-                      )}
-                  </div>
+                  <MarkdownRenderer content={contentWithoutSuggestions} />
                 )}
 
                 {/* Suggestions */}
@@ -731,7 +765,7 @@ function IntegratedBuilderChat({ onAgentCreated, onCancel }: IntegratedBuilderCh
               onChange={(e) => setInput(e.target.value)}
               placeholder="Describe what you want to build..."
               rows={1}
-              className="flex-1 bg-transparent resize-none outline-none text-sm min-h-[24px] max-h-32"
+              className="flex-1 bg-transparent resize-none overflow-hidden outline-none text-sm min-h-[24px] max-h-32"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -739,14 +773,13 @@ function IntegratedBuilderChat({ onAgentCreated, onCancel }: IntegratedBuilderCh
                 }
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0"
-            >
-              <Microphone className="size-4" />
-            </Button>
+            <VoiceInputButton
+              isListening={isListening}
+              isTranscribing={isTranscribing}
+              onClick={handleMicClick}
+              disabled={isLoading}
+              className="size-8"
+            />
             <Button
               type="submit"
               size="icon"
@@ -834,14 +867,7 @@ function MessageBubble({
 
         {/* Text content */}
         {contentWithoutSuggestions && (
-          <div className="text-sm prose prose-sm max-w-none">
-            {contentWithoutSuggestions
-              .split("\n")
-              .map(
-                (paragraph: string, i: number) =>
-                  paragraph.trim() && <p key={i}>{paragraph}</p>
-              )}
-          </div>
+          <MarkdownRenderer content={contentWithoutSuggestions} />
         )}
 
         {/* Suggestions */}

@@ -13,6 +13,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   return (
     <ChatInterface
       conversationId={conversationId}
+      agentId={conversation.data.agent.id}
       agentName={conversation.data.agent.name}
       agentAvatar={conversation.data.agent.avatar}
       initialMessages={conversation.data.messages}

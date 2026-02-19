@@ -1,5 +1,5 @@
 /**
- * @nodebase/crypto
+ * @elevay/crypto
  *
  * AES-256-GCM encryption with key rotation support.
  * All credentials MUST be encrypted before storage.
@@ -7,7 +7,7 @@
 
 import { randomBytes, createCipheriv, createDecipheriv, scrypt } from "crypto";
 import { promisify } from "util";
-import { CredentialError } from "@nodebase/types";
+import { CredentialError } from "@elevay/types";
 
 const scryptAsync = promisify(scrypt);
 

@@ -5,10 +5,10 @@
  */
 
 import { Worker as BullWorker, WorkerOptions, Job } from "bullmq";
-import { getRedisConfig } from "@nodebase/config";
-import type { JobData, JobResult } from "@nodebase/types";
+import { getRedisConfig } from "@elevay/config";
+import type { JobData, JobResult } from "@elevay/types";
 
-export interface NodebaseWorkerOptions extends Partial<WorkerOptions> {
+export interface ElevayWorkerOptions extends Partial<WorkerOptions> {
   redisUrl?: string;
   concurrency?: number;
 }
@@ -33,7 +33,7 @@ export type JobProcessor<T extends JobData = JobData, R extends JobResult = JobR
 export function createWorker<T extends JobData = JobData, R extends JobResult = JobResult>(
   queueName: string,
   processor: JobProcessor<T, R>,
-  options?: NodebaseWorkerOptions
+  options?: ElevayWorkerOptions
 ): BullWorker<T, R> {
   const redisUrl = options?.redisUrl || getRedisConfig().url;
 

@@ -1,20 +1,20 @@
 /**
  * Integration Test Script
  *
- * Tests the Nodebase core integration with the Next.js app.
- * Run with: pnpm --filter @nodebase/web tsx scripts/test-integration.ts
+ * Tests the Elevay core integration with the Next.js app.
+ * Run with: pnpm --filter @elevay/web tsx scripts/test-integration.ts
  */
 
-import { getNodebaseCore, getScanEngine, getAgentEngine } from "../src/lib/nodebase";
-import type { ScanCategory } from "@nodebase/types";
+import { getElevayCore, getScanEngine, getAgentEngine } from "../src/lib/elevay";
+import type { ScanCategory } from "@elevay/types";
 
 async function main() {
-  console.log("=== Nodebase Integration Test ===\n");
+  console.log("=== Elevay Integration Test ===\n");
 
   // Test 1: Initialize core
-  console.log("[Test 1] Initializing Nodebase core...");
+  console.log("[Test 1] Initializing Elevay core...");
   try {
-    const core = await getNodebaseCore();
+    const core = await getElevayCore();
     console.log("✓ Core initialized successfully");
     console.log(`  Scan Engine: ${core.scanEngine ? "✓" : "✗"}`);
     console.log(`  Agent Engine: ${core.agentEngine ? "✓" : "✗"}`);

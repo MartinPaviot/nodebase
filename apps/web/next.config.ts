@@ -2,7 +2,7 @@ import {withSentryConfig} from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@nodebase/queue'],
+  transpilePackages: ['@elevay/queue'],
   serverExternalPackages: [
     'bullmq',
     'ioredis',
@@ -35,7 +35,7 @@ export default withSentryConfig(nextConfig, {
 
   org: "echo-7w",
 
-  project: "nodebase",
+  project: "elevay",
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

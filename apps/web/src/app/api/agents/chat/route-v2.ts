@@ -2,10 +2,10 @@
 // TODO: This is a draft v2 route with many schema mismatches - needs full rewrite
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { AgentModel, MessageRole, ActivityType, MemoryCategory } from "@prisma/client";
+import { TONE_SUFFIX } from "@/lib/flow-executor/prompt-utils";
 import { executeWorkflowSync } from "@/lib/workflow-executor";
 import type { AgentTool, Workflow } from "@prisma/client";
 import {
@@ -35,12 +35,14 @@ import {
 } from "@/lib/integrations/notion";
 import { recordMetric } from "@/lib/agent-analytics";
 import { logActivity } from "@/lib/activity-logger";
-import { AgentTracer } from "@nodebase/core";
+import { AgentTracer } from "@elevay/core";
 import { ClaudeClient } from "@/lib/ai/claude-client";
 import { AIEventLogger } from "@/lib/ai/event-logger";
 import { evaluateContent } from "@/lib/eval";
 
 export const maxDuration = 300; // 5 minutes for Pro plan
+
+import { getPlatformApiKey } from "@/lib/config";
 
 // Actions that have side effects and require confirmation in Safe Mode
 const SIDE_EFFECT_ACTIONS = new Set([
@@ -114,7 +116,6 @@ export async function POST(request: Request) {
       include: {
         agent: {
           include: {
-            credential: true,
             agentTools: {
               include: {
                 workflow: true,
@@ -124,11 +125,7 @@ export async function POST(request: Request) {
             connectedTo: {
               where: { enabled: true },
               include: {
-                targetAgent: {
-                  include: {
-                    credential: true,
-                  },
-                },
+                targetAgent: true,
               },
             },
           },
@@ -161,17 +158,8 @@ export async function POST(request: Request) {
     // Start tracing
     await tracer.startTrace();
 
-    // Get API key
-    let apiKey: string | undefined;
-    if (agent.credential) {
-      apiKey = decrypt(agent.credential.value);
-    }
-
-    if (!apiKey) {
-      return new Response("No API credential configured for this agent", {
-        status: 400,
-      });
-    }
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Only support Anthropic for now (ClaudeClient)
     if (agent.model !== AgentModel.ANTHROPIC) {
@@ -240,6 +228,8 @@ export async function POST(request: Request) {
 
     // Add memory tools instructions
     enhancedSystemPrompt += `\n\nYou have access to memory tools to save, retrieve, and delete memories. Use these to remember important information across conversations (like user preferences, important facts, or standing instructions).`;
+
+    enhancedSystemPrompt += TONE_SUFFIX;
 
     // Create tools from agent tools (connected workflows)
     const workflowTools = createToolsFromAgentTools(
@@ -675,7 +665,6 @@ type AgentConnectionWithTarget = {
     systemPrompt: string;
     model: AgentModel;
     temperature: number;
-    credential: { value: string } | null;
   };
 };
 
@@ -700,18 +689,9 @@ function createToolsFromAgentConnections(
         try {
           const targetAgent = connection.targetAgent;
 
-          if (!targetAgent.credential) {
-            return {
-              error: true,
-              message: `Agent "${targetAgent.name}" has no API credential configured`,
-            };
-          }
-
-          const apiKey = decrypt(targetAgent.credential.value);
-
           // Use ClaudeClient for Anthropic agents
           if (targetAgent.model === AgentModel.ANTHROPIC) {
-            const client = new ClaudeClient({ apiKey });
+            const client = new ClaudeClient({ apiKey: getPlatformApiKey() });
             const response = await client.chat({
               model: "smart",
               messages: [{ role: "user", content: args.message }],

@@ -3,9 +3,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { createAgentBuilder } from "@nodebase/core";
+import { createAgentBuilder } from "@elevay/core";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { decrypt } from "@/lib/encryption";
+import { getPlatformApiKey } from "@/lib/config";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,28 +24,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get API key - first try environment variable, then user's credential
-    let apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) {
-      const credential = await prisma.credential.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "ANTHROPIC",
-        },
-      });
-
-      if (credential) {
-        apiKey = decrypt(credential.value);
-      }
-    }
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "No Anthropic API key found. Please add one in settings." },
-        { status: 400 }
-      );
-    }
+    // Get platform API key
+    const apiKey = getPlatformApiKey();
 
     // Create Anthropic client
     const anthropic = new Anthropic({ apiKey });
@@ -53,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Create LLM generate function
     const llmGenerate = async (prompt: string): Promise<string> => {
       const message = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-sonnet-4-5-20250929",
         max_tokens: 4096,
         messages: [{ role: "user", content: prompt }],
       });

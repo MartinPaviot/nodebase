@@ -1,5 +1,5 @@
 export { default as prisma } from './client.js';
-import { UserId, WorkspaceId, ScanCategory, ScanSignal, LLMUsage } from '@nodebase/types';
+import { UserId, WorkspaceId, ScanCategory, ScanSignal, LLMUsage } from '@elevay/types';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
 import * as _prisma_client from '@prisma/client';
 import { AgentModel, CredentialType } from '@prisma/client';

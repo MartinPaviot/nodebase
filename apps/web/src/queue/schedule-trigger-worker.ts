@@ -9,19 +9,18 @@
 import { Queue, Worker } from "bullmq";
 import { getRedisConnection } from "./bullmq/config";
 import prisma from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
 import { ClaudeClient } from "@/lib/ai/claude-client";
-import { AgentModel, type AgentTrigger, type Agent, type Credential } from "@prisma/client";
+import { AgentModel, type AgentTrigger, type Agent } from "@prisma/client";
 import { CronExpressionParser } from "cron-parser";
-import { AgentTracer } from "@nodebase/core";
-import { calculateCost } from "@/lib/config";
+import { AgentTracer } from "@elevay/core";
+import { calculateCost, getPlatformApiKey } from "@/lib/config";
 
 const QUEUE_NAME = "schedule-triggers";
 const JOB_NAME = "check-schedule-triggers";
 const POLL_INTERVAL_MS = 60_000; // 60 seconds
 
 type TriggerWithAgent = AgentTrigger & {
-  agent: Agent & { credential: Credential | null };
+  agent: Agent;
 };
 
 let scheduleQueue: Queue | null = null;
@@ -128,11 +127,7 @@ async function checkScheduleTriggers(): Promise<void> {
       cronExpression: { not: null },
     },
     include: {
-      agent: {
-        include: {
-          credential: true,
-        },
-      },
+      agent: true,
     },
   });
 
@@ -161,12 +156,7 @@ async function executeScheduledTrigger(trigger: TriggerWithAgent): Promise<void>
   const startTime = Date.now();
   const agent = trigger.agent;
 
-  if (!agent.credential) {
-    console.warn(`[ScheduleTrigger] Agent "${agent.name}" (${agent.id}) has no credential, skipping`);
-    return;
-  }
-
-  const apiKey = decrypt(agent.credential.value);
+  const apiKey = getPlatformApiKey();
 
   // Build prompt from trigger config
   const triggerConfig = trigger.config as Record<string, unknown>;
@@ -237,7 +227,7 @@ async function executeScheduledTrigger(trigger: TriggerWithAgent): Promise<void>
     let modelName = "unknown";
 
     if (agent.model === AgentModel.ANTHROPIC) {
-      modelName = "claude-3-5-sonnet-20241022";
+      modelName = "claude-sonnet-4-5-20250929";
       const client = new ClaudeClient(apiKey);
       const result = await client.chat({
         model: "smart",

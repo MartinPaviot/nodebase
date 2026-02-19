@@ -22,7 +22,7 @@ const TABS = [
   { id: "ai", label: "AI", icon: Sparkle },
   { id: "logic", label: "Logic", icon: GitBranch },
   { id: "scrapers", label: "Scrapers", icon: Globe },
-  { id: "nodebase", label: "By Nodebase", icon: DiamondsFour },
+  { id: "elevay", label: "By Elevay", icon: DiamondsFour },
 ];
 
 // Structural nodes for workflow logic (not Composio)
@@ -35,9 +35,20 @@ const STRUCTURAL_NODES: Record<string, StructuralNode[]> = {
     { id: "agent-step", label: "Agent step", icon: "noto:robot", description: "Let AI decide next action" },
     { id: "knowledge-base", label: "Knowledge base", icon: "noto:books", description: "Search knowledge base" },
   ],
-  nodebase: [
-    { id: "people-data", label: "People Data Labs", icon: "ph:users-three-fill", description: "Search for people and companies" },
+  elevay: [
+    { id: "chat-agent", label: "Chat with this Agent", icon: "ph:chats-circle-fill", description: "Chat actions for your agent" },
   ],
+};
+
+// Sub-actions for elevay items that have drill-down views
+const ELEVAY_SUB_ACTIONS: Record<string, { label: string; items: Array<{ id: string; label: string; description: string; icon: string }> }> = {
+  "chat-agent": {
+    label: "Chat with this Agent",
+    items: [
+      { id: "observe-messages", label: "Observe messages", description: "Observe messages from the user chat.", icon: "ph:chats-circle-fill" },
+      { id: "send-message", label: "Send message", description: "Sends a message to the user chat.", icon: "ph:chats-circle-fill" },
+    ],
+  },
 };
 
 // Structural node item (for flow editor workflow nodes)
@@ -63,6 +74,7 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
   const [activeTab, setActiveTab] = useState<ActionCategory | "top">("top");
   const [search, setSearch] = useState("");
   const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
+  const [selectedElevayApp, setSelectedElevayApp] = useState<string | null>(null);
 
   // Mutation for saving agent tools
   const addAgentTool = useAddAgentTool();
@@ -197,6 +209,11 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
 
   const handleItemClick = (item: { type: 'structural' | 'composio' | 'google'; id?: string; key?: string }) => {
     if (item.type === 'structural' && item.id) {
+      // Check if this item has sub-actions (drill-down)
+      if (ELEVAY_SUB_ACTIONS[item.id]) {
+        setSelectedElevayApp(item.id);
+        return;
+      }
       // Structural node - use legacy callback
       onSelectStructuralNode?.(item.id);
       onOpenChange(false);
@@ -233,6 +250,7 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       setSelectedAppKey(null);
+      setSelectedElevayApp(null);
       setSearch("");
     }
     onOpenChange(isOpen);
@@ -241,7 +259,45 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-[680px] p-0 gap-0 overflow-hidden">
-        {selectedAppKey ? (
+        {selectedElevayApp && ELEVAY_SUB_ACTIONS[selectedElevayApp] ? (
+          <>
+            <div className="px-6 pt-5 pb-4 flex items-center gap-2">
+              <button onClick={() => setSelectedElevayApp(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <CaretLeft className="size-5" weight="bold" />
+              </button>
+              <h2 className="text-xl font-semibold">{ELEVAY_SUB_ACTIONS[selectedElevayApp].label}</h2>
+            </div>
+
+            <div className="px-6 pb-2">
+              <span className="text-sm text-muted-foreground">Linked actions</span>
+            </div>
+
+            <div className="px-6 pb-5 space-y-1">
+              {ELEVAY_SUB_ACTIONS[selectedElevayApp].items.map((subAction) => (
+                <button
+                  key={subAction.id}
+                  onClick={() => {
+                    onSelectStructuralNode?.(subAction.id);
+                    onOpenChange(false);
+                    setSelectedElevayApp(null);
+                    setSearch("");
+                  }}
+                  className="w-full text-left hover:bg-gray-50 rounded-lg p-3 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                      <Icon icon={subAction.icon} className="size-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-sm text-foreground block">{subAction.label}</span>
+                      <p className="text-xs text-muted-foreground">{subAction.description}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : selectedAppKey ? (
           <>
             <div className="px-6 pt-5 pb-4 flex items-center gap-2">
               <button onClick={handleBackClick} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -394,6 +450,22 @@ export function AddActionModal({ open, onOpenChange, agentId, onSelectAction, on
                                 setSelectedAppKey(item.key!);
                               }}
                             />
+                          ) : item.type === 'structural' ? (
+                            // Structural node with card-style icon
+                            <button
+                              key={item.id || idx}
+                              onClick={() => handleItemClick(item)}
+                              className="flex items-center gap-3 w-full px-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
+                            >
+                              <div className="size-8 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
+                                {item.icon ? (
+                                  <Icon icon={item.icon} className="size-4 text-white" />
+                                ) : (
+                                  <Icon icon="ph:app-window" className="size-4 text-white" />
+                                )}
+                              </div>
+                              <span className="text-sm font-medium text-foreground">{item.name}</span>
+                            </button>
                           ) : (
                             // Show normal button when not searching
                             <button

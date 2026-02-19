@@ -21,6 +21,7 @@
  */
 
 import { ValidationError } from "../errors";
+import { validateActionOutput } from "./action-schemas";
 
 // ============================================
 // TYPES
@@ -205,6 +206,37 @@ class AssertionChecker {
   }
 
   /**
+   * Validate action output against Zod schema
+   */
+  static schemaValid(
+    _text: string,
+    context?: Record<string, unknown>,
+  ): AssertionResult {
+    const actionName = context?.actionName as string | undefined;
+    const actionArgs = context?.actionArgs as
+      | Record<string, unknown>
+      | undefined;
+
+    if (!actionName || !actionArgs) {
+      return {
+        check: "schema_valid",
+        passed: true,
+        severity: "block",
+      };
+    }
+
+    const { valid, errors } = validateActionOutput(actionName, actionArgs);
+    return {
+      check: "schema_valid",
+      passed: valid,
+      severity: "block",
+      message: valid
+        ? undefined
+        : `Schema validation failed: ${errors.join("; ")}`,
+    };
+  }
+
+  /**
    * Check for real content (not just template)
    */
   static hasRealContent(text: string): AssertionResult {
@@ -294,6 +326,10 @@ export class L1Evaluator {
 
         case "has_real_content":
           result = AssertionChecker.hasRealContent(text);
+          break;
+
+        case "schema_valid":
+          result = AssertionChecker.schemaValid(text, context);
           break;
 
         default:

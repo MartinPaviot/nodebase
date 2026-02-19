@@ -31,9 +31,9 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 
-// Lindy-style color palette for agents
+// Color palette for agents
 const AGENT_COLORS = [
-  "#E6C147", // Gold (Lindy primary)
+  "#E6C147", // Gold
   "#7C3AED", // Purple
   "#059669", // Emerald
   "#DC2626", // Red

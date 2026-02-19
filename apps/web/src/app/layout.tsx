@@ -20,7 +20,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nodebase - AI Agents Platform",
+  title: "Elevay - AI Agents Platform",
   description: "Build, deploy, and manage AI agents that automate your workflows",
 };
 

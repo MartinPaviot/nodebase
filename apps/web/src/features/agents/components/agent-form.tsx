@@ -182,9 +182,9 @@ export function AgentForm({ agent, credentials = [] }: AgentFormProps) {
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ANTHROPIC">Claude (Anthropic)</SelectItem>
+                    <SelectItem value="ANTHROPIC">Claude 4.5 Sonnet (Anthropic)</SelectItem>
                     <SelectItem value="OPENAI">GPT-4o (OpenAI)</SelectItem>
-                    <SelectItem value="GEMINI">Gemini (Google)</SelectItem>
+                    <SelectItem value="GEMINI">Gemini 2.5 Pro (Google)</SelectItem>
                   </SelectContent>
                 </Select>
               )}
